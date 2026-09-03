@@ -20,6 +20,7 @@
   const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
   const originalSubscribeStatsForCommesse = subscribeStatsForCommesse;
   let statsUiRefreshScheduled = false;
+  let statsUiRefreshPendingWhileHidden = false;
   const state = {
     cacheHits: 0,
     cacheMisses: 0,
@@ -27,6 +28,7 @@
     incrementalListeners: 0,
     incrementalDeliveries: 0,
     changedDocumentsRead: 0,
+    deferredUiRefreshes: 0,
     errors: []
   };
 
@@ -124,11 +126,26 @@
     }
   }
 
+  function pageIsHidden() {
+    return typeof document !== "undefined" && document.visibilityState === "hidden";
+  }
+
   function refreshStatsUI() {
+    if (pageIsHidden()) {
+      if (!statsUiRefreshPendingWhileHidden) state.deferredUiRefreshes += 1;
+      statsUiRefreshPendingWhileHidden = true;
+      return;
+    }
     if (statsUiRefreshScheduled) return;
     statsUiRefreshScheduled = true;
     const run = () => {
       statsUiRefreshScheduled = false;
+      if (pageIsHidden()) {
+        if (!statsUiRefreshPendingWhileHidden) state.deferredUiRefreshes += 1;
+        statsUiRefreshPendingWhileHidden = true;
+        return;
+      }
+      statsUiRefreshPendingWhileHidden = false;
       recalculateCommessaWorkSummaries();
       try { renderCommesseHomeList?.(); } catch (_) {}
       try { renderCommesseManagementList?.(); } catch (_) {}
@@ -137,6 +154,12 @@
     };
     if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(run);
     else window.setTimeout(run, 0);
+  }
+
+  if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && statsUiRefreshPendingWhileHidden) refreshStatsUI();
+    });
   }
 
   function applyItems(commessaId, items, markerMs = 0) {
@@ -299,9 +322,14 @@
 
   window.HeraCommessaStatsCacheOptimizer = {
     installed: true,
-    version: "1.1.0",
+    version: "1.2.0",
     mode: "persistent-cache-plus-change-index",
     originalSubscribeStatsForCommesse,
-    getState: () => ({ ...state, errors: state.errors.slice(), active: unsubscribeCommessaStats.size })
+    getState: () => ({
+      ...state,
+      errors: state.errors.slice(),
+      active: unsubscribeCommessaStats.size,
+      uiRefreshPendingWhileHidden: statsUiRefreshPendingWhileHidden
+    })
   };
 })();

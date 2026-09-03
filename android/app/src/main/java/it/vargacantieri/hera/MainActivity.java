@@ -10,6 +10,9 @@ import android.os.Bundle;
 import android.webkit.WebView;
 
 import androidx.activity.EdgeToEdge;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -37,8 +40,17 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HeraContinuousCameraPlugin.class);
         EdgeToEdge.enable(this);
         super.onCreate(savedInstanceState);
+        hideAndroidStatusBar();
         clearWebViewCacheAfterAppUpdate();
         applyTemporaryLoginDeepLink(getIntent());
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            hideAndroidStatusBar();
+        }
     }
 
     @Override
@@ -46,6 +58,19 @@ public class MainActivity extends BridgeActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         applyTemporaryLoginDeepLink(intent);
+    }
+
+    private void hideAndroidStatusBar() {
+        try {
+            WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+            WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+            controller.hide(WindowInsetsCompat.Type.statusBars());
+            controller.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            );
+        } catch (Exception ignored) {
+            // La barra di stato non deve mai interferire con l'avvio dell'app.
+        }
     }
 
     private void applyTemporaryLoginDeepLink(Intent intent) {

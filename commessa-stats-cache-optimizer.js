@@ -20,11 +20,13 @@
   const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
   const TAP_RELEASE_GRACE_MS = 180;
   const originalSubscribeStatsForCommesse = subscribeStatsForCommesse;
+
   let statsUiRefreshScheduled = false;
   let statsUiRefreshPendingWhileHidden = false;
   let interactionGuardUntil = 0;
   let interactionPointerDown = false;
   let deferredInteractionRefreshTimer = null;
+
   const state = {
     cacheHits: 0,
     cacheMisses: 0,
@@ -34,6 +36,7 @@
     changedDocumentsRead: 0,
     deferredUiRefreshes: 0,
     deferredInteractionRefreshes: 0,
+    tapCacheWarmups: 0,
     errors: []
   };
 
@@ -92,9 +95,12 @@
     const scope = getScope();
     const parsed = readJson(impiantiCacheKey(commessaId, scope));
     const age = Date.now() - Number(parsed?.savedAt || 0);
-    if (!scope || !parsed || parsed.schemaVersion !== 1 || parsed.uid !== scope.uid || parsed.collectionName !== scope.collectionName
+    if (
+      !scope || !parsed || parsed.schemaVersion !== 1
+      || parsed.uid !== scope.uid || parsed.collectionName !== scope.collectionName
       || parsed.commessaId !== commessaId || !Array.isArray(parsed.items) || !parsed.items.length
-      || !Number(parsed.markerMs) || age < 0 || age > MAX_AGE_MS) return null;
+      || !Number(parsed.markerMs) || age < 0 || age > MAX_AGE_MS
+    ) return null;
     return { items: cloneItems(parsed.items), markerMs: Number(parsed.markerMs) };
   }
 
@@ -102,9 +108,12 @@
     const scope = getScope();
     const parsed = readJson(cacheKey(commessaId, scope));
     const age = Date.now() - Number(parsed?.savedAt || 0);
-    if (!scope || !parsed || parsed.version !== CACHE_VERSION || parsed.uid !== scope.uid || parsed.collectionName !== scope.collectionName
+    if (
+      !scope || !parsed || parsed.version !== CACHE_VERSION
+      || parsed.uid !== scope.uid || parsed.collectionName !== scope.collectionName
       || parsed.commessaId !== commessaId || !parsed.stats || !Number(parsed.markerMs)
-      || age < 0 || age > MAX_AGE_MS) return null;
+      || age < 0 || age > MAX_AGE_MS
+    ) return null;
     return parsed;
   }
 
@@ -113,18 +122,16 @@
     const key = cacheKey(commessaId, scope);
     if (!scope || !key || !Array.isArray(items) || !items.length || !Number(markerMs)) return false;
     const rawItems = cloneItems(items);
-    const stats = calculateImpiantiStats(rawItems);
-    const payload = {
-      version: CACHE_VERSION,
-      uid: scope.uid,
-      collectionName: scope.collectionName,
-      commessaId,
-      markerMs: Number(markerMs),
-      savedAt: Date.now(),
-      stats
-    };
     try {
-      localStorage.setItem(key, JSON.stringify(payload));
+      localStorage.setItem(key, JSON.stringify({
+        version: CACHE_VERSION,
+        uid: scope.uid,
+        collectionName: scope.collectionName,
+        commessaId,
+        markerMs: Number(markerMs),
+        savedAt: Date.now(),
+        stats: calculateImpiantiStats(rawItems)
+      }));
       return true;
     } catch (_) {
       return false;
@@ -140,6 +147,27 @@
     return Boolean(target.closest(
       "#commesse-lista, #today-squads-section, #today-summary-card, #commesse-manage-list"
     ));
+  }
+
+  function getTappedCommessaId(target) {
+    if (!(target instanceof Element)) return "";
+    const node = target.closest("[data-commessa-id], .commessa-btn");
+    return String(node?.dataset?.commessaId || "").trim();
+  }
+
+  function warmTappedCommessaCache(target) {
+    const commessaId = getTappedCommessaId(target);
+    if (!commessaId) return false;
+    const existing = cloneItems(impiantiByCommessaId.get(commessaId) || []);
+    if (existing.length) return false;
+    const persistent = readImpiantiCache(commessaId);
+    if (!persistent?.items?.length) return false;
+
+    const rawItems = cloneItems(persistent.items);
+    impiantiByCommessaId.set(commessaId, combineImpiantiForView(rawItems));
+    commessaStatsById.set(commessaId, calculateImpiantiStats(rawItems));
+    state.tapCacheWarmups += 1;
+    return true;
   }
 
   function interactionGuardActive() {
@@ -165,6 +193,7 @@
   function onProtectedPointerDown(event) {
     if (!isProtectedTapTarget(event?.target)) return;
     if (typeof event.button === "number" && event.button !== 0) return;
+    warmTappedCommessaCache(event.target);
     interactionPointerDown = true;
     interactionGuardUntil = Number.POSITIVE_INFINITY;
   }
@@ -220,8 +249,7 @@
 
   function applyItems(commessaId, items, markerMs = 0) {
     const rawItems = cloneItems(items);
-    const combined = combineImpiantiForView(rawItems);
-    impiantiByCommessaId.set(commessaId, combined);
+    impiantiByCommessaId.set(commessaId, combineImpiantiForView(rawItems));
     commessaStatsById.set(commessaId, calculateImpiantiStats(rawItems));
     if (markerMs > 0) writeStatsCache(commessaId, rawItems, markerMs);
     refreshStatsUI();
@@ -231,8 +259,10 @@
     const selected = String(selectedCommessaId || "").trim();
     if (!selected) return [];
     const children = typeof getSubcommesse === "function" ? (getSubcommesse(selected) || []) : [];
-    const ids = [selected, ...children.map((item) => String(item?.id || "").trim())].filter(Boolean);
-    return Array.from(new Set(ids));
+    return Array.from(new Set([
+      selected,
+      ...children.map((item) => String(item?.id || "").trim()).filter(Boolean)
+    ]));
   }
 
   function stopUnused(targetIds) {
@@ -258,17 +288,15 @@
   }
 
   async function readChangedDocument(commessaId, impiantoId) {
-    const ref = commessaRef(commessaId).collection("impianti").doc(impiantoId);
-    const snap = await ref.get();
+    const snap = await commessaRef(commessaId).collection("impianti").doc(impiantoId).get();
     state.changedDocumentsRead += snap.exists ? 1 : 0;
     return snap.exists ? { id: snap.id, ...snap.data() } : null;
   }
 
   function startIncrementalListener(commessaId, markerMs) {
     if (!markerMs || unsubscribeCommessaStats.has(commessaId)) return;
-    const markerDate = new Date(markerMs);
     const query = commessaRef(commessaId).collection("impiantoChangeIndex")
-      .where("changedAt", ">", markerDate)
+      .where("changedAt", ">", new Date(markerMs))
       .orderBy("changedAt", "asc");
 
     const unsubscribe = query.onSnapshot(async (snapshot) => {
@@ -279,19 +307,18 @@
       if (!deltaDocs.length) return;
       state.incrementalDeliveries += 1;
       try {
-        const changes = deltaDocs.map((doc) => ({ id: doc.id, markerMs: timestampMs(doc.data()?.changedAt) }));
         const current = cloneItems(impiantiByCommessaId.get(commessaId) || []);
         const byId = new Map(current.map((item) => [String(item.id || ""), item]));
         let newestMarker = markerMs;
-        for (const change of changes) {
-          if (!change.id) continue;
-          const changed = await readChangedDocument(commessaId, change.id);
-          if (changed) byId.set(change.id, changed);
-          else byId.delete(change.id);
-          newestMarker = Math.max(newestMarker, change.markerMs || 0);
+        for (const doc of deltaDocs) {
+          const id = String(doc.id || "").trim();
+          if (!id) continue;
+          const changed = await readChangedDocument(commessaId, id);
+          if (changed) byId.set(id, changed);
+          else byId.delete(id);
+          newestMarker = Math.max(newestMarker, timestampMs(doc.data()?.changedAt) || 0);
         }
-        const items = Array.from(byId.values());
-        applyItems(commessaId, items, newestMarker);
+        applyItems(commessaId, Array.from(byId.values()), newestMarker);
         startIncrementalListener.lastMarkers.set(commessaId, newestMarker);
       } catch (error) {
         state.errors.push(`incremental ${commessaId}: ${String(error?.message || error)}`);
@@ -301,6 +328,7 @@
       state.errors.push(`listener ${commessaId}: ${String(error?.message || error)}`);
       console.warn("Listener incrementale statistiche non disponibile:", error);
     });
+
     unsubscribeCommessaStats.set(commessaId, unsubscribe);
     state.incrementalListeners += 1;
   }
@@ -314,7 +342,7 @@
     const statsCache = readStatsCache(commessaId);
 
     if (memoryItems.length) {
-      const marker = Number(statsCache?.markerMs || persistentItems?.markerMs || 0);
+      const marker = Number(statsCache?.markerMs || 0);
       commessaStatsById.set(commessaId, calculateImpiantiStats(memoryItems));
       if (marker) writeStatsCache(commessaId, memoryItems, marker);
       state.cacheHits += 1;
@@ -347,11 +375,11 @@
       const snapshot = await commessaRef(commessaId).collection("impianti").get();
       const rawItems = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       applyItems(commessaId, rawItems, markerBefore);
-      if (markerBefore > 0) startIncrementalListener(commessaId, markerBefore);
-      else {
+      if (markerBefore > 0) {
+        startIncrementalListener(commessaId, markerBefore);
+      } else {
         const fallbackUnsubscribe = commessaRef(commessaId).collection("impianti").onSnapshot((live) => {
-          const liveItems = live.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-          applyItems(commessaId, liveItems, 0);
+          applyItems(commessaId, live.docs.map((doc) => ({ id: doc.id, ...doc.data() })), 0);
         });
         unsubscribeCommessaStats.set(commessaId, fallbackUnsubscribe);
       }
@@ -374,8 +402,8 @@
 
   window.HeraCommessaStatsCacheOptimizer = {
     installed: true,
-    version: "1.4.0",
-    mode: "selected-first-persistent-cache-plus-change-index",
+    version: "1.5.0",
+    mode: "tap-warmup-selected-first-persistent-cache-plus-change-index",
     originalSubscribeStatsForCommesse,
     getState: () => ({
       ...state,

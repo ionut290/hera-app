@@ -19,6 +19,7 @@
   const IMPIANTI_CACHE_PREFIX = "heraImpiantiPersistentCacheV1:";
   const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
   const originalSubscribeStatsForCommesse = subscribeStatsForCommesse;
+  let statsUiRefreshScheduled = false;
   const state = {
     cacheHits: 0,
     cacheMisses: 0,
@@ -124,11 +125,18 @@
   }
 
   function refreshStatsUI() {
-    recalculateCommessaWorkSummaries();
-    try { renderCommesseHomeList?.(); } catch (_) {}
-    try { renderCommesseManagementList?.(); } catch (_) {}
-    try { renderParentCommessaOverview?.(); } catch (_) {}
-    try { updateCommessaDashboard?.(); } catch (_) {}
+    if (statsUiRefreshScheduled) return;
+    statsUiRefreshScheduled = true;
+    const run = () => {
+      statsUiRefreshScheduled = false;
+      recalculateCommessaWorkSummaries();
+      try { renderCommesseHomeList?.(); } catch (_) {}
+      try { renderCommesseManagementList?.(); } catch (_) {}
+      try { renderParentCommessaOverview?.(); } catch (_) {}
+      try { updateCommessaDashboard?.(); } catch (_) {}
+    };
+    if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(run);
+    else window.setTimeout(run, 0);
   }
 
   function applyItems(commessaId, items, markerMs = 0) {
@@ -291,7 +299,7 @@
 
   window.HeraCommessaStatsCacheOptimizer = {
     installed: true,
-    version: "1.0.0",
+    version: "1.1.0",
     mode: "persistent-cache-plus-change-index",
     originalSubscribeStatsForCommesse,
     getState: () => ({ ...state, errors: state.errors.slice(), active: unsubscribeCommessaStats.size })

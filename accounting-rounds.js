@@ -122,6 +122,19 @@
     return { giroId, numeroGiro, doneRows: doneRows.length, totalRows: workRows.length, totalAmount: sumDone(workRows.map(item => item.data)), accountingDueAt };
   }
 
+  function setRoundButtonsBusy(busy) {
+    document.querySelectorAll('[data-commessa-round-action="close"]').forEach(button => {
+      button.disabled = busy;
+      if (button.dataset.roundDesktop === "1") {
+        button.textContent = busy ? "Preparazione giro…" : "✓ Chiudi giro e archivia";
+      } else {
+        button.innerHTML = busy
+          ? '<strong>Preparazione giro…</strong>'
+          : '<span aria-hidden="true">✓</span><strong>Chiudi giro e archivia</strong><small>Scegli il numero reale e salva la contabilità</small>';
+      }
+    });
+  }
+
   async function closeRoundAndOpenClear() {
     const commessa = currentCommessa();
     if (!commessa) return alert("Seleziona prima una commessa.");
@@ -130,8 +143,7 @@
     const ok = confirm(`CHIUDI GIRO CONTABILE\n\nCommessa: ${commessa.nome || commessa.name || ""}\n\nNel passaggio successivo scegli TU il numero reale del giro. Verrà poi creata una copia immutabile di lavorazioni FATTO, impianti e prove. Continuare?`);
     if (!ok) return;
 
-    const button = document.querySelector('[data-commessa-round-action="close"]');
-    if (button) { button.disabled = true; button.textContent = "Preparazione giro…"; }
+    setRoundButtonsBusy(true);
     try {
       const result = await archiveCurrentRound(commessa);
       if (result?.cancelled) return;
@@ -141,11 +153,11 @@
       console.error("Chiusura giro non riuscita", error);
       alert(`Il giro NON è stato chiuso e la commessa non verrà svuotata.\n\n${error.message || error}`);
     } finally {
-      if (button) { button.disabled = false; button.innerHTML = '<span aria-hidden="true">✓</span><strong>Chiudi giro e archivia</strong><small>Scegli il numero reale e salva la contabilità</small>'; }
+      setRoundButtonsBusy(false);
     }
   }
 
-  function installButton() {
+  function installMobileButton() {
     const grid = document.querySelector("#commessa-mobile-management-home .commessa-mobile-action-grid");
     if (!grid || grid.querySelector('[data-commessa-round-action="close"]')) return;
     const button = document.createElement("button");
@@ -156,9 +168,29 @@
     grid.appendChild(button);
   }
 
-  const observer = new MutationObserver(installButton);
+  function installDesktopButton() {
+    const pricesButton = document.getElementById("open-prezziario-btn");
+    const screen = document.getElementById("impianti-management-screen");
+    if (!pricesButton || !screen || screen.querySelector('[data-round-desktop="1"]')) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = pricesButton.className || "btn";
+    button.dataset.commessaRoundAction = "close";
+    button.dataset.roundDesktop = "1";
+    button.textContent = "✓ Chiudi giro e archivia";
+    button.title = "Scegli il numero reale del giro e archivia la contabilità prima di svuotare la commessa";
+    button.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); void closeRoundAndOpenClear(); });
+    pricesButton.parentElement?.insertBefore(button, pricesButton);
+  }
+
+  function installButtons() {
+    installMobileButton();
+    installDesktopButton();
+  }
+
+  const observer = new MutationObserver(installButtons);
   observer.observe(document.documentElement, { childList: true, subtree: true });
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", installButton); else installButton();
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", installButtons); else installButtons();
 
   window.VargaAccountingRounds = { archiveCurrentRound, closeRoundAndOpenClear };
 })();

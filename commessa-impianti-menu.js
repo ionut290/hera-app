@@ -5,7 +5,7 @@
   function ensureAccountingRoundsModule() {
     if (window.VargaAccountingRounds || document.querySelector('script[data-varga-accounting-rounds]')) return;
     const script = document.createElement("script");
-    script.src = `accounting-rounds.js?v=20260903-1`;
+    script.src = `accounting-rounds.js?v=20260903-2`;
     script.async = true;
     script.dataset.vargaAccountingRounds = "1";
     document.head.appendChild(script);
@@ -13,10 +13,8 @@
 
   ensureAccountingRoundsModule();
 
-  const wrap = document.getElementById("commessa-plants-menu-wrap");
-  const toggle = document.getElementById("commessa-plants-menu-btn");
-  const title = document.getElementById("commessa-focus-label");
-  if (!wrap || !toggle || !title) return;
+  let initialized = false;
+  let availabilityTimer = null;
 
   function ensureMobileView() {
     if (document.getElementById("commessa-mobile-management")) return;
@@ -51,15 +49,23 @@
       </section>`);
   }
 
-  function updateAvailability() {
-    const available = typeof canManageData === "function"
-      && canManageData()
-      && typeof selectedCommessaId !== "undefined"
-      && Boolean(String(selectedCommessaId || "").trim());
-    wrap.classList.toggle("hidden", !available);
+  function currentElements() {
+    return {
+      wrap: document.getElementById("commessa-plants-menu-wrap"),
+      toggle: document.getElementById("commessa-plants-menu-btn"),
+      title: document.getElementById("commessa-focus-label")
+    };
   }
 
-  async function openCommessaManagement() {
+  function updateAvailability() {
+    const { wrap } = currentElements();
+    if (!wrap) return;
+    const hasCommessa = typeof selectedCommessaId !== "undefined" && Boolean(String(selectedCommessaId || "").trim());
+    const allowed = typeof canManageData === "function" && canManageData();
+    wrap.classList.toggle("hidden", !(hasCommessa && allowed));
+  }
+
+  async function openCommessaManagement(toggle) {
     if (typeof canManageData !== "function" || !canManageData()) {
       window.alert("La gestione della commessa è riservata agli amministratori.");
       return;
@@ -84,19 +90,54 @@
     }
   }
 
-  ensureMobileView();
-  document.getElementById("commessa-plants-menu")?.remove();
-  toggle.removeAttribute("aria-haspopup");
-  toggle.removeAttribute("aria-expanded");
-  toggle.removeAttribute("aria-controls");
-  toggle.setAttribute("aria-label", "Apri gestione commessa");
-  toggle.setAttribute("title", "Gestione commessa");
-  toggle.addEventListener("click", (event) => {
-    event.preventDefault();
-    void openCommessaManagement();
-  });
+  function initialize() {
+    if (initialized) {
+      updateAvailability();
+      return true;
+    }
+    const { wrap, toggle, title } = currentElements();
+    if (!wrap || !toggle || !title) return false;
 
-  new MutationObserver(updateAvailability).observe(title, { childList: true, characterData: true, subtree: true });
-  window.addEventListener("pageshow", updateAvailability);
-  updateAvailability();
+    initialized = true;
+    ensureMobileView();
+    document.getElementById("commessa-plants-menu")?.remove();
+    toggle.removeAttribute("aria-haspopup");
+    toggle.removeAttribute("aria-expanded");
+    toggle.removeAttribute("aria-controls");
+    toggle.setAttribute("aria-label", "Apri gestione commessa");
+    toggle.setAttribute("title", "Gestione commessa");
+    toggle.addEventListener("click", event => {
+      event.preventDefault();
+      void openCommessaManagement(toggle);
+    });
+
+    new MutationObserver(updateAvailability).observe(title, { childList: true, characterData: true, subtree: true });
+    updateAvailability();
+    return true;
+  }
+
+  function bootUntilReady() {
+    if (initialize()) return;
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      if (initialize() || attempts >= 80) clearInterval(timer);
+    }, 250);
+  }
+
+  window.addEventListener("pageshow", () => { initialize(); updateAvailability(); });
+  window.addEventListener("focus", updateAvailability);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) updateAvailability(); });
+  document.addEventListener("click", event => {
+    if (event.target.closest?.('[data-commessa-id], .commessa-card, .commessa-item, [data-action="open-commessa"]')) {
+      setTimeout(updateAvailability, 0);
+      setTimeout(updateAvailability, 150);
+    }
+  }, true);
+
+  availabilityTimer = setInterval(updateAvailability, 1000);
+  window.addEventListener("beforeunload", () => clearInterval(availabilityTimer), { once: true });
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootUntilReady, { once: true });
+  else bootUntilReady();
 })();

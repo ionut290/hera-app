@@ -64,22 +64,65 @@
     }
   }
 
+  async function readRoundSourceRows(ref) {
+    const [works, plants, evidence, operational] = await Promise.all([
+      ref.collection("lavorazioni").get(),
+      ref.collection("impiantiFisici").get(),
+      ref.collection("fattoVisualEvidence").get(),
+      ref.collection("impianti").get()
+    ]);
+
+    let workRows = works.docs.map(doc => ({ id: doc.id, data: doc.data() }));
+    let sourceType = "lavorazioni";
+
+    if (!workRows.length && operational.docs.length) {
+      const adapter = window.InreteWorkItemsV2?.adaptLegacyPlantToWorkItems;
+      workRows = operational.docs.flatMap((doc, docIndex) => {
+        const plant = { id: doc.id, ...doc.data() };
+        const adapted = typeof adapter === "function" ? adapter({
+          ...plant,
+          numeroProgressivoRiga: plant.numeroProgressivoRiga ?? plant.numeroProgressivo ?? plant.numeroProgressivoImpianto ?? docIndex + 1,
+          frequenzaAnnua: plant.frequenzaAnnua || "",
+          note: plant.note || plant.noteImpianto || ""
+        }) : [{
+          ...plant,
+          impiantoId: plant.physicalPlantId || plant.id,
+          stato: plant.stato || plant.statoGenerale || (plant.done ? "FATTO" : "DA FARE"),
+          codiceVocePrezzo: plant.codiceVocePrezzo || plant.codicePrezzo || "",
+          tipologiaLavorazione: plant.tipologiaLavorazione || plant.tipologiaIntervento || ""
+        }];
+        return adapted.map((row, index) => ({
+          id: `${doc.id}_legacy_${index + 1}`,
+          data: { ...row, legacySourceId: doc.id, archivedFromLegacy: true }
+        }));
+      });
+      sourceType = "impianti-legacy";
+    }
+
+    const plantRows = plants.docs.length
+      ? plants.docs.map(doc => ({ id: doc.id, data: doc.data() }))
+      : operational.docs.map(doc => ({ id: doc.id, data: doc.data() }));
+
+    return {
+      workRows,
+      plantRows,
+      evidenceRows: evidence.docs.map(doc => ({ id: doc.id, data: doc.data() })),
+      sourceType
+    };
+  }
+
   async function archiveCurrentRound(commessa, options = {}) {
     if (!commessa?.id) throw new Error("Commessa non valida.");
     if (typeof db === "undefined" || !db) throw new Error("Firestore non disponibile.");
 
     const ref = db.collection(collectionName()).doc(commessa.id);
-    const [works, plants, evidence] = await Promise.all([
-      ref.collection("lavorazioni").get(),
-      ref.collection("impiantiFisici").get(),
-      ref.collection("fattoVisualEvidence").get()
-    ]);
-    const workRows = works.docs.map(doc => ({ id: doc.id, data: doc.data() }));
+    const source = await readRoundSourceRows(ref);
+    const workRows = source.workRows;
     if (!workRows.length) throw new Error("La commessa non contiene lavorazioni da archiviare.");
 
     const doneRows = workRows.filter(item => upper(item.data?.stato) === "FATTO");
     if (!doneRows.length && options.allowWithoutDone !== true) {
-      throw new Error("Non ci sono lavorazioni FATTO. Il giro non può essere chiuso come contabilità.");
+      throw new Error(`Sono presenti ${workRows.length} lavorazioni, ma nessuna è FATTO. Il giro contabile va chiuso dopo aver completato le lavorazioni da contabilizzare.`);
     }
 
     const numeroGiro = Number(options.numeroGiro) || await askRealRoundNumber(ref, commessa);
@@ -111,13 +154,14 @@
       mapReference: "",
       mapDocumentUrl: "",
       mapReminderDays: 7,
-      archiveVersion: 1,
+      archiveVersion: 2,
+      sourceType: source.sourceType,
       immutableSnapshot: true
     });
 
     await copyRows(workRows, giroRef.collection("lavorazioni"));
-    await copyRows(plants.docs.map(doc => ({ id: doc.id, data: doc.data() })), giroRef.collection("impiantiFisici"));
-    await copyRows(evidence.docs.map(doc => ({ id: doc.id, data: doc.data() })), giroRef.collection("fattoVisualEvidence"));
+    await copyRows(source.plantRows, giroRef.collection("impiantiFisici"));
+    await copyRows(source.evidenceRows, giroRef.collection("fattoVisualEvidence"));
 
     await ref.set({
       lastClosedGiroId: giroId,

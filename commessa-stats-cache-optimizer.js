@@ -18,9 +18,12 @@
   const CACHE_PREFIX = "heraCommessaStatsCacheV1:";
   const IMPIANTI_CACHE_PREFIX = "heraImpiantiPersistentCacheV1:";
   const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+  const COMMESSA_TAP_GUARD_MS = 450;
   const originalSubscribeStatsForCommesse = subscribeStatsForCommesse;
   let statsUiRefreshScheduled = false;
   let statsUiRefreshPendingWhileHidden = false;
+  let commessaTapGuardUntil = 0;
+  let commessaTapDeferredTimer = null;
   const state = {
     cacheHits: 0,
     cacheMisses: 0,
@@ -29,6 +32,7 @@
     incrementalDeliveries: 0,
     changedDocumentsRead: 0,
     deferredUiRefreshes: 0,
+    deferredTapUiRefreshes: 0,
     errors: []
   };
 
@@ -130,10 +134,37 @@
     return typeof document !== "undefined" && document.visibilityState === "hidden";
   }
 
+  function commessaTapGuardActive() {
+    return Date.now() < commessaTapGuardUntil;
+  }
+
+  function scheduleRefreshAfterCommessaTap() {
+    if (commessaTapDeferredTimer) return;
+    state.deferredTapUiRefreshes += 1;
+    const delay = Math.max(16, commessaTapGuardUntil - Date.now() + 16);
+    commessaTapDeferredTimer = window.setTimeout(() => {
+      commessaTapDeferredTimer = null;
+      refreshStatsUI();
+    }, delay);
+  }
+
+  function markCommessaTap(event) {
+    const target = event?.target;
+    if (!(target instanceof Element)) return;
+    if (typeof event.button === "number" && event.button !== 0) return;
+    const interactiveArea = target.closest("#commesse-lista, #squadre-lista, #commesse-manage-list");
+    if (!interactiveArea) return;
+    commessaTapGuardUntil = Math.max(commessaTapGuardUntil, Date.now() + COMMESSA_TAP_GUARD_MS);
+  }
+
   function refreshStatsUI() {
     if (pageIsHidden()) {
       if (!statsUiRefreshPendingWhileHidden) state.deferredUiRefreshes += 1;
       statsUiRefreshPendingWhileHidden = true;
+      return;
+    }
+    if (commessaTapGuardActive()) {
+      scheduleRefreshAfterCommessaTap();
       return;
     }
     if (statsUiRefreshScheduled) return;
@@ -143,6 +174,10 @@
       if (pageIsHidden()) {
         if (!statsUiRefreshPendingWhileHidden) state.deferredUiRefreshes += 1;
         statsUiRefreshPendingWhileHidden = true;
+        return;
+      }
+      if (commessaTapGuardActive()) {
+        scheduleRefreshAfterCommessaTap();
         return;
       }
       statsUiRefreshPendingWhileHidden = false;
@@ -160,6 +195,8 @@
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && statsUiRefreshPendingWhileHidden) refreshStatsUI();
     });
+    document.addEventListener("pointerdown", markCommessaTap, { capture: true, passive: true });
+    document.addEventListener("click", markCommessaTap, { capture: true, passive: true });
   }
 
   function applyItems(commessaId, items, markerMs = 0) {
@@ -322,14 +359,15 @@
 
   window.HeraCommessaStatsCacheOptimizer = {
     installed: true,
-    version: "1.2.0",
+    version: "1.3.0",
     mode: "persistent-cache-plus-change-index",
     originalSubscribeStatsForCommesse,
     getState: () => ({
       ...state,
       errors: state.errors.slice(),
       active: unsubscribeCommessaStats.size,
-      uiRefreshPendingWhileHidden: statsUiRefreshPendingWhileHidden
+      uiRefreshPendingWhileHidden: statsUiRefreshPendingWhileHidden,
+      commessaTapGuardActive: commessaTapGuardActive()
     })
   };
 })();

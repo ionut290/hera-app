@@ -68,52 +68,116 @@
   global.VargaPureUtils = Object.freeze({ ...(global.VargaPureUtils || {}), ...api });
 })(window);
 
-// Runtime trasparenza dati: carica la vista comune Licenze e fonti dati.
-(function loadDataLicenseView() {
-  if (document.querySelector("script[data-hera-data-license-view]")) return;
+// Performance runtime: piccolo, senza dipendenze e senza letture/scritture remote.
+(function loadPerformanceRuntime() {
+  if (document.querySelector("script[data-hera-performance-runtime]")) return;
   const script = document.createElement("script");
-  script.src = "./data-license-view.js?v=20260831-license1";
-  script.async = false;
-  script.setAttribute("data-hera-data-license-view", "1");
+  script.src = "./performance-runtime.js?v=20260903a";
+  script.async = true;
+  script.setAttribute("data-hera-performance-runtime", "1");
   document.head.appendChild(script);
 })();
 
-// Verde Bologna: modulo ufficiale Comune di Bologna, nessuna lettura Firestore.
-(function loadVerdeBologna() {
-  if (document.querySelector("script[data-hera-verde-bologna]")) return;
-  const script = document.createElement("script");
-  script.src = "./verde-bologna.js?v=20260901-cobo-sfalcio1";
-  script.async = false;
-  script.setAttribute("data-hera-verde-bologna", "1");
-  document.head.appendChild(script);
-})();
+// Loader non critico. I moduli Verde Bologna/Levato non vengono più parsati
+// durante il bootstrap: si caricano al primo ingresso pertinente. Un fallback
+// idle mantiene compatibilità con i flussi storici che possono invocarli senza click.
+(function installDeferredOptionalRuntimes() {
+  const state = {
+    verdeRequested: false,
+    licenseRequested: false,
+    loadedScripts: new Set()
+  };
 
-// Verde Bologna operativo: rende il modulo più rapido e leggibile da telefono.
-(function loadVerdeBolognaOperativo() {
-  if (document.querySelector("script[data-hera-verde-bologna-operativo]")) return;
-  const script = document.createElement("script");
-  script.src = "./verde-bologna-operativo.js?v=20260901-catasto-open2";
-  script.async = false;
-  script.setAttribute("data-hera-verde-bologna-operativo", "1");
-  document.head.appendChild(script);
-})();
+  function addScript(src, dataName) {
+    if (document.querySelector(`script[data-${dataName}]`)) return Promise.resolve(true);
+    const existing = Array.from(document.scripts || []).find((node) => {
+      try { return new URL(node.src, document.baseURI).pathname.endsWith(new URL(src, document.baseURI).pathname); }
+      catch (_) { return false; }
+    });
+    if (existing) return Promise.resolve(true);
 
-// Parchi Bologna mobile: ricerca live CODVIA/NOMEVIA, quartieri, distanza e scheda completa.
-(function loadVerdeBolognaParchiMobile() {
-  if (document.querySelector("script[data-hera-verde-bologna-parchi-mobile]")) return;
-  const script = document.createElement("script");
-  script.src = "./verde-bologna-parchi-mobile.js?v=20260901-cobo-sfalcio1";
-  script.async = false;
-  script.setAttribute("data-hera-verde-bologna-parchi-mobile", "1");
-  document.head.appendChild(script);
-})();
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.async = false;
+      script.setAttribute(`data-${dataName}`, "1");
+      script.addEventListener("load", () => {
+        state.loadedScripts.add(src);
+        resolve(true);
+      }, { once: true });
+      script.addEventListener("error", () => reject(new Error(`Caricamento ${src} non riuscito`)), { once: true });
+      document.head.appendChild(script);
+    });
+  }
 
-// Verde Levato: censimenti manuali e amministratore limitato alla sola sezione.
-(function loadVerdeLevato() {
-  if (document.querySelector("script[data-hera-verde-levato]")) return;
-  const script = document.createElement("script");
-  script.src = "./verde-levato.js?v=20260902-verde-levato2";
-  script.async = false;
-  script.setAttribute("data-hera-verde-levato", "1");
-  document.head.appendChild(script);
+  async function loadDataLicenseView() {
+    if (state.licenseRequested) return;
+    state.licenseRequested = true;
+    try {
+      await addScript("./data-license-view.js?v=20260831-license1", "hera-data-license-view");
+    } catch (error) {
+      state.licenseRequested = false;
+      console.warn("Vista licenze non caricata:", error);
+    }
+  }
+
+  async function loadVerdeRuntimes() {
+    if (state.verdeRequested) return;
+    state.verdeRequested = true;
+    try {
+      await addScript("./verde-bologna.js?v=20260901-cobo-sfalcio1", "hera-verde-bologna");
+      await addScript("./verde-bologna-operativo.js?v=20260901-catasto-open2", "hera-verde-bologna-operativo");
+      await addScript("./verde-bologna-parchi-mobile.js?v=20260901-cobo-sfalcio1", "hera-verde-bologna-parchi-mobile");
+      await addScript("./verde-levato.js?v=20260902-verde-levato2", "hera-verde-levato");
+    } catch (error) {
+      state.verdeRequested = false;
+      console.warn("Moduli Verde differiti non caricati:", error);
+    }
+  }
+
+  function isVerdeEntry(target) {
+    const button = target?.closest?.("button, [role='button'], a");
+    if (!button) return false;
+    const id = String(button.id || "").toLowerCase();
+    const action = String(button.dataset?.action || "").toLowerCase();
+    const text = String(button.textContent || "").toLowerCase();
+    return id.includes("green")
+      || id.includes("verde")
+      || id.includes("tree-search")
+      || action.includes("green")
+      || action.includes("verde")
+      || /verde bologna|verde levato|catasto alberi|aree verdi/.test(text);
+  }
+
+  document.addEventListener("pointerdown", (event) => {
+    if (isVerdeEntry(event.target)) void loadVerdeRuntimes();
+  }, { capture: true, passive: true });
+
+  document.addEventListener("focusin", (event) => {
+    if (isVerdeEntry(event.target)) void loadVerdeRuntimes();
+  }, true);
+
+  const scheduleIdle = (job, timeout, fallbackDelay) => {
+    if ("requestIdleCallback" in window) window.requestIdleCallback(() => void job(), { timeout });
+    else window.setTimeout(() => void job(), fallbackDelay);
+  };
+
+  const afterLoad = () => {
+    scheduleIdle(loadDataLicenseView, 4500, 2500);
+    scheduleIdle(loadVerdeRuntimes, 9000, 6500);
+  };
+  if (document.readyState === "complete") afterLoad();
+  else window.addEventListener("load", afterLoad, { once: true });
+
+  window.HeraDeferredOptionalRuntimes = {
+    installed: true,
+    version: "1.0.0",
+    loadVerde: loadVerdeRuntimes,
+    loadDataLicense: loadDataLicenseView,
+    getState: () => ({
+      verdeRequested: state.verdeRequested,
+      licenseRequested: state.licenseRequested,
+      loadedScripts: Array.from(state.loadedScripts)
+    })
+  };
 })();

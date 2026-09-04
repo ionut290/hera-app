@@ -16,6 +16,7 @@
 
   let busy = false;
   let editorLockUntil = 0;
+  let lastPointerToggleAt = 0;
 
   function el(id) {
     return document.getElementById(id);
@@ -176,11 +177,24 @@
     }
   }
 
+  function toggleFromPointer(event) {
+    const toggle = event.target.closest?.(`#${IDS.toggle}`);
+    if (!toggle) return false;
+    if (!canOpen()) return true;
+    event.preventDefault();
+    event.stopPropagation();
+    lastPointerToggleAt = Date.now();
+    const menu = el(IDS.menu);
+    setMenuOpen(Boolean(menu?.classList.contains("hidden")));
+    return true;
+  }
+
   function handleToggle(event) {
     const toggle = event.target.closest?.(`#${IDS.toggle}`);
     if (!toggle) return false;
     event.preventDefault();
     event.stopPropagation();
+    if (Date.now() - lastPointerToggleAt < 700) return true;
     if (!canOpen()) return true;
     const menu = el(IDS.menu);
     setMenuOpen(Boolean(menu?.classList.contains("hidden")));
@@ -223,6 +237,12 @@
     return true;
   }
 
+  document.addEventListener("pointerdown", event => {
+    toggleFromPointer(event);
+  }, true);
+  document.addEventListener("touchstart", event => {
+    toggleFromPointer(event);
+  }, { capture: true, passive: false });
   document.addEventListener("click", handleDocumentClick, false);
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") closeMenu();
@@ -253,7 +273,7 @@
   if (title) observer.observe(title, { childList: true, characterData: true, subtree: true });
 
   window.CommessaThreeDotsMenu = {
-    version: "2026.09.04-rebuild1",
+    version: "2026.09.04-rebuild2-pointerdown",
     open: openAction,
     refresh: updateAvailability
   };

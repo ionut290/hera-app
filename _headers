@@ -48,3 +48,12 @@
 
 /shared-pdf-attachments.js
   Cache-Control: no-cache, must-revalidate
+
+/commessa-impianti-menu.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/accounting-v2.js
+  Cache-Control: no-cache, must-revalidate
+
+/accounting-v2.css
+  Cache-Control: no-cache, must-revalidate

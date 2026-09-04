@@ -50,6 +50,67 @@
       </section>`);
   }
 
+  function handleMobileCurrentLocation(event) {
+    const button = event.target.closest?.("#commessa-mobile-current-location");
+    if (!button) return;
+
+    // Questo pulsante vive dentro il form di inserimento impianto. Su iOS il
+    // click poteva proseguire verso listener globali e riportare alla home della
+    // gestione commessa. Lo intercettiamo qui, prima del bubbling, senza toccare
+    // FATTO, WhatsApp o il modello dati degli impianti.
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const form = button.closest("#commessa-mobile-plant-form");
+    if (!form) return;
+    const status = form.querySelector("#commessa-mobile-geocode-status");
+    const setStatus = (message) => { if (status) status.textContent = message; };
+
+    if (!navigator.geolocation) {
+      setStatus("La posizione automatica non è disponibile su questo dispositivo.");
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Rilevamento posizione…";
+    setStatus("Rilevamento GPS in corso…");
+
+    navigator.geolocation.getCurrentPosition(position => {
+      if (!document.contains(button) || button.closest("#commessa-mobile-plant-form") !== form) return;
+      const latitude = Number(position?.coords?.latitude);
+      const longitude = Number(position?.coords?.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        button.disabled = false;
+        button.textContent = "📍 Usa la mia posizione";
+        setStatus("Il telefono ha restituito coordinate non valide. Riprova.");
+        return;
+      }
+
+      const latitudeInput = form.querySelector('[data-v2-field="latitudine"]');
+      const longitudeInput = form.querySelector('[data-v2-field="longitudine"]');
+      if (latitudeInput) latitudeInput.value = latitude.toFixed(6);
+      if (longitudeInput) longitudeInput.value = longitude.toFixed(6);
+      form.dataset.mobileGeocodeKey = "";
+
+      // Riutilizza il flusso già esistente di accounting-v2: gli eventi input
+      // avviano la compilazione automatica di Comune e Via senza cambiare vista.
+      latitudeInput?.dispatchEvent(new Event("input", { bubbles: true }));
+      longitudeInput?.dispatchEvent(new Event("input", { bubbles: true }));
+
+      button.disabled = false;
+      button.textContent = "✓ Posizione acquisita";
+      setStatus("Posizione acquisita. Ricerca automatica di Comune e Via…");
+    }, error => {
+      if (!document.contains(button) || button.closest("#commessa-mobile-plant-form") !== form) return;
+      button.disabled = false;
+      button.textContent = "📍 Usa la mia posizione";
+      if (error?.code === 1) setStatus("Non è stato possibile accedere alla posizione. Consenti la localizzazione, verifica che il GPS sia attivo e riprova.");
+      else if (error?.code === 2) setStatus("Posizione non disponibile. Verifica che il GPS del telefono sia attivo e riprova.");
+      else if (error?.code === 3) setStatus("Rilevamento della posizione scaduto. Spostati in un punto con più segnale e riprova.");
+      else setStatus("Non è stato possibile rilevare la posizione. Verifica il GPS e riprova.");
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  }
+
   function currentElements() {
     return {
       wrap: document.getElementById("commessa-plants-menu-wrap"),
@@ -146,6 +207,7 @@
 
     initialized = true;
     ensureMobileView();
+    document.addEventListener("click", handleMobileCurrentLocation, true);
     document.getElementById("commessa-plants-menu")?.remove();
     toggle.removeAttribute("aria-haspopup");
     toggle.removeAttribute("aria-expanded");

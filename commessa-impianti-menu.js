@@ -14,6 +14,7 @@
   ensureAccountingRoundsModule();
 
   let initialized = false;
+  let opening = false;
   let availabilityTimer = null;
 
   function ensureMobileView() {
@@ -65,7 +66,44 @@
     wrap.classList.toggle("hidden", !(hasCommessa && allowed));
   }
 
+  function showMobileOpeningState(commessa) {
+    const mobile = document.getElementById("commessa-mobile-management");
+    if (!mobile) return;
+    mobile.classList.remove("hidden");
+    mobile.setAttribute("aria-hidden", "false");
+    mobile.setAttribute("aria-busy", "true");
+    document.getElementById("commessa-mobile-management-home")?.classList.remove("hidden");
+    document.getElementById("commessa-mobile-plant-list")?.classList.add("hidden");
+    document.getElementById("commessa-mobile-plant-editor")?.classList.add("hidden");
+    const title = document.getElementById("commessa-mobile-management-title");
+    const meta = document.getElementById("commessa-mobile-management-meta");
+    const stats = document.getElementById("commessa-mobile-management-stats");
+    if (title) title.textContent = commessa?.nome || "Gestione commessa";
+    if (meta) meta.textContent = `Cod. ${commessa?.codice || "—"}`;
+    if (stats) stats.innerHTML = '<span><b>…</b> caricamento dati commessa</span>';
+    mobile.querySelectorAll('[data-commessa-mobile-action]').forEach(button => { button.disabled = true; });
+  }
+
+  function finishMobileOpeningState() {
+    const mobile = document.getElementById("commessa-mobile-management");
+    if (!mobile) return;
+    mobile.removeAttribute("aria-busy");
+    mobile.querySelectorAll('[data-commessa-mobile-action]').forEach(button => { button.disabled = false; });
+  }
+
+  function showMobileOpeningError(error) {
+    const mobile = document.getElementById("commessa-mobile-management");
+    const stats = document.getElementById("commessa-mobile-management-stats");
+    if (mobile) {
+      mobile.classList.remove("hidden");
+      mobile.setAttribute("aria-hidden", "false");
+      mobile.removeAttribute("aria-busy");
+    }
+    if (stats) stats.innerHTML = `<span><b>⚠️</b> ${String(error?.message || "Caricamento non riuscito. Chiudi e riprova.").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]))}</span>`;
+  }
+
   async function openCommessaManagement(toggle) {
+    if (opening) return;
     if (typeof canManageData !== "function" || !canManageData()) {
       window.alert("La gestione della commessa è riservata agli amministratori.");
       return;
@@ -80,12 +118,20 @@
       window.alert("La gestione commessa non è ancora disponibile. Ricarica l’app e riprova.");
       return;
     }
+    opening = true;
     toggle.disabled = true;
     try {
       ensureMobileView();
       openManagementPanel("commesse");
-      await window.AccountingV2.openMobileHub(commessa);
+      showMobileOpeningState(commessa);
+      const opened = await window.AccountingV2.openMobileHub(commessa);
+      if (!opened) throw new Error("Il caricamento della commessa è stato interrotto. Riprova.");
+      finishMobileOpeningState();
+    } catch (error) {
+      console.error("Apertura gestione commessa non riuscita:", error);
+      showMobileOpeningError(error);
     } finally {
+      opening = false;
       toggle.disabled = false;
     }
   }

@@ -17,7 +17,7 @@ assert.match(source, /RECORDS_COLLECTION = "verdeLevatoRecords"/);
 assert.match(source, /COMMESSE_COLLECTION = "verdeLevatoCommesse"/);
 assert.match(source, /CONFIG_COLLECTION = "verdeLevatoConfig"/);
 assert.match(source, /source: "MANUALE_VERDE_LEVATO"/);
-assert.match(loader, /data-hera-verde-levato/);
+assert.match(loader, /addScript\("\.\/verde-levato\.js\?v=20260902-verde-levato2", "hera-verde-levato"\)/);
 assert.match(source, /LA MIA POSIZIONE/);
 assert.match(source, /enableHighAccuracy: true, timeout: 18000, maximumAge: 0/);
 assert.match(source, /nominatim\.openstreetmap\.org\/reverse/);

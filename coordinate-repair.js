@@ -125,3 +125,28 @@
     isValidLongitude
   });
 })(window);
+
+/* Carica la nuova implementazione isolata di “Usa la mia posizione”. */
+(function loadCommessaCurrentLocation(root) {
+  "use strict";
+  if (root.__commessaCurrentLocationLoader) return;
+  root.__commessaCurrentLocationLoader = true;
+
+  function load() {
+    if (document.querySelector('script[data-commessa-current-location="1"]')) return;
+    const script = document.createElement("script");
+    script.src = "commessa-current-location.js?v=20260904-1";
+    script.async = false;
+    script.dataset.commessaCurrentLocation = "1";
+    script.onerror = function () {
+      console.error("Impossibile caricare il nuovo flusso Usa la mia posizione.");
+    };
+    (document.head || document.documentElement).appendChild(script);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", load, { once: true });
+  } else {
+    load();
+  }
+})(window);

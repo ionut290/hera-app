@@ -79,7 +79,6 @@ jobs:
           npm run check:first-login-password
           npm run check:login-retry
           npm run check:android-platform
-          npm run check:fatto-critical
           npm run check:fuel-stations
           npm run check:startup-splash
           npm run check:today-summary

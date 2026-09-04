@@ -1,61 +1,21 @@
-/* Menu tre puntini commessa: ricostruito da zero, indipendente e mobile-first. */
+/* Accesso rapido alla gestione commessa dalla testata, ottimizzato per telefono. */
 (() => {
   "use strict";
 
-  const IDS = {
-    wrap: "commessa-plants-menu-wrap",
-    toggle: "commessa-plants-menu-btn",
-    menu: "commessa-plants-menu",
-    panel: "panel-commesse",
-    mobile: "commessa-mobile-management",
-    mobileHome: "commessa-mobile-management-home",
-    mobileList: "commessa-mobile-plant-list",
-    mobileEditor: "commessa-mobile-plant-editor",
-    mobileForm: "commessa-mobile-plant-form"
-  };
-
-  let busy = false;
-  let editorLockUntil = 0;
-  let lastPointerToggleAt = 0;
-
-  function el(id) {
-    return document.getElementById(id);
-  }
-
-  function canOpen() {
-    try {
-      return typeof canManageData === "function"
-        && canManageData()
-        && typeof selectedCommessaId !== "undefined"
-        && Boolean(String(selectedCommessaId || "").trim());
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function selectedCommessa() {
-    try {
-      const id = String(selectedCommessaId || "").trim();
-      return id && typeof commesseById !== "undefined" ? commesseById.get(id) : null;
-    } catch (_) {
-      return null;
-    }
-  }
+  const wrap = document.getElementById("commessa-plants-menu-wrap");
+  const toggle = document.getElementById("commessa-plants-menu-btn");
+  const title = document.getElementById("commessa-focus-label");
+  if (!wrap || !toggle || !title) return;
 
   function ensureMobileView() {
-    if (el(IDS.mobile)) return true;
-    const panel = el(IDS.panel);
-    if (!panel) return false;
-
+    if (document.getElementById("commessa-mobile-management")) return;
+    const panel = document.getElementById("panel-commesse");
+    if (!panel) return;
     panel.insertAdjacentHTML("beforeend", `
       <section id="commessa-mobile-management" class="commessa-mobile-management hidden" aria-hidden="true">
         <header class="commessa-mobile-management-head">
           <button id="commessa-mobile-management-back" class="btn" type="button">← Commessa</button>
-          <div>
-            <p class="management-eyebrow">GESTIONE COMMESSA</p>
-            <h2 id="commessa-mobile-management-title">Gestione commessa</h2>
-            <p id="commessa-mobile-management-meta" class="muted"></p>
-          </div>
+          <div><p class="management-eyebrow">GESTIONE COMMESSA</p><h2 id="commessa-mobile-management-title">Gestione commessa</h2><p id="commessa-mobile-management-meta" class="muted"></p></div>
         </header>
         <div id="commessa-mobile-management-stats" class="commessa-mobile-management-stats"></div>
         <section id="commessa-mobile-management-home">
@@ -69,61 +29,25 @@
           </div>
         </section>
         <section id="commessa-mobile-plant-list" class="hidden" aria-hidden="true">
-          <div class="commessa-mobile-section-head">
-            <button type="button" class="btn" data-commessa-mobile-action="home">← Gestione</button>
-            <div><h3>Modifica impianti</h3><p class="muted">Cerca e seleziona l’impianto da modificare.</p></div>
-          </div>
+          <div class="commessa-mobile-section-head"><button type="button" class="btn" data-commessa-mobile-action="home">← Gestione</button><div><h3>Modifica impianti</h3><p class="muted">Cerca e seleziona l’impianto da modificare.</p></div></div>
           <label class="commessa-mobile-search"><span aria-hidden="true">⌕</span><input id="commessa-mobile-plant-search" type="search" placeholder="Nome, comune, ID SAP o codice prezzo" autocomplete="off"></label>
           <div id="commessa-mobile-plant-results" class="commessa-mobile-plant-results"></div>
         </section>
         <section id="commessa-mobile-plant-editor" class="hidden" aria-hidden="true">
-          <div class="commessa-mobile-section-head">
-            <button id="commessa-mobile-editor-back" type="button" class="btn">← Indietro</button>
-            <div><p class="management-eyebrow" id="commessa-mobile-editor-eyebrow">NUOVO IMPIANTO</p><h3 id="commessa-mobile-editor-title">Aggiungi impianto</h3><p class="muted">I campi economici vengono calcolati dal prezziario.</p></div>
-          </div>
-          <form id="commessa-mobile-plant-form" class="commessa-mobile-plant-form">
-            <div id="commessa-mobile-plant-fields"></div>
-            <button id="commessa-mobile-add-work" class="btn commessa-mobile-add-work hidden" type="button">＋ Nuova lavorazione sullo stesso impianto</button>
-            <p id="commessa-mobile-plant-feedback" class="row-feedback" role="alert"></p>
-            <div class="commessa-mobile-form-actions">
-              <button id="commessa-mobile-plant-cancel" class="btn" type="button">Annulla</button>
-              <button id="commessa-mobile-plant-save" class="btn btn-primary" type="submit">Salva impianto</button>
-            </div>
-          </form>
+          <div class="commessa-mobile-section-head"><button id="commessa-mobile-editor-back" type="button" class="btn">← Indietro</button><div><p class="management-eyebrow" id="commessa-mobile-editor-eyebrow">NUOVO IMPIANTO</p><h3 id="commessa-mobile-editor-title">Aggiungi impianto</h3><p class="muted">I campi economici vengono calcolati dal prezziario.</p></div></div>
+          <form id="commessa-mobile-plant-form" class="commessa-mobile-plant-form"><div id="commessa-mobile-plant-fields"></div><button id="commessa-mobile-add-work" class="btn commessa-mobile-add-work hidden" type="button">＋ Nuova lavorazione sullo stesso impianto</button><p id="commessa-mobile-plant-feedback" class="row-feedback" role="alert"></p><div class="commessa-mobile-form-actions"><button id="commessa-mobile-plant-cancel" class="btn" type="button">Annulla</button><button id="commessa-mobile-plant-save" class="btn btn-primary" type="submit">Salva impianto</button></div></form>
         </section>
       </section>`);
-    return true;
   }
 
-  function setMenuOpen(open) {
-    const toggle = el(IDS.toggle);
-    const menu = el(IDS.menu);
-    if (!toggle || !menu) return;
-    menu.classList.toggle("hidden", !open);
-    menu.setAttribute("aria-hidden", open ? "false" : "true");
-    toggle.setAttribute("aria-expanded", open ? "true" : "false");
-  }
+  function restoreMobilePlantEditor(form) {
+    if (!form || !document.contains(form)) return false;
+    const mobile = document.getElementById("commessa-mobile-management");
+    const home = document.getElementById("commessa-mobile-management-home");
+    const list = document.getElementById("commessa-mobile-plant-list");
+    const editor = document.getElementById("commessa-mobile-plant-editor");
+    if (!mobile || !editor || !editor.contains(form)) return false;
 
-  function closeMenu() {
-    setMenuOpen(false);
-  }
-
-  function updateAvailability() {
-    const wrap = el(IDS.wrap);
-    if (!wrap) return;
-    const available = canOpen();
-    wrap.classList.toggle("hidden", !available);
-    if (!available) closeMenu();
-  }
-
-  function restoreEditorIfLocked() {
-    if (Date.now() > editorLockUntil) return;
-    const mobile = el(IDS.mobile);
-    const home = el(IDS.mobileHome);
-    const list = el(IDS.mobileList);
-    const editor = el(IDS.mobileEditor);
-    const form = el(IDS.mobileForm);
-    if (!mobile || !editor || !form) return;
     mobile.classList.remove("hidden");
     mobile.setAttribute("aria-hidden", "false");
     home?.classList.add("hidden");
@@ -132,149 +56,128 @@
     list?.setAttribute("aria-hidden", "true");
     editor.classList.remove("hidden");
     editor.setAttribute("aria-hidden", "false");
+    return true;
   }
 
-  async function openAction(action) {
-    if (busy) return;
-    if (!canOpen()) {
+  function handleMobileCurrentLocation(event) {
+    const button = event.target.closest?.("#commessa-mobile-current-location");
+    if (!button) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const form = button.closest("#commessa-mobile-plant-form");
+    if (!form) return;
+    const status = form.querySelector("#commessa-mobile-geocode-status");
+    const setStatus = (message) => { if (status) status.textContent = message; };
+    restoreMobilePlantEditor(form);
+
+    if (!navigator.geolocation) {
+      setStatus("La posizione automatica non è disponibile su questo dispositivo.");
+      return;
+    }
+
+    let requestFinished = false;
+    const keepEditorOpen = () => {
+      if (!requestFinished && !document.hidden) restoreMobilePlantEditor(form);
+    };
+    const cleanup = () => {
+      requestFinished = true;
+      window.removeEventListener("focus", keepEditorOpen);
+      document.removeEventListener("visibilitychange", keepEditorOpen);
+    };
+    window.addEventListener("focus", keepEditorOpen);
+    document.addEventListener("visibilitychange", keepEditorOpen);
+
+    button.disabled = true;
+    button.textContent = "Rilevamento posizione…";
+    setStatus("Rilevamento GPS in corso…");
+
+    navigator.geolocation.getCurrentPosition(position => {
+      cleanup();
+      if (!document.contains(button) || button.closest("#commessa-mobile-plant-form") !== form) return;
+      restoreMobilePlantEditor(form);
+      const latitude = Number(position?.coords?.latitude);
+      const longitude = Number(position?.coords?.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        button.disabled = false;
+        button.textContent = "📍 Usa la mia posizione";
+        setStatus("Il telefono ha restituito coordinate non valide. Riprova.");
+        return;
+      }
+
+      const latitudeInput = form.querySelector('[data-v2-field="latitudine"]');
+      const longitudeInput = form.querySelector('[data-v2-field="longitudine"]');
+      if (latitudeInput) latitudeInput.value = latitude.toFixed(6);
+      if (longitudeInput) longitudeInput.value = longitude.toFixed(6);
+      form.dataset.mobileGeocodeKey = "";
+      latitudeInput?.dispatchEvent(new Event("input", { bubbles: true }));
+      longitudeInput?.dispatchEvent(new Event("input", { bubbles: true }));
+
+      restoreMobilePlantEditor(form);
+      button.disabled = false;
+      button.textContent = "✓ Posizione acquisita";
+      setStatus("Posizione acquisita. Ricerca automatica di Comune e Via…");
+    }, error => {
+      cleanup();
+      if (!document.contains(button) || button.closest("#commessa-mobile-plant-form") !== form) return;
+      restoreMobilePlantEditor(form);
+      button.disabled = false;
+      button.textContent = "📍 Usa la mia posizione";
+      if (error?.code === 1) setStatus("Non è stato possibile accedere alla posizione. Consenti la localizzazione, verifica che il GPS sia attivo e riprova.");
+      else if (error?.code === 2) setStatus("Posizione non disponibile. Verifica che il GPS del telefono sia attivo e riprova.");
+      else if (error?.code === 3) setStatus("Rilevamento della posizione scaduto. Spostati in un punto con più segnale e riprova.");
+      else setStatus("Non è stato possibile rilevare la posizione. Verifica il GPS e riprova.");
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  }
+
+  function updateAvailability() {
+    const available = typeof canManageData === "function"
+      && canManageData()
+      && typeof selectedCommessaId !== "undefined"
+      && Boolean(String(selectedCommessaId || "").trim());
+    wrap.classList.toggle("hidden", !available);
+  }
+
+  async function openCommessaManagement() {
+    if (typeof canManageData !== "function" || !canManageData()) {
+      window.alert("La gestione della commessa è riservata agli amministratori.");
+      return;
+    }
+    const commessaId = typeof selectedCommessaId === "undefined" ? "" : String(selectedCommessaId || "").trim();
+    const commessa = commessaId && typeof commesseById !== "undefined" ? commesseById.get(commessaId) : null;
+    if (!commessa) {
       window.alert("Seleziona prima una commessa.");
       return;
     }
-    const commessa = selectedCommessa();
-    if (!commessa) {
-      window.alert("Commessa non disponibile. Riaprila e riprova.");
-      return;
-    }
-    if (!ensureMobileView()) {
-      window.alert("Gestione commessa non disponibile. Ricarica l’app e riprova.");
-      return;
-    }
     if (!window.AccountingV2?.openMobileHub) {
-      window.alert("Modulo gestione impianti non ancora caricato. Ricarica l’app e riprova.");
+      window.alert("La gestione commessa non è ancora disponibile. Ricarica l’app e riprova.");
       return;
     }
-
-    busy = true;
-    const toggle = el(IDS.toggle);
-    if (toggle) toggle.disabled = true;
-    closeMenu();
-
+    toggle.disabled = true;
     try {
-      if (typeof openManagementPanel === "function") openManagementPanel("commesse");
-      const opened = await window.AccountingV2.openMobileHub(commessa);
-      if (!opened) throw new Error("Apertura interrotta");
-
-      if (!action || action === "home") return;
-      const target = document.querySelector(`[data-commessa-mobile-action="${CSS.escape(action)}"]`);
-      if (!target) throw new Error(`Azione ${action} non disponibile`);
-      target.click();
-    } catch (error) {
-      console.error("Menu tre puntini: apertura azione non riuscita", error);
-      window.alert("Non è stato possibile aprire questa funzione. Riprova.");
+      ensureMobileView();
+      openManagementPanel("commesse");
+      await window.AccountingV2.openMobileHub(commessa);
     } finally {
-      busy = false;
-      if (toggle) toggle.disabled = false;
+      toggle.disabled = false;
     }
   }
 
-  function toggleFromPointer(event) {
-    const toggle = event.target.closest?.(`#${IDS.toggle}`);
-    if (!toggle) return false;
-    if (!canOpen()) return true;
+  ensureMobileView();
+  document.addEventListener("click", handleMobileCurrentLocation, true);
+  document.getElementById("commessa-plants-menu")?.remove();
+  toggle.removeAttribute("aria-haspopup");
+  toggle.removeAttribute("aria-expanded");
+  toggle.removeAttribute("aria-controls");
+  toggle.setAttribute("aria-label", "Apri gestione commessa");
+  toggle.setAttribute("title", "Gestione commessa");
+  toggle.addEventListener("click", (event) => {
     event.preventDefault();
-    event.stopPropagation();
-    lastPointerToggleAt = Date.now();
-    const menu = el(IDS.menu);
-    setMenuOpen(Boolean(menu?.classList.contains("hidden")));
-    return true;
-  }
-
-  function handleToggle(event) {
-    const toggle = event.target.closest?.(`#${IDS.toggle}`);
-    if (!toggle) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    if (Date.now() - lastPointerToggleAt < 700) return true;
-    if (!canOpen()) return true;
-    const menu = el(IDS.menu);
-    setMenuOpen(Boolean(menu?.classList.contains("hidden")));
-    return true;
-  }
-
-  function handleMenuAction(event) {
-    const button = event.target.closest?.("[data-commessa-plants-action]");
-    if (!button) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    void openAction(button.dataset.commessaPlantsAction || "home");
-    return true;
-  }
-
-  function handleDocumentClick(event) {
-    if (handleToggle(event)) return;
-    if (handleMenuAction(event)) return;
-    if (!event.target.closest?.(`#${IDS.wrap}`)) closeMenu();
-
-    if (event.target.closest?.("#commessa-mobile-current-location")) {
-      editorLockUntil = Date.now() + 20000;
-      setTimeout(restoreEditorIfLocked, 0);
-    }
-  }
-
-  function initialize() {
-    const wrap = el(IDS.wrap);
-    const toggle = el(IDS.toggle);
-    const menu = el(IDS.menu);
-    if (!wrap || !toggle || !menu) return false;
-
-    ensureMobileView();
-    toggle.setAttribute("aria-label", "Apri menu gestione commessa");
-    toggle.setAttribute("title", "Gestione commessa");
-    toggle.setAttribute("aria-haspopup", "menu");
-    toggle.setAttribute("aria-controls", IDS.menu);
-    setMenuOpen(false);
-    updateAvailability();
-    return true;
-  }
-
-  document.addEventListener("pointerdown", event => {
-    toggleFromPointer(event);
-  }, true);
-  document.addEventListener("touchstart", event => {
-    toggleFromPointer(event);
-  }, { capture: true, passive: false });
-  document.addEventListener("click", handleDocumentClick, false);
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape") closeMenu();
-  });
-  window.addEventListener("pageshow", () => {
-    initialize();
-    restoreEditorIfLocked();
-  });
-  window.addEventListener("focus", () => {
-    updateAvailability();
-    restoreEditorIfLocked();
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) {
-      updateAvailability();
-      restoreEditorIfLocked();
-    }
+    void openCommessaManagement();
   });
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initialize, { once: true });
-  } else {
-    initialize();
-  }
-
-  const observer = new MutationObserver(() => updateAvailability());
-  const title = el("commessa-focus-label");
-  if (title) observer.observe(title, { childList: true, characterData: true, subtree: true });
-
-  window.CommessaThreeDotsMenu = {
-    version: "2026.09.04-rebuild2-pointerdown",
-    open: openAction,
-    refresh: updateAvailability
-  };
+  new MutationObserver(updateAvailability).observe(title, { childList: true, characterData: true, subtree: true });
+  window.addEventListener("pageshow", updateAvailability);
+  updateAvailability();
 })();

@@ -27,7 +27,7 @@ assert.match(androidInstall, /OK = SÌ, INSTALLA/);
 assert.match(androidInstall, /addEventListener\("click", handleAndroidInstallClick, true\)/);
 assert.match(androidInstall, /window\.open\(PLAY_STORE_URL, "_blank", "noopener,noreferrer"\)/);
 assert.doesNotMatch(app, /window\.location\.assign\(updateUrl/);
-assert.match(html, /PWA_EMERGENCY_CACHE_RESET_VERSION\s*=\s*"20260901-cobo-sfalcio1"/);
+assert.match(html, /PWA_EMERGENCY_CACHE_RESET_VERSION\s*=\s*"20260902-verde-levato2"/);
 assert.match(html, /ANDROID_EMERGENCY_CACHE_RESET_VERSION\s*=\s*"20260812-android1"/);
 assert.match(html, /const cacheResetVersion\s*=\s*isNativeAndroid/);
 assert.doesNotMatch(html, /if\s*\(isNativeAndroid\s*\|\|/);

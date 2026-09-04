@@ -64,7 +64,7 @@ assert.match(nativeUpdatePlugin, /@CapacitorPlugin\(name = "HeraAppUpdate"\)/);
 assert.match(nativeUpdatePlugin, /UpdateAvailability\.UPDATE_AVAILABLE/);
 assert.match(nativeUpdatePlugin, /AppUpdateType\.IMMEDIATE/);
 assert.match(nativeUpdatePlugin, /startUpdateFlowForResult/);
-assert.match(html, /sw\.js\?v=20260901-cobo-sfalcio1/);
+assert.match(html, new RegExp(`sw\\.js\\?v=${serviceWorkerResetMatch[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 const updateFeature = fs.readFileSync("update-app-feature.js", "utf8");
 assert.match(updateFeature, /id = "hera-update-notice"/);
 assert.match(updateFeature, /Nuova versione Android disponibile/);

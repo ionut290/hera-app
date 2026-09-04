@@ -2,20 +2,10 @@
 (() => {
   "use strict";
 
-  function ensureAccountingRoundsModule() {
-    if (window.VargaAccountingRounds || document.querySelector('script[data-varga-accounting-rounds]')) return;
-    const script = document.createElement("script");
-    script.src = `accounting-rounds.js?v=20260903-2`;
-    script.async = true;
-    script.dataset.vargaAccountingRounds = "1";
-    document.head.appendChild(script);
-  }
-
-  ensureAccountingRoundsModule();
-
-  let initialized = false;
-  let opening = false;
-  let availabilityTimer = null;
+  const wrap = document.getElementById("commessa-plants-menu-wrap");
+  const toggle = document.getElementById("commessa-plants-menu-btn");
+  const title = document.getElementById("commessa-focus-label");
+  if (!wrap || !toggle || !title) return;
 
   function ensureMobileView() {
     if (document.getElementById("commessa-mobile-management")) return;
@@ -50,157 +40,15 @@
       </section>`);
   }
 
-  function restoreMobilePlantEditor(form) {
-    if (!form || !document.contains(form)) return false;
-    const mobile = document.getElementById("commessa-mobile-management");
-    const home = document.getElementById("commessa-mobile-management-home");
-    const list = document.getElementById("commessa-mobile-plant-list");
-    const editor = document.getElementById("commessa-mobile-plant-editor");
-    if (!mobile || !editor || !editor.contains(form)) return false;
-
-    mobile.classList.remove("hidden");
-    mobile.setAttribute("aria-hidden", "false");
-    home?.classList.add("hidden");
-    home?.setAttribute("aria-hidden", "true");
-    list?.classList.add("hidden");
-    list?.setAttribute("aria-hidden", "true");
-    editor.classList.remove("hidden");
-    editor.setAttribute("aria-hidden", "false");
-    return true;
-  }
-
-  function handleMobileCurrentLocation(event) {
-    const button = event.target.closest?.("#commessa-mobile-current-location");
-    if (!button) return;
-
-    // Su iOS la richiesta GPS può portare temporaneamente la web-app fuori focus.
-    // Manteniamo esplicitamente aperto l'editor del nuovo impianto durante tutto
-    // il ciclo della richiesta, senza toccare FATTO, WhatsApp o dati Firestore.
-    event.preventDefault();
-    event.stopImmediatePropagation();
-
-    const form = button.closest("#commessa-mobile-plant-form");
-    if (!form) return;
-    const status = form.querySelector("#commessa-mobile-geocode-status");
-    const setStatus = (message) => { if (status) status.textContent = message; };
-    restoreMobilePlantEditor(form);
-
-    if (!navigator.geolocation) {
-      setStatus("La posizione automatica non è disponibile su questo dispositivo.");
-      return;
-    }
-
-    let requestFinished = false;
-    const keepEditorOpen = () => {
-      if (!requestFinished && !document.hidden) restoreMobilePlantEditor(form);
-    };
-    const cleanup = () => {
-      requestFinished = true;
-      window.removeEventListener("focus", keepEditorOpen);
-      document.removeEventListener("visibilitychange", keepEditorOpen);
-    };
-    window.addEventListener("focus", keepEditorOpen);
-    document.addEventListener("visibilitychange", keepEditorOpen);
-
-    button.disabled = true;
-    button.textContent = "Rilevamento posizione…";
-    setStatus("Rilevamento GPS in corso…");
-
-    navigator.geolocation.getCurrentPosition(position => {
-      cleanup();
-      if (!document.contains(button) || button.closest("#commessa-mobile-plant-form") !== form) return;
-      restoreMobilePlantEditor(form);
-      const latitude = Number(position?.coords?.latitude);
-      const longitude = Number(position?.coords?.longitude);
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-        button.disabled = false;
-        button.textContent = "📍 Usa la mia posizione";
-        setStatus("Il telefono ha restituito coordinate non valide. Riprova.");
-        return;
-      }
-
-      const latitudeInput = form.querySelector('[data-v2-field="latitudine"]');
-      const longitudeInput = form.querySelector('[data-v2-field="longitudine"]');
-      if (latitudeInput) latitudeInput.value = latitude.toFixed(6);
-      if (longitudeInput) longitudeInput.value = longitude.toFixed(6);
-      form.dataset.mobileGeocodeKey = "";
-
-      // Riutilizza il flusso già esistente di accounting-v2: gli eventi input
-      // avviano la compilazione automatica di Comune e Via senza cambiare vista.
-      latitudeInput?.dispatchEvent(new Event("input", { bubbles: true }));
-      longitudeInput?.dispatchEvent(new Event("input", { bubbles: true }));
-
-      restoreMobilePlantEditor(form);
-      button.disabled = false;
-      button.textContent = "✓ Posizione acquisita";
-      setStatus("Posizione acquisita. Ricerca automatica di Comune e Via…");
-    }, error => {
-      cleanup();
-      if (!document.contains(button) || button.closest("#commessa-mobile-plant-form") !== form) return;
-      restoreMobilePlantEditor(form);
-      button.disabled = false;
-      button.textContent = "📍 Usa la mia posizione";
-      if (error?.code === 1) setStatus("Non è stato possibile accedere alla posizione. Consenti la localizzazione, verifica che il GPS sia attivo e riprova.");
-      else if (error?.code === 2) setStatus("Posizione non disponibile. Verifica che il GPS del telefono sia attivo e riprova.");
-      else if (error?.code === 3) setStatus("Rilevamento della posizione scaduto. Spostati in un punto con più segnale e riprova.");
-      else setStatus("Non è stato possibile rilevare la posizione. Verifica il GPS e riprova.");
-    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
-  }
-
-  function currentElements() {
-    return {
-      wrap: document.getElementById("commessa-plants-menu-wrap"),
-      toggle: document.getElementById("commessa-plants-menu-btn"),
-      title: document.getElementById("commessa-focus-label")
-    };
-  }
-
   function updateAvailability() {
-    const { wrap } = currentElements();
-    if (!wrap) return;
-    const hasCommessa = typeof selectedCommessaId !== "undefined" && Boolean(String(selectedCommessaId || "").trim());
-    const allowed = typeof canManageData === "function" && canManageData();
-    wrap.classList.toggle("hidden", !(hasCommessa && allowed));
+    const available = typeof canManageData === "function"
+      && canManageData()
+      && typeof selectedCommessaId !== "undefined"
+      && Boolean(String(selectedCommessaId || "").trim());
+    wrap.classList.toggle("hidden", !available);
   }
 
-  function showMobileOpeningState(commessa) {
-    const mobile = document.getElementById("commessa-mobile-management");
-    if (!mobile) return;
-    mobile.classList.remove("hidden");
-    mobile.setAttribute("aria-hidden", "false");
-    mobile.setAttribute("aria-busy", "true");
-    document.getElementById("commessa-mobile-management-home")?.classList.remove("hidden");
-    document.getElementById("commessa-mobile-plant-list")?.classList.add("hidden");
-    document.getElementById("commessa-mobile-plant-editor")?.classList.add("hidden");
-    const title = document.getElementById("commessa-mobile-management-title");
-    const meta = document.getElementById("commessa-mobile-management-meta");
-    const stats = document.getElementById("commessa-mobile-management-stats");
-    if (title) title.textContent = commessa?.nome || "Gestione commessa";
-    if (meta) meta.textContent = `Cod. ${commessa?.codice || "—"}`;
-    if (stats) stats.innerHTML = '<span><b>…</b> caricamento dati commessa</span>';
-    mobile.querySelectorAll('[data-commessa-mobile-action]').forEach(button => { button.disabled = true; });
-  }
-
-  function finishMobileOpeningState() {
-    const mobile = document.getElementById("commessa-mobile-management");
-    if (!mobile) return;
-    mobile.removeAttribute("aria-busy");
-    mobile.querySelectorAll('[data-commessa-mobile-action]').forEach(button => { button.disabled = false; });
-  }
-
-  function showMobileOpeningError(error) {
-    const mobile = document.getElementById("commessa-mobile-management");
-    const stats = document.getElementById("commessa-mobile-management-stats");
-    if (mobile) {
-      mobile.classList.remove("hidden");
-      mobile.setAttribute("aria-hidden", "false");
-      mobile.removeAttribute("aria-busy");
-    }
-    if (stats) stats.innerHTML = `<span><b>⚠️</b> ${String(error?.message || "Caricamento non riuscito. Chiudi e riprova.").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]))}</span>`;
-  }
-
-  async function openCommessaManagement(toggle) {
-    if (opening) return;
+  async function openCommessaManagement() {
     if (typeof canManageData !== "function" || !canManageData()) {
       window.alert("La gestione della commessa è riservata agli amministratori.");
       return;
@@ -215,73 +63,29 @@
       window.alert("La gestione commessa non è ancora disponibile. Ricarica l’app e riprova.");
       return;
     }
-    opening = true;
     toggle.disabled = true;
     try {
       ensureMobileView();
       openManagementPanel("commesse");
-      showMobileOpeningState(commessa);
-      const opened = await window.AccountingV2.openMobileHub(commessa);
-      if (!opened) throw new Error("Il caricamento della commessa è stato interrotto. Riprova.");
-      finishMobileOpeningState();
-    } catch (error) {
-      console.error("Apertura gestione commessa non riuscita:", error);
-      showMobileOpeningError(error);
+      await window.AccountingV2.openMobileHub(commessa);
     } finally {
-      opening = false;
       toggle.disabled = false;
     }
   }
 
-  function initialize() {
-    if (initialized) {
-      updateAvailability();
-      return true;
-    }
-    const { wrap, toggle, title } = currentElements();
-    if (!wrap || !toggle || !title) return false;
+  ensureMobileView();
+  document.getElementById("commessa-plants-menu")?.remove();
+  toggle.removeAttribute("aria-haspopup");
+  toggle.removeAttribute("aria-expanded");
+  toggle.removeAttribute("aria-controls");
+  toggle.setAttribute("aria-label", "Apri gestione commessa");
+  toggle.setAttribute("title", "Gestione commessa");
+  toggle.addEventListener("click", (event) => {
+    event.preventDefault();
+    void openCommessaManagement();
+  });
 
-    initialized = true;
-    ensureMobileView();
-    document.addEventListener("click", handleMobileCurrentLocation, true);
-    document.getElementById("commessa-plants-menu")?.remove();
-    toggle.removeAttribute("aria-haspopup");
-    toggle.removeAttribute("aria-expanded");
-    toggle.removeAttribute("aria-controls");
-    toggle.setAttribute("aria-label", "Apri gestione commessa");
-    toggle.setAttribute("title", "Gestione commessa");
-    toggle.addEventListener("click", event => {
-      event.preventDefault();
-      void openCommessaManagement(toggle);
-    });
-
-    new MutationObserver(updateAvailability).observe(title, { childList: true, characterData: true, subtree: true });
-    updateAvailability();
-    return true;
-  }
-
-  function bootUntilReady() {
-    if (initialize()) return;
-    let attempts = 0;
-    const timer = setInterval(() => {
-      attempts += 1;
-      if (initialize() || attempts >= 80) clearInterval(timer);
-    }, 250);
-  }
-
-  window.addEventListener("pageshow", () => { initialize(); updateAvailability(); });
-  window.addEventListener("focus", updateAvailability);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) updateAvailability(); });
-  document.addEventListener("click", event => {
-    if (event.target.closest?.('[data-commessa-id], .commessa-card, .commessa-item, [data-action="open-commessa"]')) {
-      setTimeout(updateAvailability, 0);
-      setTimeout(updateAvailability, 150);
-    }
-  }, true);
-
-  availabilityTimer = setInterval(updateAvailability, 1000);
-  window.addEventListener("beforeunload", () => clearInterval(availabilityTimer), { once: true });
-
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootUntilReady, { once: true });
-  else bootUntilReady();
+  new MutationObserver(updateAvailability).observe(title, { childList: true, characterData: true, subtree: true });
+  window.addEventListener("pageshow", updateAvailability);
+  updateAvailability();
 })();

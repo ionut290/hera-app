@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v220";
-const CACHE_RESET_VERSION = "20260902-verde-levato2";
+const CACHE_NAME = "varga-cantieri-shell-v221";
+const CACHE_RESET_VERSION = "20260904-menu-cache1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -138,6 +138,7 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/approval-access.js",
   "/header-menu-runtime.js",
   "/operational-import-repair.js",
+  "/commessa-impianti-menu.js",
   "/commessa-produced-widget.js",
   "/loading-humor.js",
   "/client-error-reporter.js",

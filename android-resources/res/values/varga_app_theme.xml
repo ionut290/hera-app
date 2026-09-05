@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Tema applicativo esplicitamente privo di ActionBar e titolo.
+      Eredita le impostazioni generate da Capacitor, ma impedisce che alcuni
+      dispositivi Android ripristinino la barra "Varga Cantieri".
+    -->
+    <style name="VargaAppTheme" parent="AppTheme.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+
+    <style name="VargaAppTheme.Launch" parent="AppTheme.NoActionBarLaunch">
+        <item name="postSplashScreenTheme">@style/VargaAppTheme</item>
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+</resources>

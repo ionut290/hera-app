@@ -24,14 +24,14 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/VargaAppTheme">
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation"
             android:exported="true"
             android:label="@string/title_activity_main"
             android:launchMode="singleTask"
-            android:theme="@style/AppTheme.NoActionBarLaunch">
+            android:theme="@style/VargaAppTheme.Launch">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -50,7 +50,7 @@
             android:name=".camera.HeraContinuousCameraActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:exported="false"
-            android:theme="@style/AppTheme.NoActionBar" />
+            android:theme="@style/VargaAppTheme" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

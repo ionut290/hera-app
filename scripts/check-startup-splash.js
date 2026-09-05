@@ -13,6 +13,9 @@ const styles = read("style.css");
 const serviceWorker = read("sw.js");
 const manifest = JSON.parse(read("manifest.webmanifest"));
 const workflow = read(".github/workflows/build-android-aab.yml");
+const androidManifest = read("android/app/src/main/AndroidManifest.xml");
+const mainActivity = read("android/app/src/main/java/it/vargacantieri/hera/MainActivity.java");
+const vargaAppTheme = read("android-resources/res/values/varga_app_theme.xml");
 
 assert.match(index, /class="startup-loading-logo"/);
 assert.match(index, /icons\/varga-cantieri-512\.png/);
@@ -27,6 +30,12 @@ assert.equal(manifest.theme_color, "#111214");
 assert.match(workflow, /find android\/app\/src\/main\/res -type f -name "splash\.png" -delete/);
 assert.match(workflow, /cp -R android-resources\/res\/\. android\/app\/src\/main\/res\//);
 assert.match(workflow, /cp icons\/varga-cantieri-512\.png android\/app\/src\/main\/res\/drawable-xhdpi\/splash_logo\.png/);
+assert.match(androidManifest, /android:theme="@style\/VargaAppTheme\.Launch"/);
+assert.match(mainActivity, /supportRequestWindowFeature\(Window\.FEATURE_NO_TITLE\)/);
+assert.match(mainActivity, /getSupportActionBar\(\)\.hide\(\)/);
+assert.match(vargaAppTheme, /name="VargaAppTheme" parent="AppTheme\.NoActionBar"/);
+assert.match(vargaAppTheme, /name="windowActionBar">false</);
+assert.match(vargaAppTheme, /name="windowNoTitle">true</);
 
 const splashDrawable = read("android-resources/res/drawable/splash.xml");
 assert.match(splashDrawable, /#111214/);

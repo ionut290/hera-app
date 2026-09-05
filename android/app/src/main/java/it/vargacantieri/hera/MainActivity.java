@@ -7,6 +7,7 @@ import android.content.pm.PackageInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.Window;
 import android.webkit.WebView;
 
 import androidx.activity.EdgeToEdge;
@@ -31,6 +32,9 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Impedisce ad Android/AppCompat di creare la barra con il titolo
+        // "Varga Cantieri" prima che venga inizializzata la WebView.
+        supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
         registerPlugin(HeraGeofencePlugin.class);
         registerPlugin(HeraBiometricPlugin.class);
         registerPlugin(HeraCredentialVaultPlugin.class);
@@ -40,6 +44,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HeraContinuousCameraPlugin.class);
         EdgeToEdge.enable(this);
         super.onCreate(savedInstanceState);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().hide();
+        }
         hideAndroidStatusBar();
         clearWebViewCacheAfterAppUpdate();
         applyTemporaryLoginDeepLink(getIntent());

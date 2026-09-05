@@ -1,0 +1,76 @@
+name: Deploy Varga Gestionale scheduled sync
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "functions/varga-gestionale-sync.js"
+      - ".github/workflows/deploy-varga-gestionale-schedule.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-varga-gestionale-schedule
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Validate scheduled functions
+        run: |
+          node --check functions/varga-gestionale-sync.js
+          node -e "const f=require('./functions/main.js'); if(typeof f.syncVargaGestionaleAt0530!=='function'||typeof f.syncVargaGestionaleAt1600!=='function') process.exit(1)"
+
+      - name: Prepare scheduled-sync entrypoint
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const entrypointPath = "functions/main.js";
+          const source = fs.readFileSync(entrypointPath, "utf8");
+          const prepared = source
+            .replace(/^const errorReportingFunctions = require\("\.\/error-reporting"\);\r?\n/m, "")
+            .replace(/^\s*errorReportingFunctions,\r?\n/m, "");
+
+          if (prepared === source || prepared.includes("errorReportingFunctions")) {
+            throw new Error("Unable to isolate the scheduled-sync deploy entrypoint.");
+          }
+
+          fs.writeFileSync(entrypointPath, prepared);
+          const exported = require("./functions/main.js");
+          for (const name of ["syncVargaGestionaleAt0530", "syncVargaGestionaleAt1600"]) {
+            if (typeof exported[name] !== "function") throw new Error(`${name} is missing`);
+          }
+          console.log("Scheduled-sync deploy entrypoint loaded successfully");
+          NODE
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+
+      - name: Deploy scheduled functions
+        run: >-
+          npx --yes firebase-tools@latest deploy
+          --only functions:syncVargaGestionaleAt0530,functions:syncVargaGestionaleAt1600
+          --project hera-app-6cd2b
+          --non-interactive
+

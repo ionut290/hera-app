@@ -26,6 +26,8 @@
   let interactionGuardUntil = 0;
   let interactionPointerDown = false;
   let deferredInteractionRefreshTimer = null;
+  const bootstrappingCommessaIds = new Set();
+  let activeTargetIds = new Set();
 
   const state = {
     cacheHits: 0,
@@ -294,7 +296,7 @@
   }
 
   function startIncrementalListener(commessaId, markerMs) {
-    if (!markerMs || unsubscribeCommessaStats.has(commessaId)) return;
+    if (!markerMs || !activeTargetIds.has(commessaId) || unsubscribeCommessaStats.has(commessaId)) return;
     const query = commessaRef(commessaId).collection("impiantoChangeIndex")
       .where("changedAt", ">", new Date(markerMs))
       .orderBy("changedAt", "asc");
@@ -335,7 +337,7 @@
   startIncrementalListener.lastMarkers = new Map();
 
   async function bootstrapCommessa(commessaId) {
-    if (!commessaId || unsubscribeCommessaStats.has(commessaId)) return;
+    if (!commessaId || !activeTargetIds.has(commessaId) || unsubscribeCommessaStats.has(commessaId)) return;
 
     const memoryItems = cloneItems(impiantiByCommessaId.get(commessaId) || []);
     const persistentItems = memoryItems.length ? null : readImpiantiCache(commessaId);
@@ -371,8 +373,10 @@
   async function fallbackFullLoad(commessaId) {
     state.fullFallbackLoads += 1;
     const markerBefore = await latestMarker(commessaId);
+    if (!activeTargetIds.has(commessaId)) return;
     try {
       const snapshot = await commessaRef(commessaId).collection("impianti").get();
+      if (!activeTargetIds.has(commessaId)) return;
       const rawItems = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       applyItems(commessaId, rawItems, markerBefore);
       if (markerBefore > 0) {
@@ -391,18 +395,23 @@
 
   subscribeStatsForCommesse = function subscribeStatsForCommesseCachedIncremental() {
     const targets = targetCommessaIds();
+    activeTargetIds = new Set(targets);
     stopUnused(targets);
     if (!targets.length) return;
     targets.forEach((commessaId) => {
+      if (unsubscribeCommessaStats.has(commessaId) || bootstrappingCommessaIds.has(commessaId)) return;
+      bootstrappingCommessaIds.add(commessaId);
       bootstrapCommessa(commessaId).catch((error) => {
         state.errors.push(`bootstrap ${commessaId}: ${String(error?.message || error)}`);
+      }).finally(() => {
+        bootstrappingCommessaIds.delete(commessaId);
       });
     });
   };
 
   window.HeraCommessaStatsCacheOptimizer = {
     installed: true,
-    version: "1.5.0",
+    version: "1.6.0",
     mode: "tap-warmup-selected-first-persistent-cache-plus-change-index",
     originalSubscribeStatsForCommesse,
     getState: () => ({

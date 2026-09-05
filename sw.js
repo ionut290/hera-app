@@ -94,6 +94,7 @@ const APP_SHELL = [
   "./wastewater-plants.css?v=20260830a",
   "./wastewater-infrastructure.css?v=20260830a",
   "./wastewater-plants.js?v=20260830b",
+  "./gestionale-desktop-return.js?v=20260905-desktop-switch1",
   "./fatto-scroll-guard.js?v=20260824-oneclick2",
   "./squad-context-bridge.js?v=20260823-stability3",
   "./recommended-traffic-weather.js?v=20260823-stability3",
@@ -158,6 +159,7 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/wastewater-plants.js",
   "/wastewater-plants.css",
   "/wastewater-infrastructure.css",
+  "/gestionale-desktop-return.js",
   "/squad-context-bridge.js"
 ]);
 

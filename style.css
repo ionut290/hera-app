@@ -12226,3 +12226,28 @@ body.potature-followup-open { overflow: hidden; }
   .potature-followup-actions { grid-template-columns: 1fr; }
   .potature-followup-actions .btn { width: 100%; }
 }
+/* Ritorno al Gestionale: mostrato da JS soltanto nel browser desktop. */
+#gestionale-desktop-return {
+  position: fixed;
+  z-index: 10050;
+  top: max(10px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 13px;
+  background: rgba(12, 45, 33, .94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .24);
+  backdrop-filter: blur(8px);
+}
+#gestionale-desktop-return button {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid #82d3aa;
+  border-radius: 9px;
+  background: #fff;
+  color: #0f6847;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}

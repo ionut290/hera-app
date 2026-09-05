@@ -20,7 +20,7 @@ assert.ok(statsScriptIndex < sharedClientIndex, "Optimizer must load before Ligh
 assert.ok(statsScriptIndex < navigationScriptIndex, "Optimizer must load before navigation repair");
 assert.match(code, /heraCommessaStatsCacheV1:/);
 assert.match(code, /impiantoChangeIndex/);
-assert.match(code, /where\("changedAt", ">", markerDate\)/);
+assert.match(code, /where\("changedAt", ">", new Date\(markerMs\)\)/);
 assert.match(code, /orderBy\("changedAt", "asc"\)/);
 assert.match(
   code,
@@ -32,12 +32,14 @@ assert.match(
   /snapshot\.docChanges\(\)\.filter\(\(change\) => change\.type !== "removed"\)/,
   "Incremental listener must ignore removed change-index rows"
 );
-assert.match(code, /\.doc\(impiantoId\)\s*;\s*const snap = await ref\.get\(\)/s);
+assert.match(code, /collection\("impianti"\)\.doc\(impiantoId\)\.get\(\)/);
 assert.match(code, /fallbackFullLoad/);
 assert.match(code, /collection\("impianti"\)\.get\(\)/);
 assert.match(code, /readImpiantiCache/);
 assert.match(code, /calculateImpiantiStats/);
 assert.match(code, /recalculateCommessaWorkSummaries/);
+assert.match(code, /bootstrappingCommessaIds\.has\(commessaId\)/, "Concurrent bootstrap loads must be coalesced");
+assert.match(code, /activeTargetIds\.has\(commessaId\)/, "Stale commessa loads must be discarded");
 
 // Sono ammessi Map.set/localStorage.setItem. Vietiamo invece mutazioni Firestore
 // nel nuovo ottimizzatore: deve essere strettamente read-only lato server.

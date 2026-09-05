@@ -2,6 +2,7 @@
 
 const admin = require("firebase-admin");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 const REGION = "europe-west1";
 const SNAPSHOT_COLLECTION = "gestionaleSyncSnapshots";
@@ -278,6 +279,34 @@ exports.rebuildVargaGestionaleSnapshot = onCall({
   const manifest = await buildSnapshot();
   console.log("Snapshot Varga Gestionale completato", manifest);
   return manifest;
+});
+
+const scheduledSyncOptions = {
+  region: REGION,
+  timeZone: "Europe/Rome",
+  timeoutSeconds: 540,
+  memory: "1GiB",
+  retryCount: 1
+};
+
+async function runScheduledVargaGestionaleSync(timeLabel) {
+  const manifest = await buildSnapshot();
+  console.log(`Sincronizzazione programmata Varga Cantieri -> Varga Gestionale completata (${timeLabel})`, manifest);
+  return manifest;
+}
+
+exports.syncVargaGestionaleAt0530 = onSchedule({
+  ...scheduledSyncOptions,
+  schedule: "30 5 * * *"
+}, async () => {
+  return runScheduledVargaGestionaleSync("05:30");
+});
+
+exports.syncVargaGestionaleAt1600 = onSchedule({
+  ...scheduledSyncOptions,
+  schedule: "0 16 * * *"
+}, async () => {
+  return runScheduledVargaGestionaleSync("16:00");
 });
 
 exports.getVargaGestionaleSnapshotManifest = onCall({

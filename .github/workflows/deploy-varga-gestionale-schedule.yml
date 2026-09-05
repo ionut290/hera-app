@@ -37,7 +37,8 @@ jobs:
       - name: Validate scheduled functions
         run: |
           node --check functions/varga-gestionale-sync.js
-          node -e "const f=require('./functions/main.js'); if(typeof f.syncVargaGestionaleAt0530!=='function'||typeof f.syncVargaGestionaleAt1600!=='function') process.exit(1)"
+          node scripts/check-varga-gestionale-incremental-sync.js
+          node -e "const f=require('./functions/main.js'); if(typeof f.syncVargaGestionaleAt0530!=='function'||typeof f.syncVargaGestionaleAt1600!=='function'||typeof f.getVargaGestionaleChanges!=='function'||!f.vgDelta||Object.keys(f.vgDelta).length!==29) process.exit(1)"
 
       - name: Prepare scheduled-sync entrypoint
         shell: bash
@@ -56,8 +57,11 @@ jobs:
 
           fs.writeFileSync(entrypointPath, prepared);
           const exported = require("./functions/main.js");
-          for (const name of ["syncVargaGestionaleAt0530", "syncVargaGestionaleAt1600"]) {
+          for (const name of ["syncVargaGestionaleAt0530", "syncVargaGestionaleAt1600", "getVargaGestionaleChanges"]) {
             if (typeof exported[name] !== "function") throw new Error(`${name} is missing`);
+          }
+          if (!exported.vgDelta || Object.keys(exported.vgDelta).length !== 29) {
+            throw new Error("Incremental change triggers are missing");
           }
           console.log("Scheduled-sync deploy entrypoint loaded successfully");
           NODE
@@ -70,7 +74,6 @@ jobs:
       - name: Deploy scheduled functions
         run: >-
           npx --yes firebase-tools@latest deploy
-          --only functions:syncVargaGestionaleAt0530,functions:syncVargaGestionaleAt1600
+          --only functions:syncVargaGestionaleAt0530,functions:syncVargaGestionaleAt1600,functions:getVargaGestionaleChanges,functions:vgDelta
           --project hera-app-6cd2b
           --non-interactive
-

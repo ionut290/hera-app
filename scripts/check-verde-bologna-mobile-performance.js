@@ -160,7 +160,7 @@ assert.match(loader, /verde-bologna-parchi-mobile\.js\?v=20260901-cobo-sfalcio1/
 assert.match(html, /app-pure-utils\.js\?v=20260902-verde-levato2/);
 assert.match(html, /PWA_EMERGENCY_CACHE_RESET_VERSION = "20260902-verde-levato2"/);
 assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=20260902-verde-levato2"/);
-assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v220";/);
+assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v221";/);
 assert.match(sw, /app-pure-utils\.js\?v=20260902-verde-levato2/);
 assert.match(sw, /verde-bologna-parchi-mobile\.js\?v=20260901-cobo-sfalcio1/);
 assert.match(sw, /"\/verde-bologna\.js"/);

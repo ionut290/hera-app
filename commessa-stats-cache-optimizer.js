@@ -27,6 +27,8 @@
   let interactionPointerDown = false;
   let deferredInteractionRefreshTimer = null;
   const bootstrappingCommessaIds = new Set();
+  const pendingIncrementalChanges = new Map();
+  const processingIncrementalChanges = new Set();
   let activeTargetIds = new Set();
 
   const state = {
@@ -273,6 +275,7 @@
       if (!targetSet.has(commessaId)) {
         try { unsubscribeCommessaStats.get(commessaId)?.(); } catch (_) {}
         unsubscribeCommessaStats.delete(commessaId);
+        pendingIncrementalChanges.delete(commessaId);
       }
     });
   }
@@ -295,37 +298,68 @@
     return snap.exists ? { id: snap.id, ...snap.data() } : null;
   }
 
+  function enqueueIncrementalChanges(commessaId, docs) {
+    if (!activeTargetIds.has(commessaId)) return;
+    const pending = pendingIncrementalChanges.get(commessaId) || new Map();
+    docs.forEach((doc) => {
+      const id = String(doc?.id || "").trim();
+      if (id) pending.set(id, doc);
+    });
+    if (!pending.size) return;
+    pendingIncrementalChanges.set(commessaId, pending);
+    void drainIncrementalChanges(commessaId);
+  }
+
+  async function drainIncrementalChanges(commessaId) {
+    if (processingIncrementalChanges.has(commessaId)) return;
+    processingIncrementalChanges.add(commessaId);
+    try {
+      while (activeTargetIds.has(commessaId)) {
+        const pending = pendingIncrementalChanges.get(commessaId);
+        if (!pending?.size) break;
+        pendingIncrementalChanges.delete(commessaId);
+
+        const current = cloneItems(impiantiByCommessaId.get(commessaId) || []);
+        const byId = new Map(current.map((item) => [String(item.id || ""), item]));
+        let newestMarker = Number(startIncrementalListener.lastMarkers.get(commessaId) || 0);
+        for (const [id, doc] of pending) {
+          if (!activeTargetIds.has(commessaId)) break;
+          const changed = await readChangedDocument(commessaId, id);
+          if (changed) byId.set(id, changed);
+          else byId.delete(id);
+          newestMarker = Math.max(newestMarker, timestampMs(doc.data()?.changedAt) || 0);
+        }
+        if (!activeTargetIds.has(commessaId)) break;
+        applyItems(commessaId, Array.from(byId.values()), newestMarker);
+        startIncrementalListener.lastMarkers.set(commessaId, newestMarker);
+      }
+    } catch (error) {
+      state.errors.push(`incremental ${commessaId}: ${String(error?.message || error)}`);
+      if (state.errors.length > 50) state.errors.splice(0, state.errors.length - 50);
+      console.warn("Aggiornamento incrementale statistiche non riuscito:", error);
+    } finally {
+      processingIncrementalChanges.delete(commessaId);
+      if (activeTargetIds.has(commessaId) && pendingIncrementalChanges.get(commessaId)?.size) {
+        void drainIncrementalChanges(commessaId);
+      }
+    }
+  }
+
   function startIncrementalListener(commessaId, markerMs) {
     if (!markerMs || !activeTargetIds.has(commessaId) || unsubscribeCommessaStats.has(commessaId)) return;
     const query = commessaRef(commessaId).collection("impiantoChangeIndex")
       .where("changedAt", ">", new Date(markerMs))
       .orderBy("changedAt", "asc");
 
-    const unsubscribe = query.onSnapshot(async (snapshot) => {
+    startIncrementalListener.lastMarkers.set(commessaId, markerMs);
+    const unsubscribe = query.onSnapshot((snapshot) => {
       if (snapshot.empty) return;
       const deltaDocs = typeof snapshot.docChanges === "function"
         ? snapshot.docChanges().filter((change) => change.type !== "removed").map((change) => change.doc)
         : snapshot.docs;
       if (!deltaDocs.length) return;
       state.incrementalDeliveries += 1;
-      try {
-        const current = cloneItems(impiantiByCommessaId.get(commessaId) || []);
-        const byId = new Map(current.map((item) => [String(item.id || ""), item]));
-        let newestMarker = markerMs;
-        for (const doc of deltaDocs) {
-          const id = String(doc.id || "").trim();
-          if (!id) continue;
-          const changed = await readChangedDocument(commessaId, id);
-          if (changed) byId.set(id, changed);
-          else byId.delete(id);
-          newestMarker = Math.max(newestMarker, timestampMs(doc.data()?.changedAt) || 0);
-        }
-        applyItems(commessaId, Array.from(byId.values()), newestMarker);
-        startIncrementalListener.lastMarkers.set(commessaId, newestMarker);
-      } catch (error) {
-        state.errors.push(`incremental ${commessaId}: ${String(error?.message || error)}`);
-        console.warn("Aggiornamento incrementale statistiche non riuscito:", error);
-      }
+      enqueueIncrementalChanges(commessaId, deltaDocs);
     }, (error) => {
       state.errors.push(`listener ${commessaId}: ${String(error?.message || error)}`);
       console.warn("Listener incrementale statistiche non disponibile:", error);
@@ -411,7 +445,7 @@
 
   window.HeraCommessaStatsCacheOptimizer = {
     installed: true,
-    version: "1.6.0",
+    version: "1.7.0",
     mode: "tap-warmup-selected-first-persistent-cache-plus-change-index",
     originalSubscribeStatsForCommesse,
     getState: () => ({

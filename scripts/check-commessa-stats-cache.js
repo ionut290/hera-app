@@ -40,6 +40,9 @@ assert.match(code, /calculateImpiantiStats/);
 assert.match(code, /recalculateCommessaWorkSummaries/);
 assert.match(code, /bootstrappingCommessaIds\.has\(commessaId\)/, "Concurrent bootstrap loads must be coalesced");
 assert.match(code, /activeTargetIds\.has\(commessaId\)/, "Stale commessa loads must be discarded");
+assert.match(code, /processingIncrementalChanges\.has\(commessaId\)/, "Incremental deliveries must run serially");
+assert.match(code, /pendingIncrementalChanges\.get\(commessaId\) \|\| new Map\(\)/, "Rapid updates must be coalesced by plant id");
+assert.match(code, /enqueueIncrementalChanges\(commessaId, deltaDocs\)/, "Snapshot callbacks must enqueue instead of cloning the full list concurrently");
 
 // Sono ammessi Map.set/localStorage.setItem. Vietiamo invece mutazioni Firestore
 // nel nuovo ottimizzatore: deve essere strettamente read-only lato server.

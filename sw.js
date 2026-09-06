@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v222";
-const CACHE_RESET_VERSION = "20260906-password-recovery-code1";
+const CACHE_NAME = "varga-cantieri-shell-v223";
+const CACHE_RESET_VERSION = "20260906-password-recovery-position1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -42,7 +42,7 @@ const APP_SHELL = [
   "./management-v2.js?v=20260830-brave-manuals3",
   "./registry-google-sheet-sync.js?v=20260802-cost2",
   "./auth-login-fix.js?v=20260731-legacy1",
-  "./password-recovery-code.js?v=20260906a",
+  "./password-recovery-code.js?v=20260906b",
   "./login-retry-fix.js?v=20260906-recovery-code1",
   "./first-login-password.js?v=20260726b",
   "./approval-access.js?v=20260828-authfix",

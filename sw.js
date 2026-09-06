@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v221";
-const CACHE_RESET_VERSION = "20260904-menu-cache1";
+const CACHE_NAME = "varga-cantieri-shell-v222";
+const CACHE_RESET_VERSION = "20260906-password-recovery-code1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -42,7 +42,8 @@ const APP_SHELL = [
   "./management-v2.js?v=20260830-brave-manuals3",
   "./registry-google-sheet-sync.js?v=20260802-cost2",
   "./auth-login-fix.js?v=20260731-legacy1",
-  "./login-retry-fix.js?v=20260830-existing-account1",
+  "./password-recovery-code.js?v=20260906a",
+  "./login-retry-fix.js?v=20260906-recovery-code1",
   "./first-login-password.js?v=20260726b",
   "./approval-access.js?v=20260828-authfix",
   "./coordinate-repair.js?v=20260728a",
@@ -134,6 +135,7 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/firebase-config.js",
   "/notification-session-enhancements.js",
   "/auth-login-fix.js",
+  "/password-recovery-code.js",
   "/login-retry-fix.js",
   "/first-login-password.js",
   "/approval-access.js",

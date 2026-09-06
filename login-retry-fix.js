@@ -290,6 +290,24 @@
       if (feedback) feedback.textContent = "Inserisci email e password.";
       return;
     }
+    if (window.VargaPasswordRecovery?.isRecoveryCodeCandidate?.(password)) {
+      if (loginButton) {
+        loginButton.disabled = true;
+        loginButton.textContent = "Verifica codice...";
+      }
+      try {
+        await window.VargaPasswordRecovery.handleLoginCode({ email, code: password, feedback });
+        if (passwordInput) passwordInput.value = "";
+      } catch (error) {
+        if (feedback) feedback.textContent = error?.message || "Codice di recupero non valido.";
+      } finally {
+        if (loginButton) {
+          loginButton.disabled = false;
+          loginButton.textContent = "Entra";
+        }
+      }
+      return;
+    }
     try {
       window.HeraLoginCredentialVault?.capturePendingCredential?.({ email, password });
     } catch (error) {

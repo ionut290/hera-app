@@ -86,7 +86,7 @@ for (const expected of [
   'id="registration-password-confirm"',
   'minlength="10" autocomplete="new-password"',
   "ti invieremo un’email per verificare il nuovo account",
-  "login-retry-fix.js?v=20260830-existing-account1"
+  "login-retry-fix.js?v=20260906-recovery-code1"
 ]) {
   if (!html.includes(expected)) throw new Error(`Registrazione HTML incompleta: ${expected}`);
 }

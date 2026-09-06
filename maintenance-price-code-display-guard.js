@@ -1,5 +1,7 @@
-/* Correzione esclusivamente visiva: A1/A11/A12 sono codici di lavoro ordinario.
- * Non modifica dati, Firestore, FATTO, RESET o il messaggio Whazzup protetto.
+/* Regola A1/A11/A12: codici di lavoro ordinario.
+ * Corregge la classificazione condivisa usata da schede e messaggio Whazzup,
+ * senza intercettare pulsanti, listener, scritture Firestore o funzioni protette
+ * dei flussi FATTO, RESET e Whazzup.
  */
 (function () {
   "use strict";
@@ -17,6 +19,46 @@
         .map((code) => code.trim())
         .filter(Boolean)
     ));
+  }
+
+  function installA1OrdinaryClassificationGuard() {
+    const originalHasOrdinario = typeof window.hasOrdinario === "function"
+      ? window.hasOrdinario
+      : null;
+    const originalHasStraordinario = typeof window.hasStraordinario === "function"
+      ? window.hasStraordinario
+      : null;
+
+    if (!originalHasOrdinario || !originalHasStraordinario) return;
+    if (
+      originalHasOrdinario.__heraA1OrdinaryGuard === true
+      && originalHasStraordinario.__heraA1OrdinaryGuard === true
+    ) {
+      return;
+    }
+
+    function hasOrdinarioWithA1(codicePrezzo) {
+      const codes = splitDisplayPriceCodes(codicePrezzo);
+      return codes.includes("A1") || originalHasOrdinario(codicePrezzo);
+    }
+
+    function hasStraordinarioWithoutA1(codicePrezzo) {
+      const codes = splitDisplayPriceCodes(codicePrezzo);
+      if (codes.length > 0 && codes.every((code) => ORDINARY_PRICE_CODES.has(code))) {
+        return false;
+      }
+      return originalHasStraordinario(codicePrezzo);
+    }
+
+    Object.defineProperty(hasOrdinarioWithA1, "__heraA1OrdinaryGuard", {
+      value: true
+    });
+    Object.defineProperty(hasStraordinarioWithoutA1, "__heraA1OrdinaryGuard", {
+      value: true
+    });
+
+    window.hasOrdinario = hasOrdinarioWithA1;
+    window.hasStraordinario = hasStraordinarioWithoutA1;
   }
 
   function isA1OrdinaryOnly(impianto) {
@@ -74,6 +116,8 @@
   }
 
   function install() {
+    installA1OrdinaryClassificationGuard();
+
     const root = document.getElementById(ROOT_ID);
     if (!root) return;
 

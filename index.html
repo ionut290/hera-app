@@ -731,7 +731,7 @@
   <script src="auth-login-fix.js?v=20260731-legacy1"></script>
   <script src="approval-access.js?v=20260828-authfix"></script>
   <script src="first-login-password.js?v=20260726b"></script>
-  <script src="password-recovery-code.js?v=20260906a"></script>
+  <script src="password-recovery-code.js?v=20260906b"></script>
   <script src="login-retry-fix.js?v=20260906-recovery-code1"></script>
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
@@ -779,7 +779,7 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260906-password-recovery-code1", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260906-password-recovery-position1", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

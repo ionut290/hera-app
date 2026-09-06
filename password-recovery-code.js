@@ -161,7 +161,9 @@
         <div class="actions-row"><button class="btn btn-primary" type="submit">SALVA CODICE UNICO</button></div>
       </form>
       <p id="password-recovery-code-admin-feedback" class="muted" role="status" aria-live="polite">Stato non verificato.</p>`;
-    host.appendChild(section);
+    const adminList = host.querySelector("#admin-users-list");
+    if (adminList) adminList.insertAdjacentElement("afterend", section);
+    else host.prepend(section);
     section.querySelector("form")?.addEventListener("submit", saveAdminCode);
   }
 

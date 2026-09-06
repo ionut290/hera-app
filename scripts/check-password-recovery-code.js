@@ -58,6 +58,8 @@ for (const expected of [
 ]) assert.ok(client.includes(expected), `Flusso client mancante: ${expected}`);
 assert.ok(client.includes('id="password-recovery-code-accept" type="checkbox" required'),
   "Manca la conferma esplicita prima della sostituzione della password.");
+assert.ok(client.includes('adminList.insertAdjacentElement("afterend", section)'),
+  "Il codice unico deve comparire subito sotto gli amministratori autorizzati.");
 
 const recoveryIndex = login.indexOf("VargaPasswordRecovery?.isRecoveryCodeCandidate");
 const vaultIndex = login.indexOf("HeraLoginCredentialVault?.capturePendingCredential");

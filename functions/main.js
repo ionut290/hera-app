@@ -6,6 +6,7 @@ const centralNotificationFunctions = require("./central-notifications");
 const sharedCalendarViewFunctions = require("./shared-calendar-view");
 const sharedOperationalViewFunctions = require("./shared-operational-views");
 const adminPasswordPrivateRequestFunctions = require("./admin-password-private-requests");
+const passwordRecoveryCodeFunctions = require("./password-recovery-code");
 const impiantoChangeIndexFunctions = require("./impianto-change-index");
 const errorReportingFunctions = require("./error-reporting");
 const errorCenterFunctions = require("./error-center");
@@ -24,6 +25,7 @@ Object.assign(
   sharedCalendarViewFunctions,
   sharedOperationalViewFunctions,
   adminPasswordPrivateRequestFunctions,
+  passwordRecoveryCodeFunctions,
   impiantoChangeIndexFunctions,
   errorReportingFunctions,
   errorCenterFunctions,

@@ -39,6 +39,7 @@ const requiredFiles = [
   "approval-access.css",
   "first-login-password.css",
   "first-login-password.js",
+  "password-recovery-code.js",
   "login-retry-fix.css",
   "login-retry-fix.js",
   "documents.js",

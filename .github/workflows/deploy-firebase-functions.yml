@@ -93,7 +93,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: >-
           firebase deploy
-          --only functions:approveUserAccess,functions:processAdminPasswordPrivateRequest,functions:notifyAndroidChatMessage,functions:notifyAndroidHoursInserted,functions:notifyAndroidSquadraAssignment,functions:syncCalendarAbsenceSquadraAlerts,functions:syncSharedCalendarFromOreReports,functions:syncSharedCalendarFromOreApprovalRequests,functions:syncSharedCalendarFromImpianti,functions:syncSharedCalendarFromLavorazioni,functions:getAdministrativeCalendarMonth,functions:syncSharedRegistriesFromPersonale,functions:syncSharedRegistriesFromMezzi,functions:syncSharedSquadreFromHistory,functions:syncSharedSquadreFromCurrent,functions:rebuildAllSharedStaticViews,functions:syncImpiantoChangeIndex,functions:recordClientErrorGroup,functions:getErrorCenterSummary,functions:getErrorCenterDashboard,functions:markErrorCenterSeen,functions:updateErrorCenterStatus,functions:resetErrorCenter,functions:getErrorEmailUsage,functions:uploadWhazzupPdfToDrive,functions:cleanupExpiredWhazzupPdfs,functions:rebuildVargaGestionaleSnapshot,functions:getVargaGestionaleSnapshotManifest,functions:getVargaGestionaleSnapshotChunk
+          --only functions:approveUserAccess,functions:processAdminPasswordPrivateRequest,functions:setPasswordRecoveryCode,functions:getPasswordRecoveryCodeStatus,functions:startPasswordRecoveryWithCode,functions:completePasswordRecoveryWithCode,functions:notifyAndroidChatMessage,functions:notifyAndroidHoursInserted,functions:notifyAndroidSquadraAssignment,functions:syncCalendarAbsenceSquadraAlerts,functions:syncSharedCalendarFromOreReports,functions:syncSharedCalendarFromOreApprovalRequests,functions:syncSharedCalendarFromImpianti,functions:syncSharedCalendarFromLavorazioni,functions:getAdministrativeCalendarMonth,functions:syncSharedRegistriesFromPersonale,functions:syncSharedRegistriesFromMezzi,functions:syncSharedSquadreFromHistory,functions:syncSharedSquadreFromCurrent,functions:rebuildAllSharedStaticViews,functions:syncImpiantoChangeIndex,functions:recordClientErrorGroup,functions:getErrorCenterSummary,functions:getErrorCenterDashboard,functions:markErrorCenterSeen,functions:updateErrorCenterStatus,functions:resetErrorCenter,functions:getErrorEmailUsage,functions:uploadWhazzupPdfToDrive,functions:cleanupExpiredWhazzupPdfs,functions:rebuildVargaGestionaleSnapshot,functions:getVargaGestionaleSnapshotManifest,functions:getVargaGestionaleSnapshotChunk
           --project hera-app-6cd2b
           --non-interactive
           --force
@@ -110,6 +110,10 @@ jobs:
           const region = "europe-west1";
           const functionNames = [
             "approveUserAccess",
+            "setPasswordRecoveryCode",
+            "getPasswordRecoveryCodeStatus",
+            "startPasswordRecoveryWithCode",
+            "completePasswordRecoveryWithCode",
             "recordClientErrorGroup",
             "getErrorCenterSummary",
             "getErrorCenterDashboard",

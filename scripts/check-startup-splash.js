@@ -18,6 +18,7 @@ const mainActivity = read("android/app/src/main/java/it/vargacantieri/hera/MainA
 const vargaAppTheme = read("android-resources/res/values/varga_app_theme.xml");
 
 assert.match(index, /class="startup-loading-logo"/);
+assert.doesNotMatch(index, /<h1>Varga Cantieri<\/h1>/);
 assert.match(index, /icons\/varga-cantieri-512\.png/);
 const styleAsset = index.match(/style\.css\?v=[^"']+/)?.[0];
 assert.ok(styleAsset, "index.html deve caricare style.css con una versione cache-busting");

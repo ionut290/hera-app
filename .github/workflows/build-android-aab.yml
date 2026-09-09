@@ -331,7 +331,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             mkdir -p android-emulator-test
             adb install -r android/app/build/outputs/apk/release/app-release.apk
             adb shell am force-stop it.vargacantieri.hera

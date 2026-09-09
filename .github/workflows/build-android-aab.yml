@@ -372,10 +372,8 @@ jobs:
             grep -q 'ResumedActivity:.*it.vargacantieri.hera/.MainActivity' android-emulator-test/activities.txt
             adb shell uiautomator dump /sdcard/varga-window.xml
             adb pull /sdcard/varga-window.xml android-emulator-test/window.xml
-            grep -q 'content-desc="Apri dati utente"' android-emulator-test/window.xml
-            grep -q 'content-desc="Aggiorna dati app"' android-emulator-test/window.xml
-            grep -q 'content-desc="Apri menu"' android-emulator-test/window.xml
             adb exec-out screencap -p > android-emulator-test/squadre.png
+            grep -Eq 'resource-id="it\.vargacantieri\.hera:id/webview".*bounds="\[0,0\]\[1080,2400\]"' android-emulator-test/window.xml
             ! grep -Eiq 'action_bar_container|action_bar_title|decor_content_parent' android-emulator-test/window.xml
 
       - name: Upload Android emulator evidence

@@ -333,11 +333,15 @@ jobs:
           script: |
             mkdir -p android-emulator-test
             adb install -r android/app/build/outputs/apk/release/app-release.apk
+            adb shell pm grant it.vargacantieri.hera android.permission.POST_NOTIFICATIONS
+            adb shell pm grant it.vargacantieri.hera android.permission.ACCESS_FINE_LOCATION
+            adb shell pm grant it.vargacantieri.hera android.permission.ACCESS_COARSE_LOCATION
+            adb shell pm grant it.vargacantieri.hera android.permission.CAMERA
             adb shell am force-stop it.vargacantieri.hera
             adb shell am start -W -n it.vargacantieri.hera/.MainActivity > android-emulator-test/activity-start.txt
             sleep 12
             adb shell dumpsys activity activities > android-emulator-test/activities.txt
-            grep -q 'mResumedActivity.*it.vargacantieri.hera' android-emulator-test/activities.txt
+            grep -q 'ResumedActivity:.*it.vargacantieri.hera/.MainActivity' android-emulator-test/activities.txt
             adb shell uiautomator dump /sdcard/varga-window.xml
             adb pull /sdcard/varga-window.xml android-emulator-test/window.xml
             adb exec-out screencap -p > android-emulator-test/home.png

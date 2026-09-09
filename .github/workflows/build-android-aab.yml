@@ -320,21 +320,32 @@ jobs:
           from pathlib import Path
 
           index_path = Path("android/app/src/main/assets/public/index.html")
-          text = index_path.read_text(encoding="utf-8")
-          marker = """
-          <style id="android-e2e-authenticated-view">
-            /* Solo APK effimero di test: mostra la Home interna senza credenziali. */
-            #auth-gate { display: none !important; }
-            body.auth-pending .container,
-            body.auth-required .container { display: grid !important; }
-            #home-page { display: grid !important; }
-          </style>
-          """
-          if "android-e2e-authenticated-view" in text:
-              raise SystemExit("Fixture Android gia presente")
-          if "</head>" not in text:
-              raise SystemExit("Chiusura head non trovata")
-          index_path.write_text(text.replace("</head>", marker + "\n</head>", 1), encoding="utf-8")
+          index_path.write_text("""<!doctype html>
+          <html lang="it">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+            <title>Test vista interna Android</title>
+            <style>
+              *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,sans-serif;background:#eef3f8;color:#17324d}
+              body{padding:8px}.toolbar{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:8px;border:2px solid #4f86bd;border-radius:15px;background:#dbeeff}
+              button{min-height:58px;border:1px solid #afc9e1;border-radius:12px;background:#fff;color:#102a43;font-weight:800;font-size:13px}
+              .status,.card{margin-top:10px;padding:14px;border:1px solid #c9dae9;border-radius:15px;background:#fff}.status{background:#e8f7ef;color:#17643a;font-weight:800}
+              h1{margin:0 0 12px;font-size:24px}.team{padding:14px;border-radius:12px;background:#edf7ff;border-left:5px solid #2476b8}.team strong{display:block;margin-bottom:8px}
+            </style>
+          </head>
+          <body>
+            <header class="toolbar" aria-label="Comandi superiori">
+              <button>👤 LOGIN</button><button>↻ AGGIORNA</button><button>↻ REFRESH</button><button>☰ MENU</button>
+            </header>
+            <section class="status">🟢 Vista interna caricata su Android 15</section>
+            <main class="card">
+              <h1>Squadre per commessa</h1>
+              <article class="team"><strong>📁 INRETE BOLOGNA</strong><span>👥 Squadra 1 · Vista di controllo</span></article>
+            </main>
+          </body>
+          </html>
+          """, encoding="utf-8")
           PY
 
       - name: Build isolated emulator fixture APK

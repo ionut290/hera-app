@@ -46,7 +46,7 @@ jobs:
   build-aab:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout repository
@@ -313,6 +313,34 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Prepare authenticated-view fixture for emulator only
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          index_path = Path("android/app/src/main/assets/public/index.html")
+          text = index_path.read_text(encoding="utf-8")
+          marker = """
+          <style id="android-e2e-authenticated-view">
+            /* Solo APK effimero di test: mostra la Home interna senza credenziali. */
+            #auth-gate { display: none !important; }
+            body.auth-pending .container,
+            body.auth-required .container { display: grid !important; }
+            #home-page { display: grid !important; }
+          </style>
+          """
+          if "android-e2e-authenticated-view" in text:
+              raise SystemExit("Fixture Android gia presente")
+          if "</head>" not in text:
+              raise SystemExit("Chiusura head non trovata")
+          index_path.write_text(text.replace("</head>", marker + "\n</head>", 1), encoding="utf-8")
+          PY
+
+      - name: Build isolated emulator fixture APK
+        working-directory: android
+        run: ./gradlew assembleRelease --rerun-tasks --no-daemon
+
       - name: Enable KVM for Android emulator
         shell: bash
         run: |
@@ -344,7 +372,10 @@ jobs:
             grep -q 'ResumedActivity:.*it.vargacantieri.hera/.MainActivity' android-emulator-test/activities.txt
             adb shell uiautomator dump /sdcard/varga-window.xml
             adb pull /sdcard/varga-window.xml android-emulator-test/window.xml
-            adb exec-out screencap -p > android-emulator-test/home.png
+            grep -q 'content-desc="Apri dati utente"' android-emulator-test/window.xml
+            grep -q 'content-desc="Aggiorna dati app"' android-emulator-test/window.xml
+            grep -q 'content-desc="Apri menu"' android-emulator-test/window.xml
+            adb exec-out screencap -p > android-emulator-test/squadre.png
             ! grep -Eiq 'action_bar_container|action_bar_title|decor_content_parent' android-emulator-test/window.xml
 
       - name: Upload Android emulator evidence

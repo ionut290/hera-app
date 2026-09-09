@@ -7,7 +7,9 @@ import android.content.pm.PackageInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
 import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.WebView;
 
 import androidx.activity.EdgeToEdge;
@@ -32,9 +34,10 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // Impedisce ad Android/AppCompat di creare la barra con il titolo
-        // "Varga Cantieri" prima che venga inizializzata la WebView.
+        // Blocca titolo e barra di stato prima che BridgeActivity crei la WebView.
         supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
         registerPlugin(HeraGeofencePlugin.class);
         registerPlugin(HeraBiometricPlugin.class);
         registerPlugin(HeraCredentialVaultPlugin.class);
@@ -44,19 +47,28 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HeraContinuousCameraPlugin.class);
         EdgeToEdge.enable(this);
         super.onCreate(savedInstanceState);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().hide();
-        }
-        hideAndroidStatusBar();
+        enforceFullscreenWithoutActionBar();
         clearWebViewCacheAfterAppUpdate();
         applyTemporaryLoginDeepLink(getIntent());
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        enforceFullscreenWithoutActionBar();
+    }
+
+    @Override
+    protected void onPostResume() {
+        super.onPostResume();
+        enforceFullscreenWithoutActionBar();
     }
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
-            hideAndroidStatusBar();
+            enforceFullscreenWithoutActionBar();
         }
     }
 
@@ -67,16 +79,33 @@ public class MainActivity extends BridgeActivity {
         applyTemporaryLoginDeepLink(intent);
     }
 
-    private void hideAndroidStatusBar() {
+    @SuppressWarnings("deprecation")
+    private void enforceFullscreenWithoutActionBar() {
         try {
-            WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-            WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().hide();
+            }
+
+            Window window = getWindow();
+            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            window.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
+            WindowCompat.setDecorFitsSystemWindows(window, false);
+
+            View decorView = window.getDecorView();
+            decorView.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            );
+
+            WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, decorView);
             controller.hide(WindowInsetsCompat.Type.statusBars());
             controller.setSystemBarsBehavior(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             );
         } catch (Exception ignored) {
-            // La barra di stato non deve mai interferire con l'avvio dell'app.
+            // Le barre native non devono mai interferire con i comandi della WebView.
         }
     }
 

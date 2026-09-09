@@ -257,11 +257,11 @@ jobs:
           path.write_text(text, encoding="utf-8")
           PY
 
-      - name: Build signed release bundle
+      - name: Build signed release bundle and test APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew bundleRelease --no-daemon
+          ./gradlew bundleRelease assembleRelease --no-daemon
 
       - name: Verify 16 KB native library alignment
         shell: bash
@@ -294,5 +294,21 @@ jobs:
         with:
           name: VARGA-CANTIERI-AAB-${{ github.run_number }}
           path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Verify signed Android test APK
+        shell: bash
+        run: |
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$APK"
+          unzip -t "$APK"
+          jarsigner -verify -verbose -certs "$APK"
+
+      - name: Upload signed Android test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VARGA-CANTIERI-APK-${{ github.run_number }}
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30

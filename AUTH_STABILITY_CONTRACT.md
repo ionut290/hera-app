@@ -41,3 +41,12 @@ Modifiche ad altre sezioni dell'app non possono cambiare indirettamente il compo
 - Il codice è utilizzabile soltanto per profili operatore attivi; gli account amministratore continuano a usare il recupero Firebase tramite email.
 - Il normale accesso email/password, Google, la persistenza della sessione e le superfici visibili del login restano invariati.
 - Nessuna lettura, scrittura o listener Firebase viene aggiunto all'avvio: le chiamate avvengono soltanto su azione esplicita dell'utente o dell'amministratore.
+
+## Estensione autorizzata: accesso da Varga Gestionale
+
+- Un utente già autenticato in Varga Gestionale può entrare in Varga Cantieri senza reinserire la password.
+- Il passaggio usa esclusivamente una credenziale Firebase temporanea generata dal backend per lo stesso UID autenticato.
+- Password e credenziali permanenti non vengono lette, copiate, salvate o trasferite tra le applicazioni.
+- La credenziale temporanea viene rimossa immediatamente dall'indirizzo della pagina di Varga Cantieri.
+- Se il trasferimento non riesce, resta disponibile il normale login recuperabile e non viene mostrata una schermata bianca.
+- Il passaggio non aggiunge letture, scritture o listener Firestore.

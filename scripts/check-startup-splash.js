@@ -34,9 +34,13 @@ assert.match(workflow, /cp icons\/varga-cantieri-512\.png android\/app\/src\/mai
 assert.match(androidManifest, /android:theme="@style\/VargaAppTheme\.Launch"/);
 assert.match(mainActivity, /supportRequestWindowFeature\(Window\.FEATURE_NO_TITLE\)/);
 assert.match(mainActivity, /getSupportActionBar\(\)\.hide\(\)/);
-assert.match(vargaAppTheme, /name="VargaAppTheme" parent="AppTheme\.NoActionBar"/);
+assert.match(mainActivity, /FLAG_FULLSCREEN/);
+assert.match(mainActivity, /onResume\(\)[\s\S]*enforceFullscreenWithoutActionBar\(\)/);
+assert.match(mainActivity, /onPostResume\(\)[\s\S]*enforceFullscreenWithoutActionBar\(\)/);
+assert.match(vargaAppTheme, /name="VargaAppTheme" parent="Theme\.AppCompat\.DayNight\.NoActionBar"/);
 assert.match(vargaAppTheme, /name="windowActionBar">false</);
 assert.match(vargaAppTheme, /name="windowNoTitle">true</);
+assert.match(vargaAppTheme, /name="android:windowFullscreen">true</);
 
 const splashDrawable = read("android-resources/res/drawable/splash.xml");
 assert.match(splashDrawable, /#111214/);

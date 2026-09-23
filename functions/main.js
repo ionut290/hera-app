@@ -17,6 +17,7 @@ const whazzupPdfDriveFunctions = require("./whazzup-pdf-drive");
 const userAccessApprovalFunctions = require("./user-access-approval");
 const vargaGestionaleSyncFunctions = require("./varga-gestionale-sync");
 const vargaSessionTransferFunctions = require("./varga-session-transfer");
+const vargaBridgeVaultFunctions = require("./varga-bridge-vault");
 
 Object.assign(
   exports,
@@ -36,5 +37,6 @@ Object.assign(
   whazzupPdfDriveFunctions,
   userAccessApprovalFunctions,
   vargaGestionaleSyncFunctions,
-  vargaSessionTransferFunctions
+  vargaSessionTransferFunctions,
+  vargaBridgeVaultFunctions
 );

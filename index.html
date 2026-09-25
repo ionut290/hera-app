@@ -159,6 +159,14 @@
       </section>
       <section class="menu-section" aria-labelledby="menu-strumenti-title">
         <h3 id="menu-strumenti-title" class="menu-section-title">Altri strumenti</h3>
+        <div class="navigation-preference-setting" aria-label="Navigatore predefinito">
+          <span class="menu-item-icon" aria-hidden="true">🧭</span>
+          <label for="navigation-app-select">Navigatore predefinito</label>
+          <select id="navigation-app-select" aria-label="Scegli navigatore predefinito">
+            <option value="google">Google Maps</option>
+            <option value="waze">Waze</option>
+          </select>
+        </div>
         <button id="open-gardening-assistant-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌿</span>Assistente Giardiniere</button>
         <button id="open-equipment-assistant-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🚜</span>Assistente Mezzi e Utensili</button>
         <button id="open-howto-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">❓</span>Come si fa?</button>
@@ -774,6 +782,35 @@
   <script src="green-areas.js?v=20260829e"></script>
   <script src="urban-furniture.js?v=20260830-completesheet1"></script>
   <script src="wastewater-plants.js?v=20260830b"></script>
+  <script>
+    (() => {
+      "use strict";
+      const KEY = "varga-navigation-app";
+      const read = () => {
+        try { return localStorage.getItem(KEY) === "waze" ? "waze" : "google"; }
+        catch (_) { return "google"; }
+      };
+      const write = (value) => {
+        const choice = value === "waze" ? "waze" : "google";
+        try { localStorage.setItem(KEY, choice); } catch (_) {}
+        return choice;
+      };
+      const url = (lat, lon) => {
+        const a = Number(lat), b = Number(lon);
+        if (!Number.isFinite(a) || !Number.isFinite(b)) return "";
+        return read() === "waze"
+          ? `https://www.waze.com/ul?ll=${encodeURIComponent(`${a},${b}`)}&navigate=yes`
+          : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${a},${b}`)}`;
+      };
+      window.VargaNavigation = { getChoice: read, setChoice: write, buildUrl: url };
+      document.addEventListener("DOMContentLoaded", () => {
+        const select = document.getElementById("navigation-app-select");
+        if (!select) return;
+        select.value = read();
+        select.addEventListener("change", () => write(select.value));
+      }, { once: true });
+    })();
+  </script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script src="gestionale-desktop-return.js?v=20260905-desktop-switch1"></script>
   <script>

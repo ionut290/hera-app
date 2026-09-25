@@ -286,7 +286,7 @@
     selectedItem = item;
     sheetTitle.textContent = `${item.icon} ${item.name}`;
     sheetBody.innerHTML = renderTagDetails(item);
-    navigateButton.href = `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lon}`;
+    navigateButton.href = (window.VargaNavigation?.buildUrl?.(item.lat, item.lon) || `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lon}`);
     sheet.classList.remove("hidden");
     sheet.setAttribute("aria-hidden", "false");
   }

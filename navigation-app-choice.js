@@ -114,7 +114,6 @@
         rewriteNavigationAnchors(node);
       });
     }
-    refreshUi();
   });
 
   window.VargaNavigation = {

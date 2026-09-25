@@ -199,7 +199,7 @@
     sheetSource.textContent = municipality === "Bologna" ? "Comune di Bologna + DBTR ufficiale regionale" : "DBTR ufficiale Regione Emilia-Romagna; nome cartografico integrativo OSM";
     sheetTitle.textContent = title;
     sheetBody.innerHTML = `<dl><dt>Comune</dt><dd>${esc(municipality)}</dd><dt>Categoria</dt><dd>${esc(category)}</dd><dt>Descrizione</dt><dd>${esc(item.display_name)}</dd><dt>Coordinate</dt><dd>${lat.toFixed(6)}, ${lon.toFixed(6)}</dd></dl>`;
-    sheetNavigate.href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+    sheetNavigate.href = (window.VargaNavigation?.buildUrl?.(lat, lon) || `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`);
     sheet.classList.remove("hidden");
     sheet.setAttribute("aria-hidden", "false");
   }

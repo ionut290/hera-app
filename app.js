@@ -15310,7 +15310,11 @@ function getImpiantoNavigationCoordinates(impianto) {
 
 function buildImpiantoMapsUrl(impianto) {
   const coordinates = getImpiantoNavigationCoordinates(impianto);
-  if (coordinates) return `https://www.google.com/maps/dir/?api=1&destination=${coordinates.lat},${coordinates.lon}`;
+  if (coordinates) {
+    const preferredUrl = window.VargaNavigation?.buildUrl?.(coordinates.lat, coordinates.lon);
+    if (preferredUrl) return preferredUrl;
+    return `https://www.google.com/maps/dir/?api=1&destination=${coordinates.lat},${coordinates.lon}`;
+  }
   const address = [impianto?.indirizzo || impianto?.descrizioneVia, impianto?.comune]
     .map((value) => String(value || "").trim()).filter(Boolean).join(", ");
   return address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}` : "";

@@ -1,0 +1,30 @@
+.navigation-app-setting {
+  margin: 8px 0 12px;
+  padding: 12px;
+  border: 1px solid var(--border-color, rgba(255,255,255,.12));
+  border-radius: 12px;
+  background: rgba(255,255,255,.03);
+}
+.navigation-app-setting-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.navigation-app-options {
+  display: grid;
+  gap: 8px;
+}
+.navigation-app-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.navigation-app-options input {
+  accent-color: currentColor;
+}
+#navigation-app-status {
+  display: block;
+  margin-top: 8px;
+}

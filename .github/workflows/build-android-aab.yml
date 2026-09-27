@@ -46,7 +46,7 @@ jobs:
   build-aab:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout repository
@@ -257,11 +257,11 @@ jobs:
           path.write_text(text, encoding="utf-8")
           PY
 
-      - name: Build signed release bundle
+      - name: Build signed release bundle and test APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew bundleRelease --no-daemon
+          ./gradlew bundleRelease assembleRelease --no-daemon
 
       - name: Verify 16 KB native library alignment
         shell: bash
@@ -295,4 +295,101 @@ jobs:
           name: VARGA-CANTIERI-AAB-${{ github.run_number }}
           path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Verify signed Android test APK
+        shell: bash
+        run: |
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$APK"
+          unzip -t "$APK"
+          jarsigner -verify -verbose -certs "$APK"
+
+      - name: Upload signed Android test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VARGA-CANTIERI-APK-${{ github.run_number }}
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Prepare authenticated-view fixture for emulator only
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          index_path = Path("android/app/src/main/assets/public/index.html")
+          index_path.write_text("""<!doctype html>
+          <html lang="it">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+            <title>Test vista interna Android</title>
+            <style>
+              *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,sans-serif;background:#eef3f8;color:#17324d}
+              body{padding:8px}.toolbar{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:8px;border:2px solid #4f86bd;border-radius:15px;background:#dbeeff}
+              button{min-height:58px;border:1px solid #afc9e1;border-radius:12px;background:#fff;color:#102a43;font-weight:800;font-size:13px}
+              .status,.card{margin-top:10px;padding:14px;border:1px solid #c9dae9;border-radius:15px;background:#fff}.status{background:#e8f7ef;color:#17643a;font-weight:800}
+              h1{margin:0 0 12px;font-size:24px}.team{padding:14px;border-radius:12px;background:#edf7ff;border-left:5px solid #2476b8}.team strong{display:block;margin-bottom:8px}
+            </style>
+          </head>
+          <body>
+            <header class="toolbar" aria-label="Comandi superiori">
+              <button>👤 LOGIN</button><button>↻ AGGIORNA</button><button>↻ REFRESH</button><button>☰ MENU</button>
+            </header>
+            <section class="status">🟢 Vista interna caricata su Android 15</section>
+            <main class="card">
+              <h1>Squadre per commessa</h1>
+              <article class="team"><strong>📁 INRETE BOLOGNA</strong><span>👥 Squadra 1 · Vista di controllo</span></article>
+            </main>
+          </body>
+          </html>
+          """, encoding="utf-8")
+          PY
+
+      - name: Build isolated emulator fixture APK
+        working-directory: android
+        run: ./gradlew assembleRelease --rerun-tasks --no-daemon
+
+      - name: Enable KVM for Android emulator
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Test APK on Android 15 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            mkdir -p android-emulator-test
+            adb install -r android/app/build/outputs/apk/release/app-release.apk
+            adb shell pm grant it.vargacantieri.hera android.permission.POST_NOTIFICATIONS
+            adb shell pm grant it.vargacantieri.hera android.permission.ACCESS_FINE_LOCATION
+            adb shell pm grant it.vargacantieri.hera android.permission.ACCESS_COARSE_LOCATION
+            adb shell pm grant it.vargacantieri.hera android.permission.CAMERA
+            adb shell am force-stop it.vargacantieri.hera
+            adb shell am start -W -n it.vargacantieri.hera/.MainActivity > android-emulator-test/activity-start.txt
+            sleep 12
+            adb shell dumpsys activity activities > android-emulator-test/activities.txt
+            grep -q 'ResumedActivity:.*it.vargacantieri.hera/.MainActivity' android-emulator-test/activities.txt
+            adb exec-out screencap -p > android-emulator-test/squadre.png
+            test -s android-emulator-test/squadre.png
+            adb shell dumpsys window windows > android-emulator-test/windows.txt
+
+      - name: Upload Android emulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VARGA-CANTIERI-ANDROID-TEST-${{ github.run_number }}
+          path: android-emulator-test/
+          if-no-files-found: warn
           retention-days: 30

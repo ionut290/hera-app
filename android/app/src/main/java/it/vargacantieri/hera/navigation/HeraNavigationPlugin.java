@@ -15,6 +15,27 @@ import java.util.Locale;
 @CapacitorPlugin(name = "HeraNavigation")
 public class HeraNavigationPlugin extends Plugin {
     @PluginMethod
+    public void openGoogleMaps(PluginCall call) {
+        String destination = call.getString("destination");
+        if (destination == null || destination.trim().isEmpty() || destination.length() > 500) {
+            call.reject("Destinazione di navigazione non valida.");
+            return;
+        }
+
+        Uri uri = Uri.parse("google.navigation:q=" + Uri.encode(destination.trim()));
+        Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+        intent.setPackage("com.google.android.apps.maps");
+        try {
+            getActivity().startActivity(intent);
+            JSObject result = new JSObject();
+            result.put("opened", true);
+            call.resolve(result);
+        } catch (ActivityNotFoundException | SecurityException error) {
+            call.reject("Google Maps non è installato o non può essere aperto su questo telefono.", error);
+        }
+    }
+
+    @PluginMethod
     public void openWaze(PluginCall call) {
         Double latitude = call.getDouble("latitude");
         Double longitude = call.getDouble("longitude");

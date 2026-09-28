@@ -15321,8 +15321,13 @@ function buildImpiantoMapsUrl(impianto) {
 }
 
 async function openImpiantoNavigation(impianto, url) {
-  const wazeOnAndroid = window.VargaNavigation?.getChoice?.() === "waze"
-    && window.Capacitor?.getPlatform?.() === "android";
+  const wazeSelected = window.VargaNavigation?.getChoice?.() === "waze";
+  const wazeOnAndroid = wazeSelected && window.Capacitor?.getPlatform?.() === "android";
+  if (wazeSelected && !wazeOnAndroid && isAppInstalled()) {
+    // I controlli meteo e gli avvisi sono asincroni: un popup qui può essere bloccato nella PWA.
+    window.location.assign(url);
+    return true;
+  }
   if (!wazeOnAndroid) {
     window.open(url, "_blank");
     return true;

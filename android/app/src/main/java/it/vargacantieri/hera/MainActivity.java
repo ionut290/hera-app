@@ -24,6 +24,7 @@ import it.vargacantieri.hera.biometric.HeraCredentialVaultPlugin;
 import it.vargacantieri.hera.update.HeraAppUpdatePlugin;
 import it.vargacantieri.hera.whatsapp.HeraWhazzupPhotosPlugin;
 import it.vargacantieri.hera.whatsapp.HeraWhatsAppPlugin;
+import it.vargacantieri.hera.navigation.HeraNavigationPlugin;
 
 public class MainActivity extends BridgeActivity {
     private static final String CACHE_PREFS_NAME = "hera_native_cache";
@@ -41,6 +42,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HeraAppUpdatePlugin.class);
         registerPlugin(HeraWhazzupPhotosPlugin.class);
         registerPlugin(HeraWhatsAppPlugin.class);
+        registerPlugin(HeraNavigationPlugin.class);
         registerPlugin(HeraContinuousCameraPlugin.class);
         EdgeToEdge.enable(this);
         super.onCreate(savedInstanceState);

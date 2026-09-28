@@ -15322,13 +15322,13 @@ function buildImpiantoMapsUrl(impianto) {
 
 async function openImpiantoNavigation(impianto, url) {
   const wazeSelected = window.VargaNavigation?.getChoice?.() === "waze";
-  const wazeOnAndroid = wazeSelected && window.Capacitor?.getPlatform?.() === "android";
-  if (wazeSelected && !wazeOnAndroid && isAppInstalled()) {
-    // I controlli meteo e gli avvisi sono asincroni: un popup qui può essere bloccato nella PWA.
+  const onAndroid = window.Capacitor?.getPlatform?.() === "android";
+  if (!onAndroid && isAppInstalled()) {
+    // Gli avvisi e il meteo sono asincroni: il popup può essere bloccato nella PWA.
     window.location.assign(url);
     return true;
   }
-  if (!wazeOnAndroid) {
+  if (!onAndroid) {
     window.open(url, "_blank");
     return true;
   }
@@ -15336,22 +15336,34 @@ async function openImpiantoNavigation(impianto, url) {
   const coordinates = getImpiantoNavigationCoordinates(impianto);
   const plugin = window.Capacitor?.Plugins?.HeraNavigation
     || window.Capacitor?.registerPlugin?.("HeraNavigation");
-  if (!coordinates) {
+  if (wazeSelected && !coordinates) {
     alert("Coordinate GPS dell’impianto mancanti: impossibile avviare Waze.");
     return false;
   }
-  if (!plugin?.openWaze) {
-    alert("Aggiorna Varga Cantieri dal Play Store per aprire Waze direttamente.");
+  const address = [impianto?.indirizzo || impianto?.descrizioneVia, impianto?.comune]
+    .map((value) => String(value || "").trim()).filter(Boolean).join(", ");
+  const destination = coordinates ? `${coordinates.lat},${coordinates.lon}` : address;
+  if (!wazeSelected && !destination) {
+    alert("Posizione dell’impianto non disponibile.");
+    return false;
+  }
+  const openSelectedApp = wazeSelected ? plugin?.openWaze : plugin?.openGoogleMaps;
+  if (!openSelectedApp) {
+    alert("Aggiorna Varga Cantieri dal Play Store per aprire l’app di navigazione direttamente.");
     return false;
   }
   try {
-    await plugin.openWaze({ latitude: coordinates.lat, longitude: coordinates.lon });
+    if (wazeSelected) {
+      await plugin.openWaze({ latitude: coordinates.lat, longitude: coordinates.lon });
+    } else {
+      await plugin.openGoogleMaps({ destination });
+    }
     return true;
   } catch (error) {
     const unavailable = /not implemented|unavailable|non implementato/i.test(String(error?.message || ""));
     alert(unavailable
-      ? "Aggiorna Varga Cantieri dal Play Store per aprire Waze direttamente."
-      : "Waze non è installato o non può essere aperto su questo telefono.");
+      ? "Aggiorna Varga Cantieri dal Play Store per aprire l’app di navigazione direttamente."
+      : `${wazeSelected ? "Waze" : "Google Maps"} non è installato o non può essere aperto su questo telefono.`);
     return false;
   }
 }

@@ -11607,7 +11607,7 @@ function openGlobalImpiantoDetails(impianto, options = {}) {
       }
       const canContinueNavigation = await confirmNavigationWeatherIfNeeded(impianto);
       if (!canContinueNavigation) return;
-      window.open(`https://www.google.com/maps?q=${impianto.gpsY},${impianto.gpsX}`, "_blank");
+      await openImpiantoNavigation(impianto, buildImpiantoMapsUrl(impianto));
     };
   }
   if (ui.globalImpiantoWhatsappBtn) {
@@ -15320,6 +15320,37 @@ function buildImpiantoMapsUrl(impianto) {
   return address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}` : "";
 }
 
+async function openImpiantoNavigation(impianto, url) {
+  const wazeOnAndroid = window.VargaNavigation?.getChoice?.() === "waze"
+    && window.Capacitor?.getPlatform?.() === "android";
+  if (!wazeOnAndroid) {
+    window.open(url, "_blank");
+    return true;
+  }
+
+  const coordinates = getImpiantoNavigationCoordinates(impianto);
+  const plugin = window.Capacitor?.Plugins?.HeraNavigation
+    || window.Capacitor?.registerPlugin?.("HeraNavigation");
+  if (!coordinates) {
+    alert("Coordinate GPS dell’impianto mancanti: impossibile avviare Waze.");
+    return false;
+  }
+  if (!plugin?.openWaze) {
+    alert("Aggiorna Varga Cantieri dal Play Store per aprire Waze direttamente.");
+    return false;
+  }
+  try {
+    await plugin.openWaze({ latitude: coordinates.lat, longitude: coordinates.lon });
+    return true;
+  } catch (error) {
+    const unavailable = /not implemented|unavailable|non implementato/i.test(String(error?.message || ""));
+    alert(unavailable
+      ? "Aggiorna Varga Cantieri dal Play Store per aprire Waze direttamente."
+      : "Waze non è installato o non può essere aperto su questo telefono.");
+    return false;
+  }
+}
+
 
 function getImpiantoWeatherCacheKey(impianto) {
   const coordinates = getImpiantoNavigationCoordinates(impianto);
@@ -18706,7 +18737,7 @@ async function navigateToImpianto(impianto) {
   const canContinueNavigation = await confirmNavigationWeatherIfNeeded(impianto);
   if (!canContinueNavigation) return;
 
-  window.open(url, "_blank");
+  if (!await openImpiantoNavigation(impianto, url)) return;
 
   const operatorName = currentUser?.displayName || currentUser?.email || "Operatore";
   const navigateAtLocal = new Date();

@@ -392,10 +392,11 @@ service cloud.firestore {
       );
     }
 
+    // Privacy by design: VARGA CANTIERI non archivia né espone la posizione
+    // personale degli operatori. Il GPS resta utilizzabile solo localmente sul
+    // dispositivo per funzioni operative (navigazione, distanza, impianto vicino).
     match /operatorPositions/{userId} {
-      allow read: if isAdmin();
-      allow create, update: if validOperatorPositionWrite(userId);
-      allow delete: if isAdmin();
+      allow read, create, update, delete: if false;
     }
 
     match /platformUsers/{userId} {

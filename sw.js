@@ -3,7 +3,7 @@ const CACHE_RESET_VERSION = "20260906-password-recovery-position1";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=20260831-potature-followup1",
+  "./style.css?v=20261006-extra-alert2",
   "./management-v2.css?v=20260731",
   "./notification-center.css?v=20260729a",
   "./approval-access.css?v=20260828-email1",

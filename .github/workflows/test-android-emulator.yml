@@ -62,6 +62,10 @@ jobs:
           p.write_text(s)
           PY
           npx cap sync android
+          find android/app/src/main/res -type f -name "splash.png" -delete
+          cp -R android-resources/res/. android/app/src/main/res/
+          mkdir -p android/app/src/main/res/drawable-xhdpi
+          cp icons/varga-cantieri-512.png android/app/src/main/res/drawable-xhdpi/splash_logo.png
           printf '\n// Integrazioni native Hera\n' >> android/app/capacitor.build.gradle
           cat "$RUNNER_TEMP/hera-native-android/capacitor.build.gradle" >> android/app/capacitor.build.gradle
           cd android

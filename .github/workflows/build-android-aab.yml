@@ -170,6 +170,7 @@ jobs:
           replacements = {
               "compileSdkVersion": "36",
               "targetSdkVersion": "36",
+              "minSdkVersion": "24",
           }
 
           for key, value in replacements.items():
@@ -183,6 +184,7 @@ jobs:
 
           grep -Eq '^\s*compileSdkVersion\s*=\s*36' android/variables.gradle
           grep -Eq '^\s*targetSdkVersion\s*=\s*36' android/variables.gradle
+          grep -Eq '^\s*minSdkVersion\s*=\s*24' android/variables.gradle
 
       - name: Restore upload keystore
         shell: bash

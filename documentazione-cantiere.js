@@ -392,16 +392,97 @@
     void decorateCards(true);
   }
 
+  function hasExtraordinaryWork(plant) {
+    if (plant?.hasStraordinario === true) return true;
+    const fields = [
+      plant?.tipoManutenzione,
+      plant?.tipologiaIntervento,
+      plant?.tipologiaLavorazione,
+      plant?.lavorazioniRichieste,
+      plant?.tipoLavoro
+    ].map(normalize).join(" ");
+    return fields.includes("STRAORDIN");
+  }
+
   async function showNavigationPrompt(plant, button, items) {
-    const body = shell(plant, "📁 Documentazione disponibile");
+    closeOverlay();
+    const overlay = document.createElement("section");
+    overlay.className = "cantiere-doc-overlay cantiere-doc-navigation-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+
     const important = items.some((item) => item.importantBeforeNavigation === true);
-    body.innerHTML = `<div class="cantiere-doc-nav-card"><div class="cantiere-doc-nav-alert">${important ? "⚠️ Questo cantiere contiene documenti indicati da leggere prima del lavoro." : "Sono presenti documenti per questo cantiere."}<br><strong>${items.length} ${items.length === 1 ? "documento disponibile" : "documenti disponibili"}.</strong></div><div class="cantiere-doc-nav-actions"><button type="button" class="cantiere-doc-nav-view">📁 VISUALIZZA DOCUMENTI</button><button type="button" class="cantiere-doc-nav-continue">🧭 CONTINUA A NAVIGARE</button></div></div>`;
-    body.querySelector(".cantiere-doc-nav-view").addEventListener("click", () => openDocuments(plant));
-    body.querySelector(".cantiere-doc-nav-continue").addEventListener("click", () => {
+    const extraordinary = hasExtraordinaryWork(plant);
+    const warnings = [
+      extraordinary ? '<div class="cantiere-doc-extraordinary">⚠️ <strong>LAVORO STRAORDINARIO</strong><br>Questo impianto ha un lavoro straordinario da eseguire.</div>' : "",
+      important ? "⚠️ Questo cantiere contiene documenti indicati da leggere prima del lavoro." : "Sono presenti documenti per questo cantiere.",
+      `<strong>${items.length} ${items.length === 1 ? "documento disponibile" : "documenti disponibili"}.</strong>`
+    ].filter(Boolean).join("<br>");
+
+    overlay.innerHTML = `<div class="cantiere-doc-panel cantiere-doc-navigation-panel"><main class="cantiere-doc-body cantiere-doc-navigation-body"><div class="cantiere-doc-nav-card"><div class="cantiere-doc-nav-alert">${warnings}</div><div class="cantiere-doc-countdown" aria-live="polite">Navigazione automatica tra <strong data-countdown>5</strong> secondi</div><div class="cantiere-doc-hold-hint">Tieni premuto lo schermo per fermare il conto alla rovescia.</div><div class="cantiere-doc-nav-actions"><button type="button" class="cantiere-doc-nav-view">📁 VISUALIZZA DOCUMENTI</button><button type="button" class="cantiere-doc-nav-continue">CONFERMO · PROCEDI NAVIGAZIONE</button></div></div></main></div>`;
+    document.body.appendChild(overlay);
+    document.documentElement.style.overflow = "hidden";
+    state.overlay = overlay;
+
+    const countdown = overlay.querySelector("[data-countdown]");
+    const continueButton = overlay.querySelector(".cantiere-doc-nav-continue");
+    let remainingMs = 5000;
+    let lastTick = performance.now();
+    let paused = false;
+    let finished = false;
+    let frame = 0;
+
+    const cleanup = () => {
+      if (frame) cancelAnimationFrame(frame);
+      overlay.removeEventListener("pointerdown", pauseCountdown, true);
+      overlay.removeEventListener("pointerup", resumeCountdown, true);
+      overlay.removeEventListener("pointercancel", resumeCountdown, true);
+    };
+
+    const proceed = () => {
+      if (finished) return;
+      finished = true;
+      cleanup();
       closeOverlay();
       state.navigationBypass.add(button);
       button.click();
+    };
+
+    const tick = (now) => {
+      if (finished || !overlay.isConnected) return cleanup();
+      if (!paused) {
+        remainingMs = Math.max(0, remainingMs - (now - lastTick));
+        if (countdown) countdown.textContent = String(Math.max(0, Math.ceil(remainingMs / 1000)));
+        if (remainingMs <= 0) return proceed();
+      }
+      lastTick = now;
+      frame = requestAnimationFrame(tick);
+    };
+
+    function pauseCountdown(event) {
+      if (event.target?.closest?.("button")) return;
+      paused = true;
+      lastTick = performance.now();
+      overlay.classList.add("countdown-paused");
+    }
+
+    function resumeCountdown() {
+      if (!paused) return;
+      paused = false;
+      lastTick = performance.now();
+      overlay.classList.remove("countdown-paused");
+    }
+
+    overlay.addEventListener("pointerdown", pauseCountdown, true);
+    overlay.addEventListener("pointerup", resumeCountdown, true);
+    overlay.addEventListener("pointercancel", resumeCountdown, true);
+    overlay.querySelector(".cantiere-doc-nav-view").addEventListener("click", () => {
+      finished = true;
+      cleanup();
+      openDocuments(plant);
     });
+    continueButton.addEventListener("click", proceed);
+    frame = requestAnimationFrame(tick);
   }
 
   function findPlantForElement(element) {

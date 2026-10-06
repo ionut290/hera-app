@@ -12314,3 +12314,17 @@ body:has(#impianto-alert-modal:not(.hidden)) #hera-data-sync-status {
     max-height: 48dvh;
   }
 }
+
+
+/* Avviso lavori straordinari: centrato anche su schermi telefono. */
+@media (max-width: 520px) {
+  .impianto-alert-modal {
+    align-items: center;
+    padding: max(12px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px));
+  }
+  .impianto-alert-content {
+    width: min(520px, calc(100vw - 24px));
+    margin: auto;
+    border-radius: 22px;
+  }
+}

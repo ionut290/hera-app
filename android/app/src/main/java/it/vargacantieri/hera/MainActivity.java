@@ -49,6 +49,10 @@ public class MainActivity extends BridgeActivity {
         if (getSupportActionBar() != null) {
             getSupportActionBar().hide();
         }
+        // Copre anche l'ActionBar framework nel caso il tema locale venga sovrascritto.
+        if (getActionBar() != null) {
+            getActionBar().hide();
+        }
         hideAndroidStatusBar();
         clearWebViewCacheAfterAppUpdate();
         applyTemporaryLoginDeepLink(getIntent());

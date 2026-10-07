@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Nessuna Toolbar/ActionBar nativa: l'interfaccia è tutta nella WebView. -->
+    <style name="VargaAppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#1D4ED8</item>
+    </style>
+
+    <style name="VargaAppTheme.Launch" parent="VargaAppTheme">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>

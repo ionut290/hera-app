@@ -7,7 +7,7 @@ on:
 jobs:
   emulator-screenshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,14 +50,21 @@ jobs:
           api-level: 35
           arch: x86_64
           profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
+            set -euxo pipefail
+            timeout 180 adb wait-for-device
+            timeout 180 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 2; done'
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-            PKG=$(grep -o 'package="[^"]*"' android/app/src/main/AndroidManifest.xml | head -1 | cut -d'"' -f2)
-            if [ -z "$PKG" ]; then PKG=$(grep -E 'applicationId ' android/app/build.gradle | head -1 | sed -E 's/.*applicationId[ ="]+([^"]+)".*/\1/'); fi
+            PKG=$(grep -E 'applicationId[ ="]' android/app/build.gradle | head -1 | sed -E 's/.*applicationId[ ="]+([^"]+)".*/\1/')
+            test -n "$PKG"
             adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1
             sleep 8
-            adb exec-out screencap -p > android-home.png
+            timeout 30 adb exec-out screencap -p > android-home.png
+            test -s android-home.png
       - uses: actions/upload-artifact@v4
         with:
           name: android-home-screenshot
           path: android-home.png
+          if-no-files-found: error

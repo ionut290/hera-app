@@ -1,0 +1,70 @@
+name: Android Emulator Visual Check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  emulator-screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install dependencies
+        run: npm ci
+      - name: Prepare Android project
+        run: |
+          rm -rf www android
+          mkdir -p www
+          cp index.html app.js style.css manifest.webmanifest sw.js www/ 2>/dev/null || true
+          npx cap add android
+          npx cap sync android
+      - name: Force no native ActionBar
+        run: |
+          mkdir -p android/app/src/main/res/values
+          cat > android/app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+            <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+              <item name="android:windowActionBar">false</item>
+              <item name="android:windowNoTitle">true</item>
+            </style>
+            <style name="AppTheme.NoActionBarLaunch" parent="AppTheme">
+              <item name="android:windowActionBar">false</item>
+              <item name="android:windowNoTitle">true</item>
+            </style>
+          </resources>
+          EOF
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+      - name: Run app and capture screenshot
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euxo pipefail
+            timeout 180 adb wait-for-device
+            timeout 180 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 2; done'
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            PKG=$(grep -E 'applicationId[ ="]' android/app/build.gradle | head -1 | sed -E 's/.*applicationId[ ="]+([^"]+)".*/\1/')
+            test -n "$PKG"
+            adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1
+            sleep 8
+            timeout 30 adb exec-out screencap -p > android-home.png
+            test -s android-home.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-home-screenshot
+          path: android-home.png
+          if-no-files-found: error

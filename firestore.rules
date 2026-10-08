@@ -170,6 +170,18 @@ service cloud.firestore {
     }
 
 
+    // Piano Neve: ogni operatore scrive e rilegge solo i propri dati; il registro completo e amministrativo.
+    match /pianoNeveStreetWork/{recordId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+      );
+      allow delete: if isAdmin();
+    }
+
     match /neve_commesse/{docId} {
       allow read: if signedIn();
       allow write: if isAdmin();

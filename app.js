@@ -1804,7 +1804,23 @@ const UserLocationControl = L.Control.extend({
 map.addControl(new UserLocationControl());
 fullscreenMap.addControl(new UserLocationControl());
 
+// Prevent synchronous moveend/zoomend feedback between the embedded and fullscreen maps.
+let syncingMainMapViews = false;
+function syncMainMapView(targetMap, center, zoom) {
+  if (syncingMainMapViews) return;
+  const current = targetMap.getCenter();
+  if (Math.abs(current.lat - center[0]) < 1e-7
+      && Math.abs(current.lng - center[1]) < 1e-7
+      && targetMap.getZoom() === zoom) return;
+  syncingMainMapViews = true;
+  try {
+    targetMap.setView(center, zoom, { animate: false });
+  } finally {
+    syncingMainMapViews = false;
+  }
+}
 map.on("moveend zoomend", () => {
+  if (syncingMainMapViews) return;
   const center = map.getCenter();
   mainMapViewState = {
     center: [center.lat, center.lng],
@@ -1812,18 +1828,18 @@ map.on("moveend zoomend", () => {
     hasUserMoved: true
   };
   if (isMapFullscreenPageOpen && !drawAreaModeActive) {
-    fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
+    syncMainMapView(fullscreenMap, mainMapViewState.center, mainMapViewState.zoom);
   }
 });
 fullscreenMap.on("moveend zoomend", () => {
-  if (!isMapFullscreenPageOpen || drawAreaModeActive) return;
+  if (syncingMainMapViews || !isMapFullscreenPageOpen || drawAreaModeActive) return;
   const center = fullscreenMap.getCenter();
   mainMapViewState = {
     center: [center.lat, center.lng],
     zoom: fullscreenMap.getZoom(),
     hasUserMoved: true
   };
-  map.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
+  syncMainMapView(map, mainMapViewState.center, mainMapViewState.zoom);
 });
 globalMap.on("moveend zoomend", () => {
   const center = globalMap.getCenter();

@@ -29408,6 +29408,8 @@ function copyTextToClipboard(text) {
 async function logActivity(actionType, actionDescription, extra = {}) {
   if (!db || !currentUser) return;
   const normalizedType = String(actionType || "azione").trim();
+  // La navigazione non deve generare un registro dell'attività dell'operatore.
+  if (normalizedType === "pressione_naviga") return;
   try {
     await db.collection("activityLogs").add({
       userId: currentUser.uid || "",
@@ -29707,7 +29709,6 @@ document.addEventListener("click", (event) => {
     impiantoId: button.getAttribute("data-impianto-key") || button.getAttribute("data-impianto-id") || "",
     impiantoName: button.getAttribute("data-impianto-name") || ""
   };
-  if (label.includes("naviga")) logActivity("pressione_naviga", "Pressione NAVIGA", extra);
   if (label.includes("fatto")) logActivity("pressione_fatto", "Pressione FATTO", extra);
   if (label.includes("forza")) logActivity("pressione_forza", "Pressione FORZA", extra);
   if (label.includes("whatsapp")) logActivity("invio_whatsapp", "Invio WhatsApp", extra);

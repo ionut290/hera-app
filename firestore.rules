@@ -297,9 +297,11 @@ service cloud.firestore {
         return signedIn() && data.ownerUserId == request.auth.uid;
       }
       function canReadDocument(data) {
-        return ownsDocument(data)
+        return signedIn() && (
+          ownsDocument(data)
           || (data.visibility == "shared" && (data.sharedToAll == true || request.auth.uid in data.sharedUserIds))
-          || data.visibility == "global";
+          || data.visibility == "global"
+        );
       }
       allow read: if canReadDocument(resource.data);
       allow create: if signedIn()

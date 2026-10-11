@@ -368,6 +368,11 @@ service cloud.firestore {
     }
 
 
+    // Elenco privilegiati: gli utenti ordinari non devono potersi promuovere ad amministratori.
+    match /appConfig/adminUsers {
+      allow read, write: if isAdmin();
+    }
+
     match /appConfig/driveAdminSecret {
       allow read, write: if isAdmin();
     }
@@ -378,7 +383,7 @@ service cloud.firestore {
     }
 
     match /appConfig/{configId} {
-      allow read, write: if signedIn() && !(configId in ["driveAdminSecret", "driveBridge"]);
+      allow read, write: if signedIn() && !(configId in ["adminUsers", "driveAdminSecret", "driveBridge"]);
     }
 
     match /activityLogs/{logId} {

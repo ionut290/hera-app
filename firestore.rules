@@ -297,9 +297,11 @@ service cloud.firestore {
         return signedIn() && data.ownerUserId == request.auth.uid;
       }
       function canReadDocument(data) {
-        return ownsDocument(data)
+        return signedIn() && (
+          ownsDocument(data)
           || (data.visibility == "shared" && (data.sharedToAll == true || request.auth.uid in data.sharedUserIds))
-          || data.visibility == "global";
+          || data.visibility == "global"
+        );
       }
       allow read: if canReadDocument(resource.data);
       allow create: if signedIn()
@@ -368,6 +370,11 @@ service cloud.firestore {
     }
 
 
+    // Elenco privilegiati: gli utenti ordinari non devono potersi promuovere ad amministratori.
+    match /appConfig/adminUsers {
+      allow read, write: if isAdmin();
+    }
+
     match /appConfig/driveAdminSecret {
       allow read, write: if isAdmin();
     }
@@ -378,7 +385,7 @@ service cloud.firestore {
     }
 
     match /appConfig/{configId} {
-      allow read, write: if signedIn() && !(configId in ["driveAdminSecret", "driveBridge"]);
+      allow read, write: if signedIn() && !(configId in ["adminUsers", "driveAdminSecret", "driveBridge"]);
     }
 
     match /activityLogs/{logId} {

@@ -8,10 +8,10 @@
       sessionId = String(session?.sessionId || "");
       if (!sessionId) throw new Error("Sessione foto Android non disponibile");
 
-      for (const file of orderedFiles) {
+      for (const [index, file] of orderedFiles.entries()) {
         await plugin.addPhoto({
           sessionId,
-          fileName: String(file?.name || "foto.jpg"),
+          fileName: `Foto-${String(index + 1).padStart(2, "0")}-${String(file?.name || "foto.jpg")}`,
           mimeType: String(file?.type || "image/jpeg"),
           data: await readWhazzupPhotoAsBase64(file)
         });
@@ -44,7 +44,7 @@
     const fileUris = [];
     try {
       for (const file of orderedFiles) {
-        const fileName = String(file?.name || `Foto-${String(fileUris.length + 1).padStart(2, "0")}.jpg`);
+        const fileName = `Foto-${String(fileUris.length + 1).padStart(2, "0")}-${String(file?.name || "foto.jpg")}`;
         const result = await plugins.filesystem.writeFile({
           path: `${folderPath}/${fileName}`,
           data: await readWhazzupPhotoAsBase64(file),

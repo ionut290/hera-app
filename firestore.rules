@@ -351,6 +351,11 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
 
+    // Prezziari Preventivi: solo gli amministratori autorizzati possono leggerli o modificarli.
+    match /preventiviPriceLists/{priceListId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
     match /posDocuments/{docId} {
       allow read: if signedIn();
       allow create, update, delete: if isAdmin();

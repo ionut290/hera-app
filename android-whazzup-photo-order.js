@@ -1,6 +1,14 @@
 (function installAndroidWhazzupPhotoOrderFix() {
   "use strict";
 
+  const PHOTO_SHARE_AFTER_MESSAGE_DELAY_MS = 8000;
+
+  function waitBeforeWhazzupPhotos() {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, PHOTO_SHARE_AFTER_MESSAGE_DELAY_MS);
+    });
+  }
+
   async function sharePhotosThroughDedicatedPlugin(plugin, orderedFiles) {
     let sessionId = "";
     try {
@@ -8,10 +16,10 @@
       sessionId = String(session?.sessionId || "");
       if (!sessionId) throw new Error("Sessione foto Android non disponibile");
 
-      for (const [index, file] of orderedFiles.entries()) {
+      for (const file of orderedFiles) {
         await plugin.addPhoto({
           sessionId,
-          fileName: `Foto-${String(index + 1).padStart(2, "0")}-${String(file?.name || "foto.jpg")}`,
+          fileName: String(file?.name || "foto.jpg"),
           mimeType: String(file?.type || "image/jpeg"),
           data: await readWhazzupPhotoAsBase64(file)
         });
@@ -29,12 +37,15 @@
   }
 
   async function shareWhazzupPhotosNativeAndroidInOrder(orderedFiles, message) {
-    if (!Array.isArray(orderedFiles) || orderedFiles.length === 0) return null;
+    if (!safeOpenWhatsAppMessage(message)) {
+      throw new Error("Impossibile aprire il messaggio Whazzup iniziale");
+    }
+
+    await waitBeforeWhazzupPhotos();
 
     const dedicatedPlugin = getDedicatedAndroidWhazzupPhotoPlugin();
     if (dedicatedPlugin) {
       await sharePhotosThroughDedicatedPlugin(dedicatedPlugin, orderedFiles);
-      if (!safeOpenWhatsAppMessage(message)) throw new Error("Impossibile aprire il riepilogo Whazzup dopo le foto");
       return true;
     }
 
@@ -44,7 +55,7 @@
     const fileUris = [];
     try {
       for (const file of orderedFiles) {
-        const fileName = `Foto-${String(fileUris.length + 1).padStart(2, "0")}-${String(file?.name || "foto.jpg")}`;
+        const fileName = String(file?.name || `Foto-${String(fileUris.length + 1).padStart(2, "0")}.jpg`);
         const result = await plugins.filesystem.writeFile({
           path: `${folderPath}/${fileName}`,
           data: await readWhazzupPhotoAsBase64(file),
@@ -58,7 +69,6 @@
         dialogTitle: "Condividi le foto su Whazzup"
       });
       scheduleNativeWhazzupShareCleanup(plugins.filesystem, folderPath);
-      if (!safeOpenWhatsAppMessage(message)) throw new Error("Impossibile aprire il riepilogo Whazzup dopo le foto");
       return true;
     } catch (error) {
       await removeNativeWhazzupShareFolder(plugins.filesystem, folderPath);

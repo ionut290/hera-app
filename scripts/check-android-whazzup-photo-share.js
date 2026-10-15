@@ -54,11 +54,12 @@ assert.match(orderFix, /await plugin\.addPhoto\(\{/);
 assert.match(orderFix, /return await plugin\.share\(\{ sessionId \}\);/);
 assert.match(orderFix, /async function shareWhazzupPhotosNativeAndroidInOrder\(orderedFiles, message\)/);
 assert.match(orderFix, /window\.shareWhazzupPhotosNativeAndroid = shareWhazzupPhotosNativeAndroidInOrder;/);
-assert.match(orderFix, /if \(!safeOpenWhatsAppMessage\(message\)\)/);
-assert.match(orderFix, /await waitBeforeWhazzupPhotos\(\)/);
+assert.match(orderFix, /await sharePhotosThroughDedicatedPlugin\(dedicatedPlugin, orderedFiles\)/);
+assert.match(orderFix, /safeOpenWhatsAppMessage\(message\)/);
+assert.doesNotMatch(orderFix, /await waitBeforeWhazzupPhotos\(\)/);
 assert.match(orderFix, /await sharePhotosThroughDedicatedPlugin\(dedicatedPlugin, orderedFiles\)/);
 assert.match(orderFix, /await plugins\.share\.share\(/);
-assert.match(orderFix, /PHOTO_SHARE_AFTER_MESSAGE_DELAY_MS = 8000/);
+assert.doesNotMatch(orderFix, /PHOTO_SHARE_AFTER_MESSAGE_DELAY_MS = 8000/);
 assert.doesNotMatch(orderFix, /text:\s*message/);
 assert.doesNotMatch(orderFix, /title:\s*"Impianto fatto"/);
 
@@ -67,4 +68,4 @@ assert.match(nativeRuntime, /script\.src = "android-whazzup-photo-order\.js\?v=2
 assert.match(nativeRuntime, /const start = \(\) => \{\s*loadAndroidWhazzupPhotoOrderFix\(\);/);
 assert.match(capacitorPrepare, /"android-whazzup-photo-order\.js"/);
 
-console.log("Android Whazzup protected message-first share checks passed.");
+console.log("Android Whazzup photos-first share checks passed.");

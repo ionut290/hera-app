@@ -60,11 +60,12 @@ assert.match(orderFix, /await plugins\.share\.share\([\s\S]*safeOpenWhatsAppMess
 assert.doesNotMatch(orderFix, /text:\s*message/);
 assert.doesNotMatch(orderFix, /title:\s*"Impianto fatto"/);
 
-const messageIndex = orderFix.indexOf("safeOpenWhatsAppMessage(message)");
+const dedicatedMessageIndex = orderFix.indexOf("safeOpenWhatsAppMessage(message)");
+const fallbackMessageIndex = orderFix.lastIndexOf("safeOpenWhatsAppMessage(message)");
 const dedicatedShareIndex = orderFix.indexOf("await sharePhotosThroughDedicatedPlugin(dedicatedPlugin, orderedFiles)");
 const genericShareIndex = orderFix.indexOf("await plugins.share.share");
-assert.ok(messageIndex > dedicatedShareIndex, "Le foto dedicate devono precedere il testo");
-assert.ok(messageIndex > genericShareIndex, "Le foto fallback devono precedere il testo");
+assert.ok(dedicatedMessageIndex > dedicatedShareIndex, "Le foto dedicate devono precedere il testo");
+assert.ok(fallbackMessageIndex > genericShareIndex, "Le foto fallback devono precedere il testo");
 assert.doesNotMatch(orderFix, /PHOTO_SHARE_AFTER_MESSAGE_DELAY_MS/);
 
 assert.match(nativeRuntime, /function loadAndroidWhazzupPhotoOrderFix\(\)/);

@@ -436,8 +436,11 @@ service cloud.firestore {
     }
 
     match /chatMessages/{messageId} {
-      allow read, create, update: if signedIn();
-      allow delete: if isAdmin();
+      allow read, create: if signedIn();
+      // La modifica arbitraria di messaggi esistenti da parte di altri utenti
+      // consentiva la falsificazione dello storico. Le eventuali correzioni
+      // vanno effettuate con procedure amministrative tracciabili.
+      allow update, delete: if isAdmin();
     }
 
     match /safetyContacts/{contactId} {

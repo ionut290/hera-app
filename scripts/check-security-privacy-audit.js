@@ -9,6 +9,7 @@ const storage = fs.readFileSync("storage.rules", "utf8");
 assert.match(rules, /match \/appConfig\/adminUsers\s*\{\s*allow read, write:\s*if isAdmin\(\);\s*\}/);
 assert.match(rules, /match \/appConfig\/\{configId\}\s*\{[\s\S]*?configId in \["adminUsers", "driveAdminSecret", "driveBridge"\]/);
 assert.match(rules, /match \/operatorPositions\/\{userId\}\s*\{\s*allow read, create, update, delete:\s*if false;/);
+assert.match(rules, /match \/chatMessages\/\{messageId\} \{[\s\S]*?allow update, delete: if isAdmin\(\);/);
 assert.match(privacy, /ionut29019@gmail\.com/);
 assert.match(privacy, /3892352575/);
 assert.match(privacy, /Hera/);

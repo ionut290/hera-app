@@ -1,25 +1,27 @@
 BEGIN;
 
--- API-facing views expose only an explicit allow-list. They never expose the imported JSON archive.
+-- API-facing views expose only an explicit allow-list. The source JSON is never returned.
+-- The path filter is essential: collection_name=commesse also labels imported subcollections.
 CREATE OR REPLACE VIEW public.varga_catalogo_api_v1 AS
-WITH source AS (
-  SELECT to_jsonb(v) AS row_data
-  FROM public.varga_catalogo_pilota AS v
-)
 SELECT
-  row_data->>'collection_name' AS collection_name,
-  row_data->>'document_id' AS document_id,
-  COALESCE(row_data->>'denominazione', row_data#>>'{data,v,denominazione,v}', row_data#>>'{data,v,nome,v}') AS denominazione,
-  COALESCE(row_data->>'comune', row_data#>>'{data,v,comune,v}') AS comune,
-  COALESCE(row_data->>'indirizzo', row_data#>>'{data,v,indirizzo,v}') AS indirizzo,
-  COALESCE(row_data->>'stato', row_data#>>'{data,v,stato,v}') AS stato,
+  collection_name,
+  document_id,
+  COALESCE(data#>>'{v,denominazione,v}', data#>>'{v,nome,v}', data#>>'{v,name,v}') AS denominazione,
+  data#>>'{v,codice,v}' AS codice,
+  data#>>'{v,comune,v}' AS comune,
+  data#>>'{v,indirizzo,v}' AS indirizzo,
+  data#>>'{v,distretto,v}' AS distretto,
+  data#>>'{v,tipologiaIntervento,v}' AS tipologia_intervento,
+  COALESCE(data#>>'{v,stato,v}', data#>>'{v,attiva,v}') AS stato,
   CASE
-    WHEN lower(COALESCE(row_data->>'eliminato', row_data#>>'{data,v,deleted,v}', 'false')) = 'true' THEN true
+    WHEN lower(COALESCE(data#>>'{v,deleted,v}', 'false')) = 'true' THEN true
     ELSE false
   END AS eliminato
-FROM source
-WHERE row_data->>'collection_name' IN ('commesse', 'impianti')
-  AND row_data->>'document_id' IS NOT NULL;
+FROM public.firestore_import_test_20261026
+WHERE
+  (collection_name = 'commesse' AND path ~ '^commesse/[^/]+$')
+  OR
+  (collection_name = 'impianti' AND path ~ '^impianti/[^/]+$');
 
 CREATE OR REPLACE VIEW public.varga_mappa_api_v1 AS
 SELECT collection_name, document_id, latitudine, longitudine

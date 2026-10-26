@@ -30,7 +30,8 @@ export function createRepository(pool) {
     async ready() { await pool.query("SELECT 1"); },
     async catalog({ collection, limit, offset }) {
       const result = await pool.query(
-        `SELECT collection_name, document_id, denominazione, comune, indirizzo, stato, eliminato
+        `SELECT collection_name, document_id, denominazione, codice, comune, indirizzo,
+                distretto, tipologia_intervento, stato, eliminato
            FROM public.varga_catalogo_api_v1
           WHERE collection_name = $1
           ORDER BY document_id

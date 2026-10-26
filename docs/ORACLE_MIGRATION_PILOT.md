@@ -61,11 +61,11 @@ SELECT collection_name, COUNT(*) FROM public.varga_mappa_api_v1 GROUP BY collect
 Valori di riferimento comunicati per le viste sorgenti:
 
 - archivio importato: 27.518 documenti;
-- catalogo: 3.264 commesse e 67 impianti;
+- vista catalogo grezza: 3.264 righe classificate come `commesse` e 67 impianti;
 - mappa: 1.679 commesse e 67 impianti;
 - archivio non leggibile da `varga_reader`.
 
-Le viste API possono differire solo se una riga sorgente è priva di `document_id` o non appartiene alle due collezioni ammesse. Ogni differenza va spiegata prima di procedere.
+L'analisi dei percorsi ha mostrato che le 3.264 righe `commesse` includono numerose sottocollezioni. Il catalogo API filtra perciò i soli documenti principali: 20 commesse (`commesse/<id>`) e 67 impianti (`impianti/<id>`). La mappa mantiene invece i 1.679 punti commessa validi perché rappresentano elementi geografici delle sottocollezioni. Ogni differenza futura va spiegata prima di procedere.
 
 ## Gate obbligatori prima di collegare una schermata
 

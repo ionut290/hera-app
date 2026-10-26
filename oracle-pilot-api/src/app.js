@@ -33,7 +33,7 @@ export function createApp({ config, repository, verifyToken }) {
     try { await repository.ready(); res.json({ status: "ready" }); } catch (error) { next(error); }
   });
 
-  const authenticate = createAuthMiddleware(config, verifyToken);
+  const authenticate = createAuthMiddleware(config, verifyToken, repository.authorizeIdentity?.bind(repository));
   app.get("/v1/me", authenticate, (req, res) => {
     res.json({ uid: req.identity.uid, email: req.identity.email, role: req.identity.role });
   });

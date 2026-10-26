@@ -5,7 +5,8 @@ SELECT current_database() AS database, current_user AS connected_as;
 SELECT
   has_table_privilege('varga_reader', 'public.firestore_import_test_20261026', 'SELECT') AS archive_select_must_be_false,
   has_table_privilege('varga_reader', 'public.varga_catalogo_api_v1', 'SELECT') AS catalog_select_must_be_true,
-  has_table_privilege('varga_reader', 'public.varga_mappa_api_v1', 'SELECT') AS map_select_must_be_true;
+  has_table_privilege('varga_reader', 'public.varga_mappa_api_v1', 'SELECT') AS map_select_must_be_true,
+  has_function_privilege('varga_reader', 'public.varga_authorize_identity(text,text)', 'EXECUTE') AS identity_check_must_be_true;
 
 SELECT collection_name, COUNT(*) AS rows
 FROM public.varga_catalogo_api_v1
@@ -30,3 +31,6 @@ SELECT
   COUNT(*) FILTER (WHERE collection_name = 'impianti' AND COALESCE(denominazione, '') <> '') AS named_impianti,
   COUNT(*) FILTER (WHERE collection_name = 'impianti' AND COALESCE(id_sap, '') <> '') AS impianti_with_id_sap
 FROM public.varga_catalogo_api_v1;
+
+SELECT *
+FROM public.varga_authorize_identity('__missing_uid__', 'missing@example.invalid');

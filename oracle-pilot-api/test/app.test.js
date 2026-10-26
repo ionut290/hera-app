@@ -11,6 +11,10 @@ const config = {
 };
 const repository = {
   async ready() {},
+  async authorizeIdentity(identity) {
+    if (identity.uid === "u4") return { matched: true, allowed: true, role: "admin" };
+    return { matched: true, allowed: false, role: "reader" };
+  },
   async catalog(page) { return [{ collection_name: page.collection, document_id: "c1" }]; },
   async map(page) { return [{ collection_name: page.collection, document_id: "m1", latitudine: "44", longitudine: "11" }]; }
 };
@@ -18,11 +22,12 @@ const verifyToken = async (token) => {
   if (token === "reader") return { uid: "u1", email: "reader@example.test", emailVerified: true, accessClaim: false, roleClaim: "" };
   if (token === "admin") return { uid: "u2", email: "admin@example.test", emailVerified: true, accessClaim: false, roleClaim: "" };
   if (token === "denied") return { uid: "u3", email: "other@example.test", emailVerified: true, accessClaim: false, roleClaim: "" };
+  if (token === "database-admin") return { uid: "u4", email: "database@example.test", emailVerified: true, accessClaim: false, roleClaim: "" };
   throw new Error("bad token");
 };
 
-async function withServer(run) {
-  const server = createApp({ config, repository, verifyToken }).listen(0, "127.0.0.1");
+async function withServer(run, configOverrides = {}) {
+  const server = createApp({ config: { ...config, ...configOverrides }, repository, verifyToken }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   try { await run(`http://127.0.0.1:${server.address().port}`); }
   finally { await new Promise((resolve) => server.close(resolve)); }
@@ -54,3 +59,14 @@ test("CORS rejects an unknown browser origin", () => withServer(async (base) => 
   const response = await fetch(`${base}/v1/me`, { headers: { origin: "https://evil.example", authorization: "Bearer reader" } });
   assert.equal(response.status, 403);
 }));
+
+test("database authorization requires an exact allowed identity", () => withServer(async (base) => {
+  assert.equal((await fetch(`${base}/v1/me`, { headers: { authorization: "Bearer reader" } })).status, 403);
+  const response = await fetch(`${base}/v1/me`, { headers: { authorization: "Bearer database-admin" } });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).role, "admin");
+}, { authzSource: "database" }));
+
+test("hybrid authorization honors an explicit database denial", () => withServer(async (base) => {
+  assert.equal((await fetch(`${base}/v1/me`, { headers: { authorization: "Bearer reader" } })).status, 403);
+}, { authzSource: "hybrid" }));

@@ -33,22 +33,38 @@ export function createTokenVerifier(config) {
   };
 }
 
-export function createAuthMiddleware(config, verifyToken = createTokenVerifier(config)) {
+export function createAuthMiddleware(config, verifyToken = createTokenVerifier(config), authorizeIdentity) {
   return async function authenticate(req, res, next) {
     const token = bearer(req);
     if (!token) return res.status(401).json({ error: "authentication_required" });
+    let identity;
     try {
-      const identity = await verifyToken(token);
-      if (!identity.uid || !identity.email || !identity.emailVerified) {
-        return res.status(403).json({ error: "verified_identity_required" });
-      }
-      const isAdmin = config.adminEmails.has(identity.email) || identity.roleClaim === "admin";
-      const isAllowed = isAdmin || config.allowedEmails.has(identity.email) || identity.accessClaim;
-      if (!isAllowed) return res.status(403).json({ error: "pilot_access_denied" });
-      req.identity = { ...identity, role: isAdmin ? "admin" : "reader" };
-      return next();
+      identity = await verifyToken(token);
     } catch {
       return res.status(401).json({ error: "invalid_or_expired_token" });
     }
+    if (!identity.uid || !identity.email || !identity.emailVerified) {
+      return res.status(403).json({ error: "verified_identity_required" });
+    }
+    try {
+      const authzSource = config.authzSource || "env";
+      const envAdmin = config.adminEmails.has(identity.email) || identity.roleClaim === "admin";
+      const envAllowed = envAdmin || config.allowedEmails.has(identity.email) || identity.accessClaim;
+      let databaseAuth = { matched: false, allowed: false, role: "reader" };
+      if (authzSource !== "env") {
+        if (typeof authorizeIdentity !== "function") throw new Error("database authorization unavailable");
+        databaseAuth = await authorizeIdentity(identity);
+      }
+      const databaseAdmin = databaseAuth.allowed && databaseAuth.role === "admin";
+      const isAdmin = envAdmin || databaseAdmin;
+      const isAllowed = authzSource === "database"
+        ? databaseAuth.allowed
+        : authzSource === "hybrid"
+          ? (databaseAuth.matched ? databaseAuth.allowed : envAllowed)
+          : envAllowed;
+      if (!isAllowed) return res.status(403).json({ error: "pilot_access_denied" });
+      req.identity = { ...identity, role: isAdmin ? "admin" : "reader" };
+      return next();
+    } catch (error) { return next(error); }
   };
 }

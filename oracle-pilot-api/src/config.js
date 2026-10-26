@@ -11,12 +11,15 @@ function required(env, name) {
 export function loadConfig(env = process.env) {
   const authMode = String(env.AUTH_MODE || "firebase").trim().toLowerCase();
   if (!new Set(["firebase", "oidc"]).has(authMode)) throw new Error("AUTH_MODE must be firebase or oidc");
+  const authzSource = String(env.AUTHZ_SOURCE || "env").trim().toLowerCase();
+  if (!new Set(["env", "database", "hybrid"]).has(authzSource)) throw new Error("AUTHZ_SOURCE must be env, database or hybrid");
   const config = {
     host: String(env.HOST || "127.0.0.1"),
     port: Number(env.PORT || 18082),
     databaseUrl: required(env, "DATABASE_URL"),
     dbSsl: String(env.DB_SSL || "false").toLowerCase() === "true",
     authMode,
+    authzSource,
     firebaseProjectId: String(env.FIREBASE_PROJECT_ID || "hera-app-6cd2b"),
     checkRevokedTokens: String(env.CHECK_REVOKED_TOKENS || "false").toLowerCase() === "true",
     allowedEmails: csv(env.PILOT_ALLOWED_EMAILS),

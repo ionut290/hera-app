@@ -28,6 +28,13 @@ export function parseListQuery(query) {
 export function createRepository(pool) {
   return {
     async ready() { await pool.query("SELECT 1"); },
+    async authorizeIdentity({ uid, email }) {
+      const result = await pool.query(
+        "SELECT matched, allowed, role FROM public.varga_authorize_identity($1, $2)",
+        [uid, email]
+      );
+      return result.rows[0] || { matched: false, allowed: false, role: "reader" };
+    },
     async catalog({ collection, limit, offset }) {
       const result = await pool.query(
         `SELECT collection_name, document_id, denominazione, codice, comune, indirizzo,

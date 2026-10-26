@@ -43,7 +43,7 @@
       matched: onlyFirebase.length === 0 && onlyOracle.length === 0
     });
     global.localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
-    console.info("[ORACLE CANARY READ-ONLY]", result);
+    console.info("[ORACLE CANARY READ-ONLY]", JSON.stringify(result));
   }
 
   global.addEventListener("load", () => {
@@ -54,7 +54,7 @@
       runComparison(user).catch((error) => {
         const failure = { checkedAt: new Date().toISOString(), error: String(error?.message || error) };
         global.localStorage.setItem(STORAGE_KEY, JSON.stringify(failure));
-        console.warn("[ORACLE CANARY READ-ONLY] confronto non completato", failure);
+        console.warn("[ORACLE CANARY READ-ONLY] confronto non completato", JSON.stringify(failure));
       });
     });
   }, { once: true });

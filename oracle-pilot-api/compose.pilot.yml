@@ -1,0 +1,20 @@
+services:
+  varga-pilot-api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:18082:18082"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - varga-pilot
+
+networks:
+  varga-pilot:
+    external: true

@@ -1,0 +1,22 @@
+{
+  "name": "varga-oracle-pilot-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "check": "node --check src/app.js && node --check src/auth.js && node --check src/config.js && node --check src/repository.js && node --check src/server.js && node --test"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "firebase-admin": "^14.5.0",
+    "helmet": "^8.1.0",
+    "jose": "^6.1.0",
+    "pg": "^8.16.3"
+  }
+}

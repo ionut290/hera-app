@@ -21,6 +21,36 @@ services:
       retries: 5
       start_period: 10s
 
+  varga-pilot-web:
+    build: ../oracle-pilot-web
+    restart: unless-stopped
+    depends_on:
+      varga-pilot-api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18084:80"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=16m,noexec,nosuid,nodev
+      - /var/run:size=2m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    networks:
+      - database
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 networks:
   database:
     external: true

@@ -1,0 +1,31 @@
+:root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #07110e; color: #edf8f2; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 85% 0, #174c36 0, transparent 35%), #07110e; }
+main { width: min(1100px, calc(100% - 32px)); margin: 0 auto; padding: 48px 0 72px; }
+header, .auth-panel, .section-title, .actions { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+header { margin-bottom: 28px; }
+h1 { margin: 4px 0 10px; font-size: clamp(2rem, 5vw, 4rem); letter-spacing: -.05em; }
+h1 span { color: #6ee7a8; }
+h2 { margin: 0; font-size: 1.1rem; }
+p { color: #a6bcb2; }
+.eyebrow { margin: 0; color: #6ee7a8; font-weight: 800; font-size: .72rem; letter-spacing: .16em; }
+.panel { background: rgba(15, 35, 28, .9); border: 1px solid #254c3c; border-radius: 18px; padding: 22px; box-shadow: 0 18px 50px #0005; }
+.badge { flex: 0 0 auto; padding: 9px 13px; border-radius: 999px; font-size: .8rem; font-weight: 800; }
+.badge.pending { background: #4f421d; color: #ffe58a; }
+.badge.ok { background: #123e2a; color: #72efae; }
+.badge.error { background: #4b1d22; color: #ff9ba5; }
+button { border: 0; border-radius: 11px; padding: 12px 17px; font: inherit; font-weight: 800; cursor: pointer; background: #59dc98; color: #062017; }
+button.secondary { background: #29453a; color: #eef7f2; }
+button:disabled { opacity: .5; cursor: wait; }
+.message { min-height: 24px; margin: 18px 4px; }
+.message.error { color: #ff9ba5; }
+.data-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.full { grid-column: 1 / -1; }
+.section-title { padding-bottom: 14px; border-bottom: 1px solid #28483b; }
+.section-title strong { color: #6ee7a8; font-size: 1.4rem; }
+.list { display: grid; gap: 8px; padding-top: 14px; max-height: 420px; overflow: auto; }
+.row { padding: 12px; border-radius: 10px; background: #0b1914; border: 1px solid #1e3a2f; }
+.row strong { display: block; margin-bottom: 4px; }
+.row small { color: #91a89e; }
+.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 700px) { header, .auth-panel { align-items: flex-start; flex-direction: column; } .data-grid { grid-template-columns: 1fr; } .full { grid-column: auto; } .compact { grid-template-columns: 1fr; } }

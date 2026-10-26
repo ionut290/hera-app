@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Varga Cantieri — Pilota Oracle</title>
+  <link rel="stylesheet" href="pilot.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">AMBIENTE ISOLATO · SOLA LETTURA</p>
+        <h1>Varga Cantieri <span>Pilota Oracle</span></h1>
+        <p>Verifica autenticazione, catalogo e mappa senza modificare Firebase o la produzione.</p>
+      </div>
+      <div id="serviceStatus" class="badge pending">Verifica servizio…</div>
+    </header>
+
+    <section class="panel auth-panel">
+      <div>
+        <h2>Accesso pilota</h2>
+        <p id="identity">Non autenticato</p>
+      </div>
+      <div class="actions">
+        <button id="login" type="button">Accedi con Google</button>
+        <button id="logout" class="secondary" type="button" hidden>Esci</button>
+      </div>
+    </section>
+
+    <p id="message" class="message" role="status" aria-live="polite">Accedi con l’email autorizzata per caricare i dati pilota.</p>
+
+    <section id="data" class="data-grid" hidden>
+      <article class="panel">
+        <div class="section-title"><h2>Commesse</h2><strong id="commesseCount">0</strong></div>
+        <div id="commesse" class="list"></div>
+      </article>
+      <article class="panel">
+        <div class="section-title"><h2>Impianti</h2><strong id="impiantiCount">0</strong></div>
+        <div id="impianti" class="list"></div>
+      </article>
+      <article class="panel full">
+        <div class="section-title"><h2>Coordinate impianti</h2><strong id="mapCount">0</strong></div>
+        <div id="mapPoints" class="list compact"></div>
+      </article>
+    </section>
+  </main>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth-compat.js"></script>
+  <script src="pilot.js"></script>
+</body>
+</html>

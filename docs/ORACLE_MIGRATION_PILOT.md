@@ -92,3 +92,9 @@ L'analisi dei percorsi ha mostrato che le 3.264 righe `commesse` includono numer
 ## Componenti non migrati
 
 Non sono migrati: login del client, profili e permessi dinamici, scritture CRUD, FATTO/WHAZZUP/RESET, offline sync, Personale, Utenti, squadre, calendario, ore, mezzi, notifiche, file/Storage, Drive/Sheets, Cloud Functions, funzioni Netlify, Android e DNS/TLS pubblico. Pertanto la migrazione completa e il cutover **non sono completati**.
+
+## Adattatore per l'interfaccia originale
+
+`oracle-read-adapter.js` prepara il contratto dati per la futura copia canary dell'interfaccia originale. È disattivato per impostazione predefinita, non viene incluso dall'HTML di produzione e non avvia richieste all'installazione. Quando esplicitamente configurato nella sola copia pilota, riusa il token dell'utente già autenticato e normalizza catalogo e coordinate in oggetti compatibili, marcati `oraclePilotReadOnly`.
+
+L'adattatore non legge o scrive Firestore, non crea listener e non modifica HTML/CSS. Il collegamento a `commesseById` e alle mappe dell'app originale resta intenzionalmente non attivo finché non saranno definiti test di parità e fallback che escludano interferenze con FATTO/WHAZZUP e con gli impianti operativi.

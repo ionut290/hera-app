@@ -77,7 +77,8 @@
     "check:preventivi-matrix-runtime": "node scripts/check-preventivi-matrix-runtime-fix.js",
     "check:preventivi-commessa-search": "node scripts/check-preventivi-commessa-search-bridge.js",
     "check:preventivi-template-fidelity": "node scripts/check-preventivi-template-fidelity.js",
-    "check:platform-profile-bootstrap": "node scripts/check-platform-profile-bootstrap-reuse.js"
+    "check:platform-profile-bootstrap": "node scripts/check-platform-profile-bootstrap-reuse.js",
+    "check:oracle-read-adapter": "node --check oracle-read-adapter.js && node scripts/check-oracle-read-adapter.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

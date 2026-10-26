@@ -24,3 +24,9 @@ WHERE latitudine NOT BETWEEN 35 AND 48 OR longitudine NOT BETWEEN 6 AND 19;
 SELECT COUNT(*) AS missing_ids_must_be_zero
 FROM public.varga_catalogo_api_v1
 WHERE document_id IS NULL OR document_id = '';
+
+SELECT
+  COUNT(*) FILTER (WHERE collection_name = 'commesse' AND COALESCE(denominazione, '') <> '') AS named_commesse,
+  COUNT(*) FILTER (WHERE collection_name = 'impianti' AND COALESCE(denominazione, '') <> '') AS named_impianti,
+  COUNT(*) FILTER (WHERE collection_name = 'impianti' AND COALESCE(id_sap, '') <> '') AS impianti_with_id_sap
+FROM public.varga_catalogo_api_v1;

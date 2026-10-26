@@ -37,6 +37,10 @@
       nome: String(item.denominazione || item.codice || item.document_id || "Commessa"),
       codice: String(item.codice || ""),
       stato: String(item.stato || ""),
+      speciale: String(item.speciale || ""),
+      tipoSpeciale: String(item.tipo_speciale || ""),
+      parentCommessaId: String(item.parent_commessa_id || ""),
+      hiddenFromHome: String(item.hidden_from_home || ""),
       oraclePilotReadOnly: true
     });
   }
@@ -45,11 +49,14 @@
     return Object.freeze({
       id: String(item.document_id || ""),
       denominazione: String(item.denominazione || ""),
-      idSap: String(item.codice || ""),
+      idSap: String(item.id_sap || item.codice || ""),
       comune: String(item.comune || ""),
       indirizzo: String(item.indirizzo || ""),
       distretto: String(item.distretto || ""),
       tipologiaIntervento: String(item.tipologia_intervento || ""),
+      voceRiferimento: String(item.voce_riferimento || ""),
+      frequenzaAnnuaMinima: String(item.frequenza_annua_minima || ""),
+      sfalciAreeVerdiMqPotaturaSiepiM: String(item.consistenza_verde || ""),
       oraclePilotReadOnly: true
     });
   }

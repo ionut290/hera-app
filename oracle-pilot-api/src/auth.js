@@ -20,7 +20,7 @@ function normalizeIdentity(claims) {
 export function createTokenVerifier(config) {
   if (config.authMode === "firebase") {
     const app = getApps()[0] || initializeApp({ projectId: config.firebaseProjectId });
-    return async (token) => normalizeIdentity(await getAuth(app).verifyIdToken(token, true));
+    return async (token) => normalizeIdentity(await getAuth(app).verifyIdToken(token, config.checkRevokedTokens));
   }
   const jwks = createRemoteJWKSet(new URL(config.oidcJwksUri));
   return async (token) => {

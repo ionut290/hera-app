@@ -18,6 +18,7 @@ export function loadConfig(env = process.env) {
     dbSsl: String(env.DB_SSL || "false").toLowerCase() === "true",
     authMode,
     firebaseProjectId: String(env.FIREBASE_PROJECT_ID || "hera-app-6cd2b"),
+    checkRevokedTokens: String(env.CHECK_REVOKED_TOKENS || "false").toLowerCase() === "true",
     allowedEmails: csv(env.PILOT_ALLOWED_EMAILS),
     adminEmails: csv(env.PILOT_ADMIN_EMAILS),
     allowedOrigins: csv(env.ALLOWED_ORIGINS),

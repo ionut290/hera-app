@@ -35,6 +35,8 @@ Per ridurre il rischio, il primo stadio riusa soltanto l'identità Firebase già
 
 Questo non replica ancora lo stato account e i permessi dinamici conservati in Firestore. Prima di ampliare il pilota è obbligatorio migrare utenti/ruoli in tabelle dedicate preservando UID ed email storici, oppure emettere claim affidabili da un processo amministrativo controllato. Non usare un token o un ruolo fornito dal browser senza verifica della firma.
 
+La modalità iniziale verifica firma, progetto, scadenza ed email verificata. `CHECK_REVOKED_TOKENS=false` evita di distribuire una credenziale Firebase Admin sul server pilota; di conseguenza una sessione revocata resta valida fino alla scadenza naturale del relativo ID token. Prima di estendere il pilota occorre fornire una credenziale minima e impostare il controllo a `true`, oppure completare il passaggio a OIDC Oracle.
+
 Il servizio supporta anche `AUTH_MODE=oidc` per una futura Identity Domain Oracle. Il passaggio da Firebase a OIDC è una fase successiva e richiede mappatura UID, test di revoca, recupero account, utenti disabilitati e rollback.
 
 ## Preparazione sul server Oracle (nessun cutover)

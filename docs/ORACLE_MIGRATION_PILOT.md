@@ -100,3 +100,9 @@ Non sono migrati: login del client, profili e permessi dinamici, scritture CRUD,
 L'adattatore non legge o scrive Firestore, non crea listener e non modifica HTML/CSS. Il collegamento a `commesseById` e alle mappe dell'app originale resta intenzionalmente non attivo finché non saranno definiti test di parità e fallback che escludano interferenze con FATTO/WHAZZUP e con gli impianti operativi.
 
 La copia canary `varga-original-canary` serve gli stessi file dell'app dal checkout, senza modificarli. Nginx inietta soltanto configurazione, adattatore e `oracle-canary-bootstrap.js` nella risposta HTML della copia locale. Il bootstrap non modifica il DOM: dopo il login confronta gli ID delle commesse già caricate dall'app con il catalogo Oracle e salva il risultato nel solo `localStorage` del canary. La porta `18085` resta vincolata a loopback e le directory tecniche o sensibili non sono servite.
+
+Il confronto considera riuscita la copertura quando ogni commessa visibile all'utente autenticato è presente nel catalogo Oracle. L'uguaglianza completa viene registrata separatamente: l'applicazione applica filtri di assegnazione e può quindi caricare intenzionalmente un sottoinsieme delle 20 commesse principali.
+
+Il catalogo espone inoltre una allow-list di campi operativi: nome/codice/stato e relazioni non personali delle commesse; denominazione, ID SAP, comune, indirizzo, distretto, tipologia, voce di riferimento, frequenza e consistenza verde degli impianti. Email operatore, autori delle modifiche, identificativi Google Sheet e payload JSON originali non sono esposti. Al controllo del 26 ottobre 2026 risultano 19 commesse nominate su 20, 67 impianti nominati su 67 e 67 ID SAP su 67.
+
+Il reverse proxy del canary usa `Referrer-Policy: strict-origin-when-cross-origin`, necessaria per rispettare la policy del provider delle tessere OpenStreetMap. Non sono state apportate modifiche al layout o al codice cartografico dell'app.

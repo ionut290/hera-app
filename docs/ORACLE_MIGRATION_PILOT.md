@@ -43,7 +43,7 @@ Il servizio supporta anche `AUTH_MODE=oidc` per una futura Identity Domain Oracl
 
 `AUTHZ_SOURCE=env` resta l'impostazione predefinita del pilota. Lo script `sql/003_identity_authorization.sql` aggiunge una funzione PostgreSQL a privilegi controllati per la futura verifica di UID ed email già autenticati. La funzione restituisce soltanto `matched`, `allowed` e `role`; `varga_reader` non riceve accesso alle raccolte `platformUsers` o `personale` e non può elencare account, nomi, email, telefoni o altri dati personali.
 
-Le modalità `database` e `hybrid` sono implementate ma non devono essere abilitate finché non è stato verificato un campione degli account storici. In modalità ibrida, una corrispondenza esplicita nel database prevale sull'allow-list: un account trovato ma non attivo viene negato. Un account non ancora migrato può continuare a usare l'allow-list del pilota. L'inventario strutturale rileva 165 documenti `platformUsers` e 149 documenti `personale`; nessun record è stato eliminato, riscritto o esposto dall'API.
+Le modalità `database` e `hybrid` sono implementate ma non devono essere abilitate finché non è stato verificato un campione degli account storici. In modalità ibrida, soltanto una decisione esplicita nel database prevale sull'allow-list: un account esplicitamente bloccato o non attivo viene negato. Un account legacy privo di stato autorizzativo continua a usare l'allow-list del pilota. L'inventario strutturale rileva 165 documenti `platformUsers` e 149 documenti `personale`; nessun record è stato eliminato, riscritto o esposto dall'API.
 
 ## Preparazione sul server Oracle (nessun cutover)
 

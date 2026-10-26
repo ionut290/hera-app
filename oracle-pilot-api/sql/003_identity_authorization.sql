@@ -11,7 +11,7 @@ AS $$
     SELECT
       lower(COALESCE(f.data#>>'{v,banned,v}', 'false')) = 'true' AS banned,
       lower(COALESCE(f.data#>>'{v,accountStatus,v}', f.data#>>'{v,statoAccount,v}', '')) AS account_status,
-      lower(COALESCE(f.data#>>'{v,approved,v}', f.data#>>'{v,abilitato,v}', f.data#>>'{v,enabled,v}', 'false')) = 'true' AS approved,
+      lower(COALESCE(f.data#>>'{v,approved,v}', f.data#>>'{v,abilitato,v}', f.data#>>'{v,enabled,v}', '')) AS approval_status,
       lower(COALESCE(f.data#>>'{v,isAdmin,v}', f.data#>>'{v,admin,v}', 'false')) = 'true' AS is_admin,
       lower(COALESCE(f.data#>>'{v,role,v}', f.data#>>'{v,ruolo,v}', '')) AS source_role
     FROM public.firestore_import_test_20261026 AS f
@@ -22,8 +22,8 @@ AS $$
     LIMIT 1
   )
   SELECT
-    EXISTS (SELECT 1 FROM candidate) AS matched,
-    COALESCE((SELECT NOT banned AND (approved OR account_status IN ('attivo', 'active', 'approved')) FROM candidate), false) AS allowed,
+    COALESCE((SELECT banned OR account_status <> '' OR approval_status <> '' FROM candidate), false) AS matched,
+    COALESCE((SELECT NOT banned AND (approval_status = 'true' OR account_status IN ('attivo', 'active', 'approved')) FROM candidate), false) AS allowed,
     COALESCE((SELECT CASE WHEN is_admin OR source_role IN ('admin', 'super_admin') THEN 'admin' ELSE 'reader' END FROM candidate), 'reader') AS role;
 $$;
 

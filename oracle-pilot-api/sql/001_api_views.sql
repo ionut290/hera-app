@@ -12,6 +12,11 @@ SELECT
   data#>>'{v,indirizzo,v}' AS indirizzo,
   data#>>'{v,distretto,v}' AS distretto,
   data#>>'{v,tipologiaIntervento,v}' AS tipologia_intervento,
+  COALESCE(data#>>'{v,stato,v}', data#>>'{v,attiva,v}') AS stato,
+  CASE
+    WHEN lower(COALESCE(data#>>'{v,deleted,v}', 'false')) = 'true' THEN true
+    ELSE false
+  END AS eliminato,
   data#>>'{v,idSap,v}' AS id_sap,
   data#>>'{v,voceRiferimento,v}' AS voce_riferimento,
   data#>>'{v,frequenzaAnnuaMinima,v}' AS frequenza_annua_minima,
@@ -19,12 +24,7 @@ SELECT
   data#>>'{v,speciale,v}' AS speciale,
   data#>>'{v,tipoSpeciale,v}' AS tipo_speciale,
   data#>>'{v,parentCommessaId,v}' AS parent_commessa_id,
-  data#>>'{v,hiddenFromHome,v}' AS hidden_from_home,
-  COALESCE(data#>>'{v,stato,v}', data#>>'{v,attiva,v}') AS stato,
-  CASE
-    WHEN lower(COALESCE(data#>>'{v,deleted,v}', 'false')) = 'true' THEN true
-    ELSE false
-  END AS eliminato
+  data#>>'{v,hiddenFromHome,v}' AS hidden_from_home
 FROM public.firestore_import_test_20261026
 WHERE
   (collection_name = 'commesse' AND path ~ '^commesse/[^/]+$')

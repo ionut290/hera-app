@@ -57,8 +57,16 @@ async function loadPilot(user) {
 
 ui.login.addEventListener("click", async () => {
   ui.login.disabled = true;
-  try { await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
-  catch (error) { message(`Accesso non riuscito: ${error.message}`, true); }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try { await auth.signInWithPopup(provider); }
+  catch (error) {
+    if (["auth/popup-blocked", "auth/cancelled-popup-request", "auth/internal-error"].includes(error?.code)) {
+      message("Apertura accesso Google…");
+      await auth.signInWithRedirect(provider);
+      return;
+    }
+    message(`Accesso non riuscito: ${error.message}`, true);
+  }
   finally { ui.login.disabled = false; }
 });
 ui.logout.addEventListener("click", () => auth.signOut());

@@ -78,7 +78,8 @@
     "check:preventivi-commessa-search": "node scripts/check-preventivi-commessa-search-bridge.js",
     "check:preventivi-template-fidelity": "node scripts/check-preventivi-template-fidelity.js",
     "check:platform-profile-bootstrap": "node scripts/check-platform-profile-bootstrap-reuse.js",
-    "check:oracle-read-adapter": "node --check oracle-read-adapter.js && node scripts/check-oracle-read-adapter.js"
+    "check:oracle-read-adapter": "node --check oracle-read-adapter.js && node scripts/check-oracle-read-adapter.js",
+    "check:oracle-original-canary": "node --check oracle-canary-bootstrap.js && node scripts/check-oracle-original-canary.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

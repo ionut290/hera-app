@@ -12,4 +12,6 @@ assert.ok(bootstrap.includes("visibleCommesseCovered: onlyFirebase.length === 0"
 assert.ok(bootstrap.includes("exactCatalogMatch"), "Manca la diagnostica separata di uguaglianza del catalogo completo.");
 assert.ok(nginx.includes("sub_filter '</head>'") && nginx.includes("sub_filter '</body>'"), "Gli script canary devono essere iniettati senza modificare index.html.");
 assert.ok(nginx.includes("deny all"), "Mancano i blocchi per file e directory non pubblici.");
+assert.ok(nginx.includes("Referrer-Policy strict-origin-when-cross-origin"), "Il canary deve inviare un'origine valida ai provider cartografici.");
+assert.ok(!nginx.includes("Referrer-Policy no-referrer"), "La policy no-referrer blocca le tessere OpenStreetMap.");
 console.log("Original UI Oracle canary: nessuna modifica UI, nessuna scrittura/listener Firestore.");

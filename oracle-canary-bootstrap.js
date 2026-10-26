@@ -40,7 +40,9 @@
       oracleCommesse: oracleIds.size,
       onlyFirebase,
       onlyOracle,
-      matched: onlyFirebase.length === 0 && onlyOracle.length === 0
+      visibleCommesseCovered: onlyFirebase.length === 0,
+      exactCatalogMatch: onlyFirebase.length === 0 && onlyOracle.length === 0,
+      matched: onlyFirebase.length === 0
     });
     global.localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
     console.info("[ORACLE CANARY READ-ONLY]", JSON.stringify(result));

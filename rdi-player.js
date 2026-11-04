@@ -104,6 +104,7 @@
     let needsUserGesture = false;
     let connecting = false;
     let connectionAttempts = 0;
+    let playbackGeneration = 0;
     let reconnectTimer = null;
     let startupTimer = null;
     let stalledTimer = null;
@@ -155,6 +156,7 @@
         return;
       }
       clearTimers();
+      const thisGeneration = ++playbackGeneration;
       connecting = true;
       mustRefreshStream = false;
       showStatus("connecting");
@@ -165,13 +167,13 @@
         audio.src = STREAM_URL;
         audio.load();
         startupTimer = setTimeout(() => {
-          if (!wantsRadio || !connecting) return;
+          if (!wantsRadio || !connecting || thisGeneration !== playbackGeneration) return;
           connecting = false;
           mustRefreshStream = true;
           scheduleRetry();
         }, 12500);
         Promise.resolve(audio.play()).catch((error) => {
-          if (!wantsRadio) return;
+          if (!wantsRadio || thisGeneration !== playbackGeneration) return;
           connecting = false;
           if (error && error.name === "NotAllowedError") {
             // Alcuni browser richiedono un altro tocco dopo il cambio di audio focus.
@@ -216,6 +218,7 @@
 
     const stopRadio = () => {
       wantsRadio = false;
+      playbackGeneration += 1;
       needsUserGesture = false;
       connecting = false;
       mustRefreshStream = false;

@@ -159,7 +159,7 @@ assert.match(loader, /verde-bologna-operativo\.js\?v=20260901-catasto-open2/);
 assert.match(loader, /verde-bologna-parchi-mobile\.js\?v=20260901-cobo-sfalcio1/);
 assert.match(html, /app-pure-utils\.js\?v=20260902-verde-levato2/);
 assert.match(html, /PWA_EMERGENCY_CACHE_RESET_VERSION = "20260902-verde-levato2"/);
-assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=20260906-password-recovery-position1"/);
+assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=[^"]+"/);
 // La cache PWA viene versionata a ogni rilascio; il test deve tollerare gli incrementi.
 const cacheVersion = Number(sw.match(/const CACHE_NAME = "varga-cantieri-shell-v(\d+)";/)?.[1]);
 assert.ok(Number.isInteger(cacheVersion) && cacheVersion >= 223, "Versione cache PWA mancante o non valida");

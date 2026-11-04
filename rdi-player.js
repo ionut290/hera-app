@@ -23,7 +23,7 @@
         <path d="M9 22h18v4H9z" fill="#15243a"/>
         <text x="18" y="25.1" text-anchor="middle" fill="#fff" font-size="5.7" font-weight="800" font-family="Arial,sans-serif">R.D.I.</text>
       </svg>
-      <span class="rdi-radio-live" aria-hidden="true"></span>
+      <i class="rdi-radio-live" aria-hidden="true"></i>
     `;
 
     const style = document.createElement("style");
@@ -40,7 +40,9 @@
         height: 24px;
       }
       #update-app-btn.rdi-radio-toggle .rdi-radio-live {
+        display: block;
         position: absolute;
+        font-style: normal;
         width: 7px;
         height: 7px;
         right: 1px;

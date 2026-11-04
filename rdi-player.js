@@ -29,12 +29,13 @@
     const style = document.createElement("style");
     style.textContent = `
       #refresh-app-btn.rdi-radio-toggle {
-        position: static;
+        position: relative;
+        box-sizing: border-box;
         display: inline-flex;
         width: 34px;
         min-width: 34px;
         height: 34px;
-        padding: 2px;
+        padding: 0;
         align-items: center;
         justify-content: center;
         overflow: visible;

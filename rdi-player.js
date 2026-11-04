@@ -30,23 +30,28 @@
     style.textContent = `
       #update-app-btn.rdi-radio-toggle {
         position: relative;
-        padding: 0;
+        box-sizing: border-box;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4px;
         overflow: visible;
         -webkit-tap-highlight-color: transparent;
       }
       #update-app-btn.rdi-radio-toggle .rdi-radio-crest {
         display: block;
-        width: 24px;
-        height: 24px;
+        width: 40px;
+        height: 40px;
       }
       #update-app-btn.rdi-radio-toggle .rdi-radio-live {
         display: block;
         position: absolute;
         font-style: normal;
-        width: 7px;
-        height: 7px;
-        right: 1px;
-        bottom: 1px;
+        width: 9px;
+        height: 9px;
+        right: 5px;
+        bottom: 5px;
         border: 1.5px solid #fff;
         border-radius: 50%;
         background: #94a3b8;
@@ -65,6 +70,26 @@
       }
     `;
     document.head.append(style);
+
+    const referenceButton = document.getElementById("refresh-app-btn")
+      || document.getElementById("menu-toggle-btn");
+    const crest = button.querySelector(".rdi-radio-crest");
+    const matchHeaderButtonSize = () => {
+      if (!referenceButton || !crest) return;
+      const rect = referenceButton.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      button.style.width = `${rect.width}px`;
+      button.style.minWidth = `${rect.width}px`;
+      button.style.height = `${rect.height}px`;
+      const crestSize = Math.max(22, Math.min(42, rect.height - 14));
+      crest.style.width = `${crestSize}px`;
+      crest.style.height = `${crestSize}px`;
+    };
+    matchHeaderButtonSize();
+    window.addEventListener("resize", matchHeaderButtonSize, { passive: true });
+    if ("ResizeObserver" in window && referenceButton) {
+      new ResizeObserver(matchHeaderButtonSize).observe(referenceButton);
+    }
 
     const audio = document.createElement("audio");
     audio.preload = "none";

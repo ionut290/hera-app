@@ -14,7 +14,7 @@
     button.setAttribute("aria-label", "Ascolta R.D.I.");
     button.setAttribute("title", "Ascolta R.D.I.");
     button.setAttribute("aria-pressed", "false");
-    button.innerHTML = \`
+    button.innerHTML = `
       <svg class="rdi-radio-crest" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
         <path d="M18 2.5 31 7v9.4c0 8.1-5.3 13.7-13 17.1C10.3 30.1 5 24.5 5 16.4V7z" fill="#15243a" stroke="#e8edf4" stroke-width="1.5"/>
         <path d="M9 9h6v13H9z" fill="#244aa5"/>
@@ -24,10 +24,10 @@
         <text x="18" y="25.1" text-anchor="middle" fill="#fff" font-size="5.7" font-weight="800" font-family="Arial,sans-serif">R.D.I.</text>
       </svg>
       <span class="rdi-radio-live" aria-hidden="true"></span>
-    \`;
+    `;
 
     const style = document.createElement("style");
-    style.textContent = \`
+    style.textContent = `
       #refresh-app-btn.rdi-radio-toggle {
         position: static;
         display: inline-flex;
@@ -71,7 +71,7 @@
         outline: 3px solid rgba(37, 99, 235, .35);
         outline-offset: 2px;
       }
-    \`;
+    `;
     document.head.append(style);
 
     const audio = document.createElement("audio");

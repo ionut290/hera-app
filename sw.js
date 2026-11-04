@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v223";
+const CACHE_NAME = "varga-cantieri-shell-v224";
 const CACHE_RESET_VERSION = "20260906-password-recovery-position1";
 const APP_SHELL = [
   "./",
@@ -95,6 +95,7 @@ const APP_SHELL = [
   "./wastewater-plants.css?v=20260830a",
   "./wastewater-infrastructure.css?v=20260830a",
   "./wastewater-plants.js?v=20260830b",
+  "./rdi-player.js?v=20261104-rdi-player1",
   "./gestionale-desktop-return.js?v=20260905-desktop-switch1",
   "./fatto-scroll-guard.js?v=20260824-oneclick2",
   "./squad-context-bridge.js?v=20260823-stability3",
@@ -159,6 +160,7 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/urban-furniture.js",
   "/urban-furniture.css",
   "/wastewater-plants.js",
+  "/rdi-player.js",
   "/wastewater-plants.css",
   "/wastewater-infrastructure.css",
   "/gestionale-desktop-return.js",

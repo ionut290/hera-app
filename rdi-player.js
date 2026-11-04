@@ -2,7 +2,7 @@
   "use strict";
 
   const STREAM_URL = "https://radio-romanii-italia.duckdns.org/listen/radio-romanii-italia/radio.mp3";
-  const BUTTON_ID = "refresh-app-btn";
+  const BUTTON_ID = "update-app-btn";
 
   const mount = () => {
     const button = document.getElementById(BUTTON_ID);
@@ -28,47 +28,36 @@
 
     const style = document.createElement("style");
     style.textContent = `
-      #refresh-app-btn.rdi-radio-toggle {
+      #update-app-btn.rdi-radio-toggle {
         position: relative;
-        box-sizing: border-box;
-        display: inline-flex;
-        width: 34px;
-        min-width: 34px;
-        height: 34px;
         padding: 0;
-        align-items: center;
-        justify-content: center;
         overflow: visible;
-        border: 1px solid var(--border, #d8dee8);
-        border-radius: 10px;
-        background: #fff;
-        cursor: pointer;
         -webkit-tap-highlight-color: transparent;
       }
-      #refresh-app-btn.rdi-radio-toggle .rdi-radio-crest {
+      #update-app-btn.rdi-radio-toggle .rdi-radio-crest {
         display: block;
-        width: 27px;
-        height: 27px;
+        width: 24px;
+        height: 24px;
       }
-      #refresh-app-btn.rdi-radio-toggle .rdi-radio-live {
+      #update-app-btn.rdi-radio-toggle .rdi-radio-live {
         position: absolute;
-        width: 8px;
-        height: 8px;
+        width: 7px;
+        height: 7px;
         right: 1px;
         bottom: 1px;
         border: 1.5px solid #fff;
         border-radius: 50%;
         background: #94a3b8;
       }
-      #refresh-app-btn.rdi-radio-toggle[aria-pressed="true"] {
+      #update-app-btn.rdi-radio-toggle[aria-pressed="true"] {
         border-color: #e43d48;
         box-shadow: 0 0 0 2px rgba(228, 61, 72, .16), var(--shadow, 0 1px 4px rgba(0,0,0,.12));
       }
-      #refresh-app-btn.rdi-radio-toggle[aria-pressed="true"] .rdi-radio-live {
+      #update-app-btn.rdi-radio-toggle[aria-pressed="true"] .rdi-radio-live {
         background: #e43d48;
         box-shadow: 0 0 7px rgba(228, 61, 72, .7);
       }
-      #refresh-app-btn.rdi-radio-toggle:focus-visible {
+      #update-app-btn.rdi-radio-toggle:focus-visible {
         outline: 3px solid rgba(37, 99, 235, .35);
         outline-offset: 2px;
       }

@@ -91,47 +91,232 @@
       new ResizeObserver(matchHeaderButtonSize).observe(referenceButton);
     }
 
+    // Dopo una telefonata riparti dal flusso live, non dal vecchio buffer.
     const audio = document.createElement("audio");
     audio.preload = "none";
     audio.playsInline = true;
-    audio.src = STREAM_URL;
     audio.setAttribute("aria-hidden", "true");
     audio.style.display = "none";
     document.body.append(audio);
 
-    const setPlaying = (playing) => {
-      button.setAttribute("aria-pressed", String(playing));
-      button.setAttribute("aria-label", playing ? "Ferma R.D.I." : "Ascolta R.D.I.");
-      button.title = playing ? "Ferma R.D.I." : "Ascolta R.D.I.";
+    const RETRY_DELAYS_MS = [1200, 2500, 4500, 8000, 14000, 23000];
+    let wantsRadio = false;
+    let needsUserGesture = false;
+    let connecting = false;
+    let connectionAttempts = 0;
+    let reconnectTimer = null;
+    let startupTimer = null;
+    let stalledTimer = null;
+    let mustRefreshStream = false;
+
+    const foreground = () => document.visibilityState !== "hidden";
+    const online = () => navigator.onLine !== false;
+    const clearReconnectTimer = () => {
+      if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    };
+    const clearStartupTimer = () => {
+      if (startupTimer !== null) clearTimeout(startupTimer);
+      startupTimer = null;
+    };
+    const clearStalledTimer = () => {
+      if (stalledTimer !== null) clearTimeout(stalledTimer);
+      stalledTimer = null;
+    };
+    const clearTimers = () => {
+      clearReconnectTimer();
+      clearStartupTimer();
+      clearStalledTimer();
     };
 
-    button.addEventListener("click", async (event) => {
+    const showStatus = (state) => {
+      const titles = {
+        idle: "Ascolta R.D.I.",
+        connecting: "Connessione alla diretta R.D.I.",
+        buffering: "R.D.I. sta caricando la diretta",
+        retrying: "R.D.I. si sta riconnettendo",
+        interrupted: "R.D.I. interrotta: ripresa al ritorno nell'app",
+        tap: "Tocca per riprendere R.D.I.",
+        playing: "Ferma R.D.I."
+      };
+      const title = titles[state] || titles.idle;
+      button.setAttribute("aria-label", title);
+      button.title = title;
+      button.setAttribute("aria-pressed", String(wantsRadio && !needsUserGesture));
+      button.dataset.rdiRadioStatus = state;
+      button.classList.toggle("rdi-radio-buffering", wantsRadio && state !== "playing");
+    };
+
+    // Un nuovo load scarta completamente i frammenti audio della connessione interrotta.
+    const connectFresh = () => {
+      if (!wantsRadio || needsUserGesture) return;
+      if (!foreground() || !online()) {
+        showStatus("interrupted");
+        return;
+      }
+      clearTimers();
+      connecting = true;
+      mustRefreshStream = false;
+      showStatus("connecting");
+      try {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+        audio.src = STREAM_URL;
+        audio.load();
+        startupTimer = setTimeout(() => {
+          if (!wantsRadio || !connecting) return;
+          connecting = false;
+          mustRefreshStream = true;
+          scheduleRetry();
+        }, 12500);
+        Promise.resolve(audio.play()).catch((error) => {
+          if (!wantsRadio) return;
+          connecting = false;
+          if (error && error.name === "NotAllowedError") {
+            // Alcuni browser richiedono un altro tocco dopo il cambio di audio focus.
+            needsUserGesture = true;
+            clearTimers();
+            showStatus("tap");
+            return;
+          }
+          mustRefreshStream = true;
+          scheduleRetry();
+        });
+      } catch (_) {
+        connecting = false;
+        mustRefreshStream = true;
+        scheduleRetry();
+      }
+    };
+
+    const queueReconnect = (delayMs, state = "retrying") => {
+      if (!wantsRadio || needsUserGesture) return;
+      clearReconnectTimer();
+      if (!foreground() || !online()) {
+        showStatus("interrupted");
+        return;
+      }
+      showStatus(state);
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        if (wantsRadio && !needsUserGesture) connectFresh();
+      }, delayMs);
+    };
+
+    function scheduleRetry() {
+      clearStartupTimer();
+      clearStalledTimer();
+      connecting = false;
+      if (!wantsRadio || needsUserGesture) return;
+      const delay = RETRY_DELAYS_MS[Math.min(connectionAttempts, RETRY_DELAYS_MS.length - 1)];
+      connectionAttempts += 1;
+      queueReconnect(delay);
+    }
+
+    const stopRadio = () => {
+      wantsRadio = false;
+      needsUserGesture = false;
+      connecting = false;
+      mustRefreshStream = false;
+      connectionAttempts = 0;
+      clearTimers();
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      showStatus("idle");
+    };
+
+    const startRadio = () => {
+      wantsRadio = true;
+      needsUserGesture = false;
+      connectionAttempts = 0;
+      // play() parte direttamente dal tocco, per rispettare le regole autoplay.
+      connectFresh();
+    };
+
+    button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (!audio.paused) {
+      if (wantsRadio && !needsUserGesture) stopRadio();
+      else startRadio();
+    }, true);
+
+    audio.addEventListener("playing", () => {
+      if (!wantsRadio) {
         audio.pause();
         return;
       }
-      if (audio.error) audio.load();
-      button.setAttribute("aria-label", "Connessione a R.D.I. in corso");
-      button.title = "Connessione a R.D.I. in corso";
-      try {
-        await audio.play();
-      } catch (_) {
-        setPlaying(false);
-        button.setAttribute("aria-label", "Riprova ad ascoltare R.D.I.");
-        button.title = "Riprova ad ascoltare R.D.I.";
-      }
-    }, true);
-
-    audio.addEventListener("playing", () => setPlaying(true));
-    audio.addEventListener("pause", () => setPlaying(false));
-    audio.addEventListener("ended", () => setPlaying(false));
-    audio.addEventListener("error", () => {
-      setPlaying(false);
-      button.setAttribute("aria-label", "Radio R.D.I. non raggiungibile");
-      button.title = "Radio R.D.I. non raggiungibile";
+      connecting = false;
+      connectionAttempts = 0;
+      clearTimers();
+      showStatus("playing");
     });
+
+    audio.addEventListener("pause", () => {
+      if (!wantsRadio || !audio.paused || connecting) return;
+      mustRefreshStream = true;
+      // Non competere con il focus audio della chiamata mentre l'app è nascosta.
+      if (!foreground()) showStatus("interrupted");
+      else queueReconnect(1800, "interrupted");
+    });
+
+    const detectBuffering = () => {
+      if (!wantsRadio || !foreground()) return;
+      showStatus("buffering");
+      clearStalledTimer();
+      stalledTimer = setTimeout(() => {
+        stalledTimer = null;
+        if (!wantsRadio || !foreground() || audio.readyState >= 3) return;
+        mustRefreshStream = true;
+        scheduleRetry();
+      }, 8500);
+    };
+    audio.addEventListener("waiting", detectBuffering);
+    audio.addEventListener("stalled", detectBuffering);
+    audio.addEventListener("canplay", clearStalledTimer);
+    audio.addEventListener("timeupdate", () => {
+      if (wantsRadio && !audio.paused && audio.readyState >= 3) clearStalledTimer();
+    });
+
+    const streamFailed = () => {
+      if (!wantsRadio) return;
+      mustRefreshStream = true;
+      scheduleRetry();
+    };
+    audio.addEventListener("error", streamFailed);
+    audio.addEventListener("ended", streamFailed);
+
+    const recoverAfterInterruption = () => {
+      if (!wantsRadio || needsUserGesture || !foreground()) return;
+      if (!online()) {
+        showStatus("interrupted");
+        return;
+      }
+      if (mustRefreshStream || audio.paused || audio.error || (!connecting && audio.readyState < 3)) {
+        queueReconnect(650, "connecting");
+      }
+    };
+    document.addEventListener("visibilitychange", () => {
+      if (!foreground()) {
+        // Lascia suonare la radio se Android continua a riprodurla in background.
+        clearReconnectTimer();
+        clearStalledTimer();
+      } else {
+        recoverAfterInterruption();
+      }
+    });
+    window.addEventListener("pageshow", recoverAfterInterruption);
+    window.addEventListener("online", () => {
+      if (wantsRadio && !needsUserGesture) queueReconnect(500, "connecting");
+    });
+    window.addEventListener("offline", () => {
+      clearReconnectTimer();
+      clearStartupTimer();
+      if (wantsRadio) showStatus("interrupted");
+    });
+    showStatus("idle");
+
   };
 
   if (document.readyState === "loading") {

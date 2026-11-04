@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v224";
+const CACHE_NAME = "varga-cantieri-shell-v223";
 const CACHE_RESET_VERSION = "20260906-password-recovery-position1";
 const APP_SHELL = [
   "./",

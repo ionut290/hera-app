@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">
+  <title>VARGA CANTIERI — Anteprima dimostrativa</title>
+  <link rel="stylesheet" href="./apple-review-demo.css">
+  <script src="./apple-review-demo.js" defer></script>
+</head>
+<body>
+  <a href="#demo-content" class="skip-link">Vai al contenuto dimostrativo</a>
+  <header class="topbar">
+    <div class="identity"><span class="symbol" aria-hidden="true">🏗️</span><div><strong>VARGA CANTIERI</strong><span>Anteprima per revisione Apple</span></div></div>
+    <a class="back-link" href="./index.html">← Torna al login</a>
+  </header>
+
+  <main id="demo-content" class="shell">
+    <section class="notice" role="status" aria-label="Ambiente isolato">
+      <span class="notice-icon" aria-hidden="true">🔒</span>
+      <div><strong>MODALITÀ DEMO · DATI INVENTATI</strong>
+        <p>Questa anteprima funziona senza account, Firebase, GPS, servizi esterni o connessione ai sistemi aziendali. Le azioni simulano i flussi dell'app e non modificano dati reali. Le modifiche di prova si azzerano chiudendo la pagina.</p>
+      </div>
+    </section>
+
+    <div class="greeting">
+      <div>
+        <p class="eyebrow">Ambiente di valutazione</p>
+        <h1>Ciao, Revisore Apple <span aria-hidden="true">👋</span></h1>
+        <p>Esplora il lavoro quotidiano dalla dashboard ai cantieri, impianti, squadre e ore.</p>
+      </div>
+      <span class="status-pill">● Demo offline</span>
+    </div>
+
+    <nav class="tabs" aria-label="Sezioni demo">
+      <button class="tab selected" type="button" data-view="home" aria-pressed="true">Panoramica</button>
+      <button class="tab" type="button" data-view="commesse" aria-pressed="false">Commesse</button>
+      <button class="tab" type="button" data-view="impianti" aria-pressed="false">Impianti</button>
+      <button class="tab" type="button" data-view="squadre" aria-pressed="false">Squadre</button>
+      <button class="tab" type="button" data-view="ore" aria-pressed="false">Ore e calendario</button>
+      <button class="tab" type="button" data-view="documenti" aria-pressed="false">Documenti</button>
+    </nav>
+
+    <section id="view-home" class="view active" aria-labelledby="home-title">
+      <div class="section-head"><div><p class="eyebrow">Centrale operativa</p><h2 id="home-title">Panoramica</h2></div><button type="button" class="soft-button reset-demo">Ripristina demo</button></div>
+      <div class="metrics" aria-label="Riepilogo demo">
+        <article class="metric"><span>Commesse</span><strong id="metric-commesse">2</strong><small>simulazioni disponibili</small></article>
+        <article class="metric"><span>Impianti da fare</span><strong id="metric-pending">3</strong><small>attività simulate</small></article>
+        <article class="metric"><span>Squadre</span><strong id="metric-squadre">2</strong><small>operatori inventati</small></article>
+      </div>
+      <div class="two-column">
+        <article class="panel"><span class="emoji-heading" aria-hidden="true">📁</span><h3>Commesse e interventi</h3><p>Consulta una commessa dimostrativa, apri gli impianti ed esegui una simulazione di intervento.</p><button class="primary-button" type="button" data-go="commesse">Apri le commesse</button></article>
+        <article class="panel"><span class="emoji-heading" aria-hidden="true">📅</span><h3>Turni e ore</h3><p>Visualizza le squadre e registra un turno fittizio senza creare presenze reali.</p><button class="primary-button" type="button" data-go="ore">Apri il calendario</button></article>
+      </div>
+      <article class="panel service-card"><h3>🌤️ Meteo operativo — Esempio</h3><p>12 °C · Nuvoloso · Nessuna allerta. Questi valori sono illustrativi, non una previsione in tempo reale.</p></article>
+    </section>
+
+    <section id="view-commesse" class="view" aria-labelledby="commesse-title" hidden>
+      <div class="section-head"><div><p class="eyebrow">Gestione attività</p><h2 id="commesse-title">Commesse dimostrative</h2></div></div>
+      <p class="section-description">Tutti i riferimenti sono inventati. Premi «Visualizza impianti» per proseguire.</p>
+      <div class="cards" id="commesse-list"></div>
+    </section>
+
+    <section id="view-impianti" class="view" aria-labelledby="impianti-title" hidden>
+      <div class="section-head"><div><p class="eyebrow">Operatività sul campo</p><h2 id="impianti-title">Impianti di prova</h2></div><button class="soft-button reset-demo" type="button">Ripristina demo</button></div>
+      <div class="filters">
+        <label for="plant-query">Cerca impianto<input id="plant-query" type="search" placeholder="Nome o codice impianto" autocomplete="off"></label>
+        <label for="plant-status">Filtra stato<select id="plant-status"><option value="all">Tutti</option><option value="pending">Da fare</option><option value="done">Completati (demo)</option></select></label>
+      </div>
+      <p class="muted small">«Simula intervento» modifica soltanto lo stato temporaneo di questa pagina. Non utilizza i comandi reali FATTO o WhatsApp.</p>
+      <div class="cards" id="plants-list"></div>
+      <p id="plants-empty" class="empty" hidden>Nessun impianto corrisponde ai filtri.</p>
+    </section>
+
+    <section id="view-squadre" class="view" aria-labelledby="squadre-title" hidden>
+      <div class="section-head"><div><p class="eyebrow">Organizzazione</p><h2 id="squadre-title">Squadre di prova</h2></div></div>
+      <div class="cards">
+        <article class="panel"><h3>👷 Squadra Demo A</h3><p>Operatori: Addetto A · Addetto B</p><dl><dt>Commessa</dt><dd>Verde Dimostrativo</dd><dt>Mezzo</dt><dd>DEMO-01</dd><dt>Turno</dt><dd>07:00 – 15:00</dd></dl></article>
+        <article class="panel"><h3>👷 Squadra Demo B</h3><p>Operatori: Addetto C · Addetto D</p><dl><dt>Commessa</dt><dd>Impianti Dimostrativi</dd><dt>Mezzo</dt><dd>DEMO-02</dd><dt>Turno</dt><dd>08:00 – 16:00</dd></dl></article>
+      </div>
+      <p class="muted">Nessun nome, contatto o assegnazione di personale reale è disponibile.</p>
+    </section>
+
+    <section id="view-ore" class="view" aria-labelledby="ore-title" hidden>
+      <div class="section-head"><div><p class="eyebrow">Calendario e presenze</p><h2 id="ore-title">Ore dimostrative</h2></div><button class="soft-button reset-demo" type="button">Ripristina demo</button></div>
+      <article class="panel">
+        <h3>Registra un turno simulato</h3>
+        <form id="demo-hours-form" class="hours-form">
+          <label for="hours-date">Data di prova<input id="hours-date" type="date" required value="2026-11-11"></label>
+          <label for="hours-start">Inizio<input id="hours-start" type="time" required value="07:00"></label>
+          <label for="hours-end">Fine<input id="hours-end" type="time" required value="15:00"></label>
+          <label for="hours-break">Pausa (minuti)<select id="hours-break"><option value="0">0</option><option value="30" selected>30</option><option value="60">60</option></select></label>
+          <button type="submit" class="primary-button">Aggiungi turno demo</button>
+        </form>
+        <p class="muted small">Nessun turno viene inviato o memorizzato in Firebase.</p>
+      </article>
+      <article class="panel"><h3>Riepilogo della sessione</h3><ul id="hours-list" class="entry-list"></ul><p><strong id="hours-total">0 h</strong> registrate in questa demo</p></article>
+    </section>
+
+    <section id="view-documenti" class="view" aria-labelledby="documenti-title" hidden>
+      <div class="section-head"><div><p class="eyebrow">Archivio operativo</p><h2 id="documenti-title">Documenti di esempio</h2></div></div>
+      <div class="cards">
+        <article class="panel"><h3>📄 Scheda impianto — DEMO-101</h3><p>Documento dimostrativo · nessun file aziendale collegato</p><button type="button" class="secondary-button" data-doc="Scheda impianto">Visualizza esempio</button></article>
+        <article class="panel"><h3>📷 Report fotografico — Demo</h3><p>Segnaposto illustrativo · nessuna fotografia reale</p><button type="button" class="secondary-button" data-doc="Report fotografico">Visualizza esempio</button></article>
+      </div>
+      <div class="panel doc-preview" id="doc-preview" hidden><h3 id="doc-title"></h3><p>Questa è una scheda dimostrativa. Gli allegati reali sono visibili solo agli utenti autorizzati nella normale app.</p></div>
+    </section>
+
+    <p class="session-message" id="demo-message" role="status" aria-live="polite"></p>
+    <footer class="footer">
+      <strong>VARGA CANTIERI · Ambiente dimostrativo isolato</strong>
+      <span>Dati sintetici; nessuna posizione reale, nessun accesso agli utenti o alle commesse effettive.</span>
+      <a href="./index.html">Torna all'accesso normale</a>
+    </footer>
+  </main>
+</body>
+</html>

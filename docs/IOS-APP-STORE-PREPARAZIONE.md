@@ -44,7 +44,10 @@ Lo stato della build si consulta in GitHub → Actions →
 
 ## Creazione locale su un Mac / runner macOS
 
-Richiede Node.js 22+, **Xcode 26 o successivo (SDK iOS 26+)** e CocoaPods.\nIl workflow gira su `macos-26` e verifica esplicitamente che Xcode e SDK\nsoddisfino i minimi Apple vigenti da aprile 2026. La compilazione con Xcode\n16.4 era soltanto una prova tecnica e non è idonea a App Store Connect.
+Richiede Node.js 22+, **Xcode 26 o successivo (SDK iOS 26+)** e CocoaPods.
+Il workflow gira su `macos-26` e verifica esplicitamente che Xcode e SDK
+soddisfino i minimi Apple vigenti da aprile 2026. La compilazione con Xcode
+16.4 era soltanto una prova tecnica e non è idonea a App Store Connect.
 
 ```bash
 npm ci
@@ -59,7 +62,16 @@ open ios/App/App.xcworkspace
 I comandi non effettuano upload, firma, deploy o modifica dei database.
 Per le prove iPhone è necessario configurare Apple signing in Xcode/CI.
 
-## Test simulatore e limiti\n\nIl comando `bash scripts/smoke-ios-simulator.sh /percorso/App.app /percorso/screenshot.png`\ninstalla e avvia il pacchetto NON firmato su un simulatore iPhone disponibile.\nLa CI carica una schermata iniziale in GitHub Actions. Il test **non**\ndimostra che login, Firebase, interfaccia interattiva o WhatsApp funzionino\nsu un dispositivo reale e non rileva automaticamente una schermata bianca.\nLa screenshot richiede una revisione visiva prima della pubblicazione.\n\n## Blocchi da superare PRIMA della pubblicazione
+## Test simulatore e limiti
+
+Il comando `bash scripts/smoke-ios-simulator.sh /percorso/App.app /percorso/screenshot.png`
+installa e avvia il pacchetto NON firmato su un simulatore iPhone disponibile.
+La CI carica una schermata iniziale in GitHub Actions. Il test **non**
+dimostra che login, Firebase, interfaccia interattiva o WhatsApp funzionino
+su un dispositivo reale e non rileva automaticamente una schermata bianca.
+La screenshot richiede una revisione visiva prima della pubblicazione.
+
+## Blocchi da superare PRIMA della pubblicazione
 
 1. **Login iPhone:** verificare su un dispositivo reale il login Google/Firebase
    in WKWebView e la ripresa di sessione. La configurazione Android non garantisce
@@ -95,7 +107,9 @@ Per le prove iPhone è necessario configurare Apple signing in Xcode/CI.
 
 ## Riferimenti
 
-- https://developer.apple.com/news/upcoming-requirements/\n- https://github.blog/changelog/2026-02-26-macos-26-is-now-generally-available-for-github-hosted-runners/\n- https://capacitorjs.com/docs/v7/ios
+- https://developer.apple.com/news/upcoming-requirements/
+- https://github.blog/changelog/2026-02-26-macos-26-is-now-generally-available-for-github-hosted-runners/
+- https://capacitorjs.com/docs/v7/ios
 - https://developer.apple.com/app-store/review/guidelines/
 - https://developer.apple.com/testflight/
 - https://github.com/advisories/GHSA-rvm3-566m-v7fv

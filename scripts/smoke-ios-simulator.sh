@@ -64,6 +64,15 @@ test -s "$SCREENSHOT_PATH"
 sips -g pixelWidth -g pixelHeight "$SCREENSHOT_PATH"
 
 if ! swift scripts/check-ios-simulator-foreground.swift "$BEFORE_SCREENSHOT" "$SCREENSHOT_PATH"; then
+  # Allow slow WebView/Firebase initialization without treating an 8-second blank as final.
+  cp "$SCREENSHOT_PATH" "${SCREENSHOT_PATH%.png}-after8s.png"
+  echo "Avvio iOS non ancora visibile: nuova verifica dopo ulteriori 15 secondi."
+  sleep 15
+  xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH"
+  if swift scripts/check-ios-simulator-foreground.swift "$BEFORE_SCREENSHOT" "$SCREENSHOT_PATH"; then
+    echo "Schermata iniziale caricata alla seconda verifica (23 secondi)."
+    exit 0
+  fi
   DIAGNOSTIC_DIR="$(dirname "$SCREENSHOT_PATH")/varga-ios-simulator-diagnostics"
   mkdir -p "$DIAGNOSTIC_DIR"
   xcrun simctl spawn "$SIMULATOR_UDID" log show --last 1m --style compact \

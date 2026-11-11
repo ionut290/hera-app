@@ -61,6 +61,7 @@ jobs:
           test -s www/firebase-config.js
           test -s www/icons/varga-cantieri-512.png
           python3 -m py_compile scripts/configure-ios-plist.py
+          ruby -c scripts/configure-ios-distribution-signing.rb
           bash -n scripts/smoke-ios-simulator.sh
 
       - name: Add patched Capacitor iOS 7 platform for this build only
@@ -69,6 +70,8 @@ jobs:
           node -e "const c=require('@capacitor/core/package.json').version; const i=require('@capacitor/ios/package.json').version; if(c!==i)throw Error('Capacitor core/iOS mismatch: '+c+' vs '+i);"
           npx cap add ios
           npx cap sync ios
+          IOS_APPLE_TEAM_ID=DEMO123456 ruby scripts/configure-ios-distribution-signing.rb
+          ruby -r xcodeproj -e 'p=Xcodeproj::Project.open("ios/App/App.xcodeproj"); t=p.targets.find{|x| x.name=="App"}; a=t.build_configurations.find{|x| x.name=="Release"}.build_settings; d=t.build_configurations.find{|x| x.name=="Debug"}.build_settings; abort "App Release identity missing" unless a["CODE_SIGN_IDENTITY[sdk=iphoneos*]"]=="Apple Distribution"; abort "Debug identity changed" if d["CODE_SIGN_IDENTITY[sdk=iphoneos*]"]=="Apple Distribution"; abort "Pods unexpectedly modified" if Xcodeproj::Project.open("ios/App/Pods/Pods.xcodeproj").targets.any?{|x| x.build_configurations.any?{|z| z.build_settings["CODE_SIGN_IDENTITY[sdk=iphoneos*]"]=="Apple Distribution"}}'
           python3 scripts/configure-ios-plist.py
           test -f ios/App/App.xcworkspace/contents.xcworkspacedata
 

@@ -46,6 +46,9 @@ if ! xcrun simctl list devices booted | grep -Fq "$SIMULATOR_UDID"; then
 fi
 xcrun simctl bootstatus "$SIMULATOR_UDID" -b
 xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+mkdir -p "$(dirname "$SCREENSHOT_PATH")"
+BEFORE_SCREENSHOT="${SCREENSHOT_PATH%.png}-before.png"
+xcrun simctl io "$SIMULATOR_UDID" screenshot "$BEFORE_SCREENSHOT"
 
 LAUNCH_OUTPUT="$(xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID")"
 echo "Avvio: $LAUNCH_OUTPUT"
@@ -56,10 +59,19 @@ fi
 
 # Do not enter demo/production accounts. Capture a non-authenticated launch only.
 sleep 8
-mkdir -p "$(dirname "$SCREENSHOT_PATH")"
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH"
 test -s "$SCREENSHOT_PATH"
 sips -g pixelWidth -g pixelHeight "$SCREENSHOT_PATH"
 
-echo "App installata e avviata; screenshot per revisione visiva: $SCREENSHOT_PATH"
-echo "ATTENZIONE: screenshot e launch NON provano login, WebView, funzioni o assenza di schermata bianca."
+if ! swift scripts/check-ios-simulator-foreground.swift "$BEFORE_SCREENSHOT" "$SCREENSHOT_PATH"; then
+  DIAGNOSTIC_DIR="$(dirname "$SCREENSHOT_PATH")/varga-ios-simulator-diagnostics"
+  mkdir -p "$DIAGNOSTIC_DIR"
+  xcrun simctl spawn "$SIMULATOR_UDID" log show --last 1m --style compact \
+    --predicate 'process == "App" OR eventMessage CONTAINS[c] "vargacantieri"' \
+    2>&1 | tail -n 250 > "$DIAGNOSTIC_DIR/app-launch-log.txt" || true
+  echo "App iOS non risulta in primo piano: screenshot e diagnostica salvati." >&2
+  exit 1
+fi
+
+echo "App installata, lanciata e schermo modificato; screenshot per revisione: $SCREENSHOT_PATH"
+echo "ATTENZIONE: il test NON prova login, WebView interattiva o funzioni operative."

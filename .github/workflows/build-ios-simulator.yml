@@ -1,0 +1,121 @@
+name: Varga Cantieri iOS Simulator (no deploy)
+
+on:
+  push:
+    branches:
+      - feature/ios-app-store-prep-20261111
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios-simulator:
+    name: Unsigned iOS simulator build
+    runs-on: macos-26
+    timeout-minutes: 50
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Require App Store-supported Xcode and iOS SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          XCODE_MAJOR="$(xcodebuild -version | awk '/^Xcode / { print $2 }' | cut -d. -f1)"
+          SDK_MAJOR="$(xcrun --sdk iphoneos --show-sdk-version | cut -d. -f1)"
+          if [[ -z "$XCODE_MAJOR" || "$XCODE_MAJOR" -lt 26 || -z "$SDK_MAJOR" || "$SDK_MAJOR" -lt 26 ]]; then
+            echo "App Store 2026: richiesti Xcode 26+ e iOS SDK 26+." >&2
+            exit 1
+          fi
+
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Check protected application flows
+        run: |
+          npm run check:fatto-whazzup-immutable
+          npm run check:fatto-isolation
+          npm run check:auth-stability
+          npm run check:security-privacy
+          npm run check:syntax
+
+      - name: Prepare existing web bundle without modifying its source
+        run: |
+          npm run android:aab:prepare
+          test -s www/index.html
+          test -s www/app.js
+          test -s www/firebase-config.js
+          test -s www/icons/varga-cantieri-512.png
+          python3 -m py_compile scripts/configure-ios-plist.py
+
+      - name: Add patched Capacitor iOS 7 platform for this build only
+        run: |
+          npm install --no-save --package-lock=false --no-audit --no-fund @capacitor/ios@7.6.10 @capacitor/core@7.6.10
+          node -e "const c=require('@capacitor/core/package.json').version; const i=require('@capacitor/ios/package.json').version; if(c!==i)throw Error('Capacitor core/iOS mismatch: '+c+' vs '+i);"
+          npx cap add ios
+          npx cap sync ios
+          python3 scripts/configure-ios-plist.py
+          test -f ios/App/App.xcworkspace/contents.xcworkspacedata
+
+      - name: Build for iOS Simulator without Apple certificates
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/varga-ios-derived" \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee "$RUNNER_TEMP/varga-ios-build.log"
+
+      - name: Install and launch on iPhone Simulator (no sign-in)
+        shell: bash
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          bash scripts/smoke-ios-simulator.sh \
+            "$RUNNER_TEMP/varga-ios-derived/Build/Products/Debug-iphonesimulator/App.app" \
+            "$RUNNER_TEMP/varga-ios-simulator-launch.png"
+
+      - name: Upload simulator screenshot for manual visual inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: varga-cantieri-ios-launch-screenshot
+          path: ${{ runner.temp }}/varga-ios-simulator-launch.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload unsigned simulator app
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: varga-cantieri-ios-simulator-unsigned
+          path: ${{ runner.temp }}/varga-ios-derived/Build/Products/Debug-iphonesimulator/App.app/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload iOS build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: varga-cantieri-ios-build-log
+          path: ${{ runner.temp }}/varga-ios-build.log
+          if-no-files-found: ignore
+          retention-days: 7

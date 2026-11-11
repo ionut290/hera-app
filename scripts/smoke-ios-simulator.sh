@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Varga Cantieri: run only the unsigned iOS Simulator app on an ephemeral CI simulator.
+# Never configures signing, production access, app distribution or real credentials.
+set -euo pipefail
+
+if [[ "$#" -ne 2 ]]; then
+  echo "Uso: bash scripts/smoke-ios-simulator.sh /percorso/App.app /percorso/screenshot.png" >&2
+  exit 2
+fi
+
+APP_PATH="$1"
+SCREENSHOT_PATH="$2"
+BUNDLE_ID="it.vargacantieri.hera"
+
+if [[ ! -d "$APP_PATH" ]] || [[ ! -s "$APP_PATH/Info.plist" ]]; then
+  echo "App iOS per il simulatore mancante: $APP_PATH" >&2
+  exit 1
+fi
+
+ACTUAL_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist")
+if [[ "$ACTUAL_BUNDLE_ID" != "$BUNDLE_ID" ]]; then
+  echo "Bundle ID inatteso: $ACTUAL_BUNDLE_ID" >&2
+  exit 1
+fi
+
+# An existing available iPhone simulator is supplied by the macOS hosted runner.
+SIMULATOR_UDID="$(xcrun simctl list devices available -j | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+for devices in data["devices"].values():
+    for device in devices:
+        if device.get("name", "").startswith("iPhone") and device.get("isAvailable", True):
+            print(device["udid"])
+            sys.exit(0)
+sys.exit("Nessun simulatore iPhone disponibile")
+')"
+
+if [[ -z "$SIMULATOR_UDID" ]]; then
+  echo "Nessun simulatore iPhone trovato" >&2
+  exit 1
+fi
+
+echo "Simulatore selezionato: $SIMULATOR_UDID"
+if ! xcrun simctl list devices booted | grep -Fq "$SIMULATOR_UDID"; then
+  xcrun simctl boot "$SIMULATOR_UDID"
+fi
+xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+
+LAUNCH_OUTPUT="$(xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID")"
+echo "Avvio: $LAUNCH_OUTPUT"
+if [[ "$LAUNCH_OUTPUT" != "$BUNDLE_ID:"* ]]; then
+  echo "L'app non è stata avviata correttamente dal simulatore" >&2
+  exit 1
+fi
+
+# Do not enter demo/production accounts. Capture a non-authenticated launch only.
+sleep 8
+mkdir -p "$(dirname "$SCREENSHOT_PATH")"
+xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH"
+test -s "$SCREENSHOT_PATH"
+sips -g pixelWidth -g pixelHeight "$SCREENSHOT_PATH"
+
+echo "App installata e avviata; screenshot per revisione visiva: $SCREENSHOT_PATH"
+echo "ATTENZIONE: screenshot e launch NON provano login, WebView, funzioni o assenza di schermata bianca."

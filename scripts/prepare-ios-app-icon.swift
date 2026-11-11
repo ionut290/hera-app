@@ -1,69 +1,70 @@
-// Prepare branded, opaque iOS AppIcon assets from the existing Varga icon.
-// Runs only on the ephemeral macOS CI runner; never edits production web assets.
+// Prepare opaque, branded iOS AppIcon assets from the existing Varga Cantieri logo.
+// Only generated iOS native assets are touched, never production web/Android files.
 import AppKit
+import CoreGraphics
 import Foundation
 
 guard CommandLine.arguments.count == 3 else {
-    fputs("Usage: swift prepare-ios-app-icon.swift icons/varga-cantieri-512.png ios/App/App/Assets.xcassets/AppIcon.appiconset\n", stderr)
+    fputs("Usage: swift prepare-ios-app-icon.swift logo.png AppIcon.appiconset\n", stderr)
     exit(2)
 }
-let sourceURL = URL(fileURLWithPath: CommandLine.arguments[1])
-let iconSet = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
-let contentsURL = iconSet.appendingPathComponent("Contents.json")
-guard let source = NSImage(contentsOf: sourceURL),
-      let data = try? Data(contentsOf: contentsURL),
-      let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-      let images = manifest["images"] as? [[String: Any]] else {
-    fputs("Missing source image or generated AppIcon Contents.json\n", stderr)
+let logoURL = URL(fileURLWithPath: CommandLine.arguments[1])
+let assetSet = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+let catalogURL = assetSet.appendingPathComponent("Contents.json")
+guard let logo = NSImage(contentsOf: logoURL),
+      let sourceImage = logo.cgImage(forProposedRect: nil, context: nil, hints: nil),
+      let catalogData = try? Data(contentsOf: catalogURL),
+      let catalog = try? JSONSerialization.jsonObject(with: catalogData) as? [String: Any],
+      let images = catalog["images"] as? [[String: Any]] else {
+    fputs("Missing logo or generated Xcode AppIcon manifest\n", stderr)
     exit(1)
 }
 
-func pixelSize(_ item: [String: Any]) -> (Int, Int)? {
-    guard let sizeString = item["size"] as? String else { return nil }
-    let parts = sizeString.split(separator: "x")
-    guard parts.count == 2, let width = Double(parts[0]), let height = Double(parts[1]) else { return nil }
-    let scaleString = (item["scale"] as? String ?? "1x").replacingOccurrences(of: "x", with: "")
-    guard let scale = Double(scaleString) else { return nil }
-    let w = Int((width * scale).rounded()), h = Int((height * scale).rounded())
-    return w > 0 && h > 0 && w <= 2048 && h <= 2048 ? (w, h) : nil
+func pixelDimensions(_ item: [String: Any]) -> (Int, Int)? {
+    guard let declaredSize = item["size"] as? String else { return nil }
+    let dimensions = declaredSize.split(separator: "x")
+    guard dimensions.count == 2,
+          let w = Double(dimensions[0]), let h = Double(dimensions[1]) else { return nil }
+    let scaleText = (item["scale"] as? String ?? "1x").replacingOccurrences(of: "x", with: "")
+    guard let scale = Double(scaleText) else { return nil }
+    let width = Int((w * scale).rounded())
+    let height = Int((h * scale).rounded())
+    guard width > 0, width <= 4096, height > 0, height <= 4096 else { return nil }
+    return (width, height)
 }
 
-var count = 0
-for item in images {
-    guard let filename = item["filename"] as? String, !filename.isEmpty else { continue }
-    guard filename == URL(fileURLWithPath: filename).lastPathComponent,
-          let dimensions = pixelSize(item) else {
-        fputs("Invalid AppIcon filename or dimensions\\n", stderr)
+var written = 0
+for image in images {
+    guard let filename = image["filename"] as? String, !filename.isEmpty else { continue }
+    guard URL(fileURLWithPath: filename).lastPathComponent == filename,
+          let size = pixelDimensions(image) else {
+        fputs("Unsupported AppIcon manifest entry: \(image)\n", stderr)
         exit(1)
     }
-    let (width, height) = dimensions
-    guard let bitmap = NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
-            bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false,
-            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
-          let context = NSGraphicsContext(bitmapImageRep: bitmap) else {
-        fputs("Invalid AppIcon asset specification\n", stderr)
+    let (width, height) = size
+    guard let context = CGContext(
+        data: nil, width: width, height: height, bitsPerComponent: 8,
+        bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
+        fputs("Cannot create opaque AppIcon bitmap (\(width)x\(height))\n", stderr)
         exit(1)
     }
-    NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = context
-    context.imageInterpolation = .high
-    NSColor.white.setFill()
-    NSRect(x: 0, y: 0, width: width, height: height).fill()
-    let bounds = NSRect(x: 0, y: 0, width: width, height: height)
-    source.draw(in: bounds, from: NSRect(origin: .zero, size: source.size),
-                operation: .sourceOver, fraction: 1.0)
-    context.flushGraphics()
-    NSGraphicsContext.restoreGraphicsState()
-    guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
-        fputs("Cannot encode AppIcon PNG\n", stderr)
+    let rect = CGRect(x: 0, y: 0, width: width, height: height)
+    context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    context.fill(rect)
+    context.interpolationQuality = .high
+    context.draw(sourceImage, in: rect)
+
+    guard let output = context.makeImage(),
+          let data = NSBitmapImageRep(cgImage: output).representation(using: .png, properties: [:]) else {
+        fputs("Cannot encode native icon PNG\n", stderr)
         exit(1)
     }
-    try pngData.write(to: iconSet.appendingPathComponent(filename), options: .atomic)
-    count += 1
+    try data.write(to: assetSet.appendingPathComponent(filename), options: .atomic)
+    print("Prepared opaque iOS icon: \(filename) \(width)x\(height)")
+    written += 1
 }
-guard count > 0 else {
-    fputs("Generated AppIcon asset catalog has no named image slots\n", stderr)
+guard written > 0 else {
+    fputs("No named AppIcon slots in generated Xcode asset manifest\n", stderr)
     exit(1)
 }
-print("Prepared \(count) branded, opaque iOS AppIcon assets (no alpha).")

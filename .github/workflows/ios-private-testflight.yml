@@ -91,6 +91,7 @@ jobs:
           bash -n scripts/smoke-ios-simulator.sh
           python3 -m py_compile scripts/configure-ios-plist.py scripts/configure-ios-firebase.py
           ruby -c scripts/register-ios-firebase-plist.rb
+          ruby -c scripts/configure-ios-distribution-signing.rb
           npm run android:aab:prepare
           test -s www/index.html
           test -s www/icons/varga-cantieri-512.png
@@ -114,6 +115,7 @@ jobs:
           printf '%s' "$IOS_FIREBASE_CONFIG_BASE64" | base64 --decode > ios/App/App/GoogleService-Info.plist
           python3 scripts/configure-ios-firebase.py
           ruby scripts/register-ios-firebase-plist.rb
+          ruby scripts/configure-ios-distribution-signing.rb
           test -s ios/App/App/GoogleService-Info.plist
 
       - name: Prepare temporary App Store Connect API authentication
@@ -146,9 +148,6 @@ jobs:
             -authenticationKeyPath "$APPLE_API_KEY_PATH" \
             -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
             -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$IOS_APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
             MARKETING_VERSION=1.0 \
             CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
             archive > "$RUNNER_TEMP/ios-private-archive.log" 2>&1 ||

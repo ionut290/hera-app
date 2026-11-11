@@ -15,7 +15,7 @@ permissions:
 jobs:
   build-ios-simulator:
     name: Unsigned iOS simulator build
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 50
 
     steps:
@@ -28,8 +28,18 @@ jobs:
           node-version: "22"
           cache: npm
 
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - name: Require App Store-supported Xcode and iOS SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          XCODE_MAJOR="$(xcodebuild -version | sed -nE 's/^Xcode ([0-9]+).*/\\1/p')"
+          SDK_MAJOR="$(xcrun --sdk iphoneos --show-sdk-version | cut -d. -f1)"
+          if [[ -z "$XCODE_MAJOR" || "$XCODE_MAJOR" -lt 26 || -z "$SDK_MAJOR" || "$SDK_MAJOR" -lt 26 ]]; then
+            echo "App Store 2026: richiesti Xcode 26+ e iOS SDK 26+." >&2
+            exit 1
+          fi
 
       - name: Install locked project dependencies
         run: npm ci --no-audit --no-fund

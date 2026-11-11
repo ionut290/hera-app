@@ -64,3 +64,23 @@
     contain-intrinsic-size: auto 180px;
   }
 }
+
+/* Link isolato alla demo di revisione Apple. Non modifica il modulo di accesso. */
+.auth-gate-card .apple-review-demo-link {
+  display: block;
+  width: 100%;
+  margin-top: 0.8rem;
+  text-align: center;
+  text-decoration: none;
+  border: 1px solid #b8cfec;
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  background: #edf5ff;
+  color: #154b92;
+  font-weight: 750;
+  box-sizing: border-box;
+}
+.auth-gate-card .apple-review-demo-link:focus-visible {
+  outline: 3px solid #ecaa37;
+  outline-offset: 2px;
+}

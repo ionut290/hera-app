@@ -74,7 +74,7 @@ jobs:
       - name: Configure registered Firebase iOS app when provided
         shell: bash
         env:
-          IOS_FIREBASE_CONFIG_BASE64: ${{ secrets.IOS_FIREBASE_CONFIG_BASE64 }}
+          IOS_FIREBASE_CONFIG_BASE64: ${{ github.event_name == 'workflow_dispatch' && secrets.IOS_FIREBASE_CONFIG_BASE64 || '' }}
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/configure-ios-firebase.py

@@ -71,6 +71,24 @@ jobs:
           python3 scripts/configure-ios-plist.py
           test -f ios/App/App.xcworkspace/contents.xcworkspacedata
 
+      - name: Configure registered Firebase iOS app when provided
+        shell: bash
+        env:
+          IOS_FIREBASE_CONFIG_BASE64: ${{ secrets.IOS_FIREBASE_CONFIG_BASE64 }}
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/configure-ios-firebase.py
+          ruby -c scripts/register-ios-firebase-plist.rb
+          if [[ -z "${IOS_FIREBASE_CONFIG_BASE64}" ]]; then
+            echo "::warning::Firebase iOS config absent. The simulator build does not validate native Firebase sign-in."
+          else
+            umask 077
+            printf '%s' "${IOS_FIREBASE_CONFIG_BASE64}" | base64 --decode > ios/App/App/GoogleService-Info.plist
+            python3 scripts/configure-ios-firebase.py
+            ruby scripts/register-ios-firebase-plist.rb
+            echo "FIREBASE_IOS_CONFIG_INJECTED=true" >> "$GITHUB_ENV"
+          fi
+
       - name: Build for iOS Simulator without Apple certificates
         shell: bash
         run: |
@@ -84,6 +102,15 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/varga-ios-derived" \
             CODE_SIGNING_ALLOWED=NO \
             build 2>&1 | tee "$RUNNER_TEMP/varga-ios-build.log"
+
+      - name: Assert native Firebase config packaged when supplied
+        if: env.FIREBASE_IOS_CONFIG_INJECTED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PLIST="$RUNNER_TEMP/varga-ios-derived/Build/Products/Debug-iphonesimulator/App.app/GoogleService-Info.plist"
+          test -s "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c 'Print :BUNDLE_ID' "$APP_PLIST" | grep -Fx 'it.vargacantieri.hera'
 
       - name: Install and launch on iPhone Simulator (no sign-in)
         shell: bash
@@ -113,7 +140,7 @@ jobs:
           retention-days: 7
 
       - name: Upload unsigned simulator app
-        if: success()
+        if: success() && env.FIREBASE_IOS_CONFIG_INJECTED != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: varga-cantieri-ios-simulator-unsigned

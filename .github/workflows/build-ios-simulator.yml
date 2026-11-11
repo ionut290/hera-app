@@ -74,6 +74,24 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build 2>&1 | tee "$RUNNER_TEMP/varga-ios-build.log"
 
+      - name: Install and launch on iPhone Simulator (no sign-in)
+        shell: bash
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          bash scripts/smoke-ios-simulator.sh \
+            "$RUNNER_TEMP/varga-ios-derived/Build/Products/Debug-iphonesimulator/App.app" \
+            "$RUNNER_TEMP/varga-ios-simulator-launch.png"
+
+      - name: Upload simulator screenshot for manual visual inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: varga-cantieri-ios-launch-screenshot
+          path: ${{ runner.temp }}/varga-ios-simulator-launch.png
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload unsigned simulator app
         if: success()
         uses: actions/upload-artifact@v4

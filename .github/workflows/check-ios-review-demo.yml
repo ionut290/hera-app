@@ -1,0 +1,49 @@
+name: Verify isolated Apple Review demo (never deploy)
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-review-demo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout read-only review branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check review demo safety and syntax
+        run: node scripts/check-ios-review-demo.js
+      - name: Verify login and immutable production flows
+        run: |
+          node scripts/check-auth-stability-contract.js
+          node scripts/check-fatto-whazzup-immutable.js
+          node scripts/check-fatto-whazzup-isolation.js
+      - name: Prepare native web assets (no deploy or signing)
+        run: |
+          npm run android:aab:prepare
+          node scripts/check-ios-review-demo.js
+      - name: Install isolated browser runner
+        run: npm install --no-save --no-audit --no-fund @playwright/test@1.55.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Serve local static test app
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/varga-review-demo.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:4173/apple-review-demo.html >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/varga-review-demo.log
+          exit 1
+      - name: Exercise fictional demo on mobile Chromium without external requests
+        env:
+          E2E_APP_URL: http://127.0.0.1:4173
+        run: npx playwright test tests/e2e/apple-review-demo.spec.js --browser=chromium --workers=1 --reporter=line

@@ -46,6 +46,13 @@ if ! xcrun simctl list devices booted | grep -Fq "$SIMULATOR_UDID"; then
 fi
 xcrun simctl bootstatus "$SIMULATOR_UDID" -b
 xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+
+# This automated smoke test must inspect the app, not the first-run iOS
+# location permission dialog. Grant only foreground location access on the
+# ephemeral CI simulator; a real iPhone will still ask the user normally.
+# No sign-in, location tracking, Firebase writes or production access occurs.
+xcrun simctl privacy "$SIMULATOR_UDID" grant location "$BUNDLE_ID"
+echo "Permesso posizione in uso concesso solo al simulatore CI per screenshot leggibile."
 mkdir -p "$(dirname "$SCREENSHOT_PATH")"
 BEFORE_SCREENSHOT="${SCREENSHOT_PATH%.png}-before.png"
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$BEFORE_SCREENSHOT"

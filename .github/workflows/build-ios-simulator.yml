@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
-          XCODE_MAJOR="$(xcodebuild -version | sed -nE 's/^Xcode ([0-9]+).*/\\1/p')"
+          XCODE_MAJOR="$(xcodebuild -version | awk '/^Xcode / { print $2 }' | cut -d. -f1)"
           SDK_MAJOR="$(xcrun --sdk iphoneos --show-sdk-version | cut -d. -f1)"
           if [[ -z "$XCODE_MAJOR" || "$XCODE_MAJOR" -lt 26 || -z "$SDK_MAJOR" || "$SDK_MAJOR" -lt 26 ]]; then
             echo "App Store 2026: richiesti Xcode 26+ e iOS SDK 26+." >&2

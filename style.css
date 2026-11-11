@@ -12251,3 +12251,15 @@ body.potature-followup-open { overflow: hidden; }
   font-weight: 900;
   cursor: pointer;
 }
+
+
+/* iOS safe-area: keep the application header below the status bar / Dynamic Island. */
+main.container {
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
+}
+
+@media (min-width: 760px) {
+  main.container {
+    padding-top: calc(22px + env(safe-area-inset-top, 0px));
+  }
+}

@@ -265,16 +265,17 @@ jobs:
           with Path(os.environ["RUNNER_TEMP"], "varga-appstore-candidate-options.plist").open("wb") as f:
               plistlib.dump(options, f)
           PY
+          test -s "$RUNNER_TEMP/varga-appstore-candidate-options.plist"
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/VargaCantieri.xcarchive" \
             -exportPath "$RUNNER_TEMP/varga-appstore-candidate-upload" \
-            -exportOptionsPlist "$RUNNER_TEMP/varga-internal-testflight-options.plist" \
+            -exportOptionsPlist "$RUNNER_TEMP/varga-appstore-candidate-options.plist" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$APPLE_API_KEY_PATH" \
             -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
             -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
             > "$RUNNER_TEMP/ios-appstore-candidate-upload.log" 2>&1 ||
-            { tail -n 80 "$RUNNER_TEMP/ios-private-upload.log"; exit 1; }
+            { tail -n 80 "$RUNNER_TEMP/ios-appstore-candidate-upload.log"; exit 1; }
           echo "App Store-eligible candidate uploaded to App Store Connect only."
           echo "NOT submitted to App Review. NOT released to customers. Select the new build manually in App Store Connect."
 

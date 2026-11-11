@@ -39,6 +39,9 @@ jobs:
       IOS_APPSTORE_KEY_ID: ${{ secrets.IOS_APPSTORE_KEY_ID }}
       IOS_APPSTORE_ISSUER_ID: ${{ secrets.IOS_APPSTORE_ISSUER_ID }}
       IOS_APPSTORE_PRIVATE_KEY_BASE64: ${{ secrets.IOS_APPSTORE_PRIVATE_KEY_BASE64 }}
+      IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+      IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+      IOS_APPSTORE_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
 
     steps:
       - name: Checkout reviewed commit
@@ -57,7 +60,7 @@ jobs:
             echo "::error::The exact reviewed SHA must match this workflow checkout. No upload performed."
             exit 1
           fi
-          for key in IOS_FIREBASE_CONFIG_BASE64 IOS_APPLE_TEAM_ID IOS_APPSTORE_KEY_ID IOS_APPSTORE_ISSUER_ID IOS_APPSTORE_PRIVATE_KEY_BASE64; do
+          for key in IOS_FIREBASE_CONFIG_BASE64 IOS_APPLE_TEAM_ID IOS_APPSTORE_KEY_ID IOS_APPSTORE_ISSUER_ID IOS_APPSTORE_PRIVATE_KEY_BASE64 IOS_DISTRIBUTION_CERTIFICATE_BASE64 IOS_DISTRIBUTION_CERTIFICATE_PASSWORD IOS_APPSTORE_PROFILE_BASE64; do
             if [[ -z "${!key:-}" ]]; then
               echo "::error::Missing required private GitHub Actions secret: $key"
               exit 1
@@ -115,8 +118,75 @@ jobs:
           printf '%s' "$IOS_FIREBASE_CONFIG_BASE64" | base64 --decode > ios/App/App/GoogleService-Info.plist
           python3 scripts/configure-ios-firebase.py
           ruby scripts/register-ios-firebase-plist.rb
-          ruby scripts/configure-ios-distribution-signing.rb
           test -s ios/App/App/GoogleService-Info.plist
+
+      - name: Install and validate App Store distribution assets in temporary keychain
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          CERT_PATH="$RUNNER_TEMP/varga-distribution.p12"
+          PROFILE_PATH="$RUNNER_TEMP/varga-appstore.mobileprovision"
+          PROFILE_PLIST="$RUNNER_TEMP/varga-appstore-profile.plist"
+          KEYCHAIN_PATH="$RUNNER_TEMP/varga-apple-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          printf '%s' "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          printf '%s' "$IOS_APPSTORE_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          openssl pkcs12 -in "$CERT_PATH" -clcerts -nokeys -passin env:IOS_DISTRIBUTION_CERTIFICATE_PASSWORD -out "$RUNNER_TEMP/varga-leaf.pem"
+          openssl x509 -in "$RUNNER_TEMP/varga-leaf.pem" -outform DER -out "$RUNNER_TEMP/varga-leaf.der"
+          openssl x509 -in "$RUNNER_TEMP/varga-leaf.pem" -noout -subject | grep -F 'Apple Distribution:' >/dev/null ||
+            { echo "::error::The p12 must contain an Apple Distribution certificate."; exit 1; }
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+          python3 - "$PROFILE_PLIST" "$RUNNER_TEMP/varga-leaf.der" <<'PY'
+          import datetime, os, plistlib, re, sys
+          from pathlib import Path
+          profile = plistlib.loads(Path(sys.argv[1]).read_bytes())
+          certificate = Path(sys.argv[2]).read_bytes()
+          team = os.environ["IOS_APPLE_TEAM_ID"]
+          expected_app = team + ".it.vargacantieri.hera"
+          actual_app = profile.get("Entitlements", {}).get("application-identifier")
+          if actual_app != expected_app:
+              raise SystemExit("App Store profile App ID does not match the approved bundle/team")
+          if team not in profile.get("TeamIdentifier", []):
+              raise SystemExit("App Store profile has the wrong Apple team")
+          if profile.get("Entitlements", {}).get("get-task-allow", True):
+              raise SystemExit("A DEVELOPMENT profile was supplied, not an App Store distribution profile")
+          if "ProvisionedDevices" in profile or profile.get("ProvisionsAllDevices"):
+              raise SystemExit("Expected an App Store distribution profile, not development/ad-hoc/enterprise")
+          expires = profile.get("ExpirationDate")
+          if not expires or expires <= datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None):
+              raise SystemExit("App Store distribution profile is expired")
+          if certificate not in profile.get("DeveloperCertificates", []):
+              raise SystemExit("App Store profile is not signed with the provided Apple Distribution certificate")
+          name, uuid = profile.get("Name", ""), profile.get("UUID", "")
+          if not name or "\n" in name or "\r" in name or not re.fullmatch(r"[0-9A-Fa-f-]{36}", uuid):
+              raise SystemExit("Invalid App Store profile name or UUID")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write("IOS_PROFILE_NAME=" + name + "\n")
+              env.write("IOS_PROFILE_UUID=" + uuid + "\n")
+          print("App Store Connect provisioning profile, team and certificate match.")
+          PY
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$IOS_DISTRIBUTION_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F 'Apple Distribution:' >/dev/null ||
+            { echo "::error::Apple Distribution private key/certificate not usable in keychain."; exit 1; }
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c "Print :UUID" "$PROFILE_PLIST")"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          echo "IOS_SIGNING_KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "App Store certificate and profile installed only on the temporary macOS runner."
+
+      - name: Configure ONLY App Release for manual distribution signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby scripts/configure-ios-distribution-signing.rb
+          ruby -r xcodeproj -e 'p=Xcodeproj::Project.open("ios/App/Pods/Pods.xcodeproj"); abort "Unexpected Distribution signing in Pods" if p.targets.any?{|t| t.build_configurations.any?{|c| c.build_settings["CODE_SIGN_IDENTITY[sdk=iphoneos*]"]=="Apple Distribution"}}'
+          echo "Release distribution identity scoped to App; Pods untouched."
 
       - name: Prepare temporary App Store Connect API authentication
         id: apple_auth
@@ -171,7 +241,9 @@ jobs:
           options = {
               "method": "app-store-connect",
               "destination": "upload",
-              "signingStyle": "automatic",
+              "signingStyle": "manual",
+              "signingCertificate": "Apple Distribution",
+              "provisioningProfiles": {"it.vargacantieri.hera": os.environ["IOS_PROFILE_NAME"]},
               "teamID": os.environ["IOS_APPLE_TEAM_ID"],
               "testFlightInternalTestingOnly": True,
               "uploadSymbols": True,
@@ -191,9 +263,18 @@ jobs:
             { tail -n 80 "$RUNNER_TEMP/ios-private-upload.log"; exit 1; }
           echo "Uploaded ONLY to App Store Connect internal TestFlight; Apple processing and device tests still required."
 
-      - name: Remove temporary App Store Connect API key
+      - name: Remove temporary Apple signing material and Firebase configuration
         if: always()
         shell: bash
         run: |
+          set +e
+          if [[ -n "$IOS_PROFILE_UUID" ]]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$IOS_PROFILE_UUID.mobileprovision"
+          fi
+          if [[ -n "$IOS_SIGNING_KEYCHAIN_PATH" && -f "$IOS_SIGNING_KEYCHAIN_PATH" ]]; then
+            security delete-keychain "$IOS_SIGNING_KEYCHAIN_PATH"
+          fi
           rm -rf "$RUNNER_TEMP/varga-apple-api"
+          rm -f "$RUNNER_TEMP"/varga-*.p12 "$RUNNER_TEMP"/varga-*.mobileprovision
+          rm -f "$RUNNER_TEMP"/varga-leaf.pem "$RUNNER_TEMP"/varga-leaf.der "$RUNNER_TEMP"/varga-appstore-profile.plist
           rm -f ios/App/App/GoogleService-Info.plist

@@ -32,8 +32,12 @@ var count = 0
 for item in images {
     guard let filename = item["filename"] as? String, !filename.isEmpty else { continue }
     guard filename == URL(fileURLWithPath: filename).lastPathComponent,
-          let (width, height) = pixelSize(item),
-          let bitmap = NSBitmapImageRep(
+          let dimensions = pixelSize(item) else {
+        fputs("Invalid AppIcon filename or dimensions\\n", stderr)
+        exit(1)
+    }
+    let (width, height) = dimensions
+    guard let bitmap = NSBitmapImageRep(
             bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
             bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false,
             colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),

@@ -122,7 +122,10 @@ jobs:
           test -s "$APP_PLIST"
           /usr/libexec/PlistBuddy -c 'Print :BUNDLE_ID' "$APP_PLIST" | grep -Fx 'it.vargacantieri.hera'
 
+      # A build without the private Firebase Apple plist is compile-only.
+      # Do not report an unconfigured app's Home screen as a release smoke test.
       - name: Install and launch on iPhone Simulator (no sign-in)
+        if: env.FIREBASE_IOS_CONFIG_INJECTED == 'true'
         shell: bash
         timeout-minutes: 12
         run: |

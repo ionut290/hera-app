@@ -26,6 +26,7 @@ let width = before.pixelsWide
 let height = before.pixelsHigh
 var samples = 0
 var changed = 0
+var nearlyWhite = 0
 
 // Exclude status bar and dock; count substantial color changes across the page.
 for y in stride(from: height / 6, to: height * 5 / 6, by: 16) {
@@ -33,6 +34,9 @@ for y in stride(from: height / 6, to: height * 5 / 6, by: 16) {
         guard let a = before.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
               let b = after.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { continue }
         samples += 1
+        if b.redComponent > 0.975 && b.greenComponent > 0.975 && b.blueComponent > 0.975 {
+            nearlyWhite += 1
+        }
         let delta = abs(a.redComponent - b.redComponent)
             + abs(a.greenComponent - b.greenComponent)
             + abs(a.blueComponent - b.blueComponent)
@@ -46,4 +50,10 @@ if ratio < 0.03 {
     fputs("FAIL: App launch did not visibly leave the iPhone Home screen. Inspect crash diagnostics.\n", stderr)
     exit(1)
 }
-print("PASS: The simulator screen changed after launch; actual app UI still requires manual inspection.")
+let whiteRatio = samples == 0 ? 0.0 : Double(nearlyWhite) / Double(samples)
+print(String(format: "Nearly white central screen: %.2f%% (%d/%d)", whiteRatio * 100, nearlyWhite, samples))
+if whiteRatio > 0.998 {
+    fputs("FAIL: iPhone app opened but displays a blank white screen. Inspect WebView startup diagnostics.\n", stderr)
+    exit(1)
+}
+print("PASS: Simulator left Home and screen is not uniformly white; inspect UI manually.")

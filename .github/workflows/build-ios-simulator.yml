@@ -72,6 +72,15 @@ jobs:
           python3 scripts/configure-ios-plist.py
           test -f ios/App/App.xcworkspace/contents.xcworkspacedata
 
+      - name: Prepare opaque Varga Cantieri iOS app icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift scripts/prepare-ios-app-icon.swift \
+            icons/varga-cantieri-512.png \
+            ios/App/App/Assets.xcassets/AppIcon.appiconset
+          test -s ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json
+
       - name: Configure registered Firebase iOS app when provided
         shell: bash
         env:

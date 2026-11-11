@@ -1,0 +1,295 @@
+name: Varga Cantieri iOS App Store Candidate (manual upload only)
+
+# This workflow uploads a signed App Store-eligible candidate to App Store Connect ONLY.
+# It never submits it for review or publishes it to customers.
+# Manual confirmation + exact SHA are mandatory; reuse the protected Apple signing environment.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Explicit authorization to upload an App Store candidate (not submit/release)"
+        type: choice
+        required: true
+        default: DO_NOT_UPLOAD
+        options:
+          - DO_NOT_UPLOAD
+          - UPLOAD_APP_STORE_CANDIDATE_ONLY
+      build_number:
+        description: "New CFBundleVersion number, greater than previously uploaded builds (e.g. 5)"
+        type: string
+        required: true
+        default: "5"
+      reviewed_commit_sha:
+        description: "Exact 40-character reviewed commit SHA shown in GitHub"
+        required: true
+        type: string
+
+concurrency:
+  group: varga-ios-appstore-candidate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  upload-appstore-candidate:
+    name: Sign and upload App Store-eligible candidate (NO submission)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY' }}
+    runs-on: macos-26
+    timeout-minutes: 90
+    # Existing protected environment holds validated Apple signing credentials.
+    # Keep the same reviewer gate; no new secret copies are needed.
+    environment: ios-internal-testflight
+
+    env:
+      IOS_BUILD_NUMBER: ${{ inputs.build_number }}
+      IOS_FIREBASE_CONFIG_BASE64: ${{ secrets.IOS_FIREBASE_CONFIG_BASE64 }}
+      IOS_APPLE_TEAM_ID: ${{ secrets.IOS_APPLE_TEAM_ID }}
+      IOS_APPSTORE_KEY_ID: ${{ secrets.IOS_APPSTORE_KEY_ID }}
+      IOS_APPSTORE_ISSUER_ID: ${{ secrets.IOS_APPSTORE_ISSUER_ID }}
+      IOS_APPSTORE_PRIVATE_KEY_BASE64: ${{ secrets.IOS_APPSTORE_PRIVATE_KEY_BASE64 }}
+      IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+      IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+      IOS_APPSTORE_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
+
+    steps:
+      - name: Checkout reviewed commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Require explicit source and signing prerequisites
+        shell: bash
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_commit_sha }}
+          ACTUAL_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$ACTUAL_SHA" ]]; then
+            echo "::error::The exact reviewed SHA must match this workflow checkout. No upload performed."
+            exit 1
+          fi
+          for key in IOS_FIREBASE_CONFIG_BASE64 IOS_APPLE_TEAM_ID IOS_APPSTORE_KEY_ID IOS_APPSTORE_ISSUER_ID IOS_APPSTORE_PRIVATE_KEY_BASE64 IOS_DISTRIBUTION_CERTIFICATE_BASE64 IOS_DISTRIBUTION_CERTIFICATE_PASSWORD IOS_APPSTORE_PROFILE_BASE64; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "::error::Missing required private GitHub Actions secret: $key"
+              exit 1
+            fi
+          done
+          [[ "$IOS_APPLE_TEAM_ID" =~ ^[A-Za-z0-9]{10}$ ]] || { echo "::error::Invalid Apple Team ID"; exit 1; }
+          [[ "$IOS_APPSTORE_KEY_ID" =~ ^[A-Za-z0-9]{10}$ ]] || { echo "::error::Invalid App Store Connect Key ID"; exit 1; }
+          XCODE_MAJOR="$(xcodebuild -version | awk '/^Xcode / { print $2 }' | cut -d. -f1)"
+          SDK_MAJOR="$(xcrun --sdk iphoneos --show-sdk-version | cut -d. -f1)"
+          [[ -n "$XCODE_MAJOR" && "$XCODE_MAJOR" -ge 26 && -n "$SDK_MAJOR" && "$SDK_MAJOR" -ge 26 ]] ||
+            { echo "::error::Xcode 26 / iOS 26 SDK or later required"; exit 1; }
+          if [[ ! "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,5}$ ]] || (( 10#$IOS_BUILD_NUMBER < 5 )); then
+            echo "::error::Enter a positive, new numeric iOS build number (at least 5)."
+            exit 1
+          fi
+          echo "Reviewed commit, requested build number and supported Xcode verified; no upload yet."
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install and verify protected application flows
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run check:fatto-whazzup-immutable
+          npm run check:fatto-isolation
+          npm run check:auth-stability
+          npm run check:auth-login
+          npm run check:security-privacy
+          npm run check:syntax
+          bash -n scripts/smoke-ios-simulator.sh
+          python3 -m py_compile scripts/configure-ios-plist.py scripts/configure-ios-firebase.py
+          ruby -c scripts/register-ios-firebase-plist.rb
+          ruby -c scripts/configure-ios-distribution-signing.rb
+          npm run android:aab:prepare
+          test -s www/index.html
+          test -s www/icons/varga-cantieri-512.png
+
+      - name: Generate native iOS with safe patched Capacitor
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --no-audit --no-fund @capacitor/core@7.6.10 @capacitor/ios@7.6.10
+          node -e "const c=require('@capacitor/core/package.json').version,i=require('@capacitor/ios/package.json').version;if(c!==i)throw Error('Capacitor mismatch');"
+          npx cap add ios
+          npx cap sync ios
+          python3 scripts/configure-ios-plist.py
+          swift scripts/prepare-ios-app-icon.swift icons/varga-cantieri-512.png ios/App/App/Assets.xcassets/AppIcon.appiconset
+
+      - name: Inject real registered Firebase Apple configuration (never publish artifact)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$IOS_FIREBASE_CONFIG_BASE64" | base64 --decode > ios/App/App/GoogleService-Info.plist
+          python3 scripts/configure-ios-firebase.py
+          ruby scripts/register-ios-firebase-plist.rb
+          test -s ios/App/App/GoogleService-Info.plist
+
+      - name: Install and validate App Store distribution assets in temporary keychain
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          CERT_PATH="$RUNNER_TEMP/varga-distribution.p12"
+          PROFILE_PATH="$RUNNER_TEMP/varga-appstore.mobileprovision"
+          PROFILE_PLIST="$RUNNER_TEMP/varga-appstore-profile.plist"
+          KEYCHAIN_PATH="$RUNNER_TEMP/varga-apple-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          printf '%s' "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          printf '%s' "$IOS_APPSTORE_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          openssl pkcs12 -in "$CERT_PATH" -clcerts -nokeys -passin env:IOS_DISTRIBUTION_CERTIFICATE_PASSWORD -out "$RUNNER_TEMP/varga-leaf.pem"
+          openssl x509 -in "$RUNNER_TEMP/varga-leaf.pem" -outform DER -out "$RUNNER_TEMP/varga-leaf.der"
+          openssl x509 -in "$RUNNER_TEMP/varga-leaf.pem" -noout -subject | grep -F 'Apple Distribution:' >/dev/null ||
+            { echo "::error::The p12 must contain an Apple Distribution certificate."; exit 1; }
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+          python3 - "$PROFILE_PLIST" "$RUNNER_TEMP/varga-leaf.der" <<'PY'
+          import datetime, os, plistlib, re, sys
+          from pathlib import Path
+          profile = plistlib.loads(Path(sys.argv[1]).read_bytes())
+          certificate = Path(sys.argv[2]).read_bytes()
+          team = os.environ["IOS_APPLE_TEAM_ID"]
+          expected_app = team + ".it.vargacantieri.hera"
+          actual_app = profile.get("Entitlements", {}).get("application-identifier")
+          if actual_app != expected_app:
+              raise SystemExit("App Store profile App ID does not match the approved bundle/team")
+          if team not in profile.get("TeamIdentifier", []):
+              raise SystemExit("App Store profile has the wrong Apple team")
+          if profile.get("Entitlements", {}).get("get-task-allow", True):
+              raise SystemExit("A DEVELOPMENT profile was supplied, not an App Store distribution profile")
+          if "ProvisionedDevices" in profile or profile.get("ProvisionsAllDevices"):
+              raise SystemExit("Expected an App Store distribution profile, not development/ad-hoc/enterprise")
+          expires = profile.get("ExpirationDate")
+          if not expires or expires <= datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None):
+              raise SystemExit("App Store distribution profile is expired")
+          if certificate not in profile.get("DeveloperCertificates", []):
+              raise SystemExit("App Store profile is not signed with the provided Apple Distribution certificate")
+          name, uuid = profile.get("Name", ""), profile.get("UUID", "")
+          if not name or "\n" in name or "\r" in name or not re.fullmatch(r"[0-9A-Fa-f-]{36}", uuid):
+              raise SystemExit("Invalid App Store profile name or UUID")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write("IOS_PROFILE_NAME=" + name + "\n")
+              env.write("IOS_PROFILE_UUID=" + uuid + "\n")
+          print("App Store Connect provisioning profile, team and certificate match.")
+          PY
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$IOS_DISTRIBUTION_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F 'Apple Distribution:' >/dev/null ||
+            { echo "::error::Apple Distribution private key/certificate not usable in keychain."; exit 1; }
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c "Print :UUID" "$PROFILE_PLIST")"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          echo "IOS_SIGNING_KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "App Store certificate and profile installed only on the temporary macOS runner."
+
+      - name: Configure ONLY App Release for manual distribution signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby scripts/configure-ios-distribution-signing.rb
+          ruby -r xcodeproj -e 'p=Xcodeproj::Project.open("ios/App/Pods/Pods.xcodeproj"); abort "Unexpected Distribution signing in Pods" if p.targets.any?{|t| t.build_configurations.any?{|c| c.build_settings["CODE_SIGN_IDENTITY[sdk=iphoneos*]"]=="Apple Distribution"}}'
+          echo "Release distribution identity scoped to App; Pods untouched."
+
+      - name: Prepare temporary App Store Connect API authentication
+        id: apple_auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          KEY_DIR="$RUNNER_TEMP/varga-apple-api"
+          mkdir -p "$KEY_DIR"
+          KEY_PATH="$KEY_DIR/AuthKey_$IOS_APPSTORE_KEY_ID.p8"
+          printf '%s' "$IOS_APPSTORE_PRIVATE_KEY_BASE64" | base64 --decode > "$KEY_PATH"
+          grep -q 'BEGIN PRIVATE KEY' "$KEY_PATH" || { echo "::error::Invalid Apple API key format"; exit 1; }
+          chmod 600 "$KEY_PATH"
+          echo "key_path=$KEY_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Archive signed iPhone app on GitHub macOS
+        shell: bash
+        env:
+          APPLE_API_KEY_PATH: ${{ steps.apple_auth.outputs.key_path }}
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/VargaCantieri.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$APPLE_API_KEY_PATH" \
+            -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
+            MARKETING_VERSION=1.0 \
+            CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
+            archive > "$RUNNER_TEMP/ios-private-archive.log" 2>&1 ||
+            { tail -n 80 "$RUNNER_TEMP/ios-private-archive.log"; exit 1; }
+          test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
+            grep -Fx "$IOS_BUILD_NUMBER"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
+            grep -Fx 'it.vargacantieri.hera'
+          test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/GoogleService-Info.plist"
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app"
+          echo "iOS Release archive signed and verified; no artifact exposed publicly."
+
+      - name: Upload App Store-eligible build to App Store Connect (NOT App Review)
+        shell: bash
+        env:
+          APPLE_API_KEY_PATH: ${{ steps.apple_auth.outputs.key_path }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, plistlib
+          from pathlib import Path
+          options = {
+              "method": "app-store-connect",
+              "destination": "upload",
+              "signingStyle": "manual",
+              "signingCertificate": "Apple Distribution",
+              "provisioningProfiles": {"it.vargacantieri.hera": os.environ["IOS_PROFILE_NAME"]},
+              "teamID": os.environ["IOS_APPLE_TEAM_ID"],
+              "uploadSymbols": True,
+          }
+          with Path(os.environ["RUNNER_TEMP"], "varga-appstore-candidate-options.plist").open("wb") as f:
+              plistlib.dump(options, f)
+          PY
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/VargaCantieri.xcarchive" \
+            -exportPath "$RUNNER_TEMP/varga-appstore-candidate-upload" \
+            -exportOptionsPlist "$RUNNER_TEMP/varga-internal-testflight-options.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$APPLE_API_KEY_PATH" \
+            -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
+            > "$RUNNER_TEMP/ios-appstore-candidate-upload.log" 2>&1 ||
+            { tail -n 80 "$RUNNER_TEMP/ios-private-upload.log"; exit 1; }
+          echo "App Store-eligible candidate uploaded to App Store Connect only."
+          echo "NOT submitted to App Review. NOT released to customers. Select the new build manually in App Store Connect."
+
+      - name: Remove temporary Apple signing material and Firebase configuration
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -n "$IOS_PROFILE_UUID" ]]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$IOS_PROFILE_UUID.mobileprovision"
+          fi
+          if [[ -n "$IOS_SIGNING_KEYCHAIN_PATH" && -f "$IOS_SIGNING_KEYCHAIN_PATH" ]]; then
+            security delete-keychain "$IOS_SIGNING_KEYCHAIN_PATH"
+          fi
+          rm -rf "$RUNNER_TEMP/varga-apple-api"
+          rm -f "$RUNNER_TEMP"/varga-*.p12 "$RUNNER_TEMP"/varga-*.mobileprovision
+          rm -f "$RUNNER_TEMP"/varga-leaf.pem "$RUNNER_TEMP"/varga-leaf.der "$RUNNER_TEMP"/varga-appstore-profile.plist
+          rm -f ios/App/App/GoogleService-Info.plist

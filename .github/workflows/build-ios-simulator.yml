@@ -1,13 +1,14 @@
 name: Varga Cantieri iOS Simulator (no deploy)
 
 on:
-  push:
-    branches:
-      - feature/ios-app-store-prep-20261111
   pull_request:
     branches:
       - main
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

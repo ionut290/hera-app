@@ -10,7 +10,7 @@
 - Nessuna modifica alle funzioni protette FATTO/WhatsApp, al database, alle regole Firestore o alla versione Android/web.
 
 ## Strategia di distribuzione
-1. **Simulatore CI:** `.github/workflows/build-ios-simulator.yml` compila senza firma, fa i test e salva screenshot. Non pubblica nulla.
+1. **CI PR senza segreto Firebase Apple:** `.github/workflows/build-ios-simulator.yml` esegue i controlli protetti, verifica l'icona e **compila soltanto** l'app simulatore non firmata; non afferma che l'app si sia aperta e non pubblica nulla. Quando il vero `IOS_FIREBASE_CONFIG_BASE64` è disponibile in una esecuzione **manuale autorizzata**, il workflow installa, avvia e salva screenshot per revisione umana. Il test non esegue il login.
 2. **TestFlight interno (solo autorizzazione manuale):** `.github/workflows/ios-private-testflight.yml` crea l'archivio con firma Apple su runner `macos-26`. Solo dopo la conferma esplicita `UPLOAD_INTERNAL_TESTFLIGHT_ONLY`, con SHA verificato e credenziali ufficiali, invia a **TestFlight Internal Only**. Non abilita il rilascio pubblico.
 3. **App Store pubblico:** **non automatizzato**. Richiede test su dispositivo fisico, informativa privacy e dati di distribuzione, verifica App Review, e un'approvazione specifica separata da questa pipeline.
 

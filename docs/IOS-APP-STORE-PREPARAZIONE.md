@@ -71,6 +71,36 @@ dimostra che login, Firebase, interfaccia interattiva o WhatsApp funzionino
 su un dispositivo reale e non rileva automaticamente una schermata bianca.
 La screenshot richiede una revisione visiva prima della pubblicazione.
 
+## Configurazione Firebase iOS verificabile (non ancora completata)
+
+Il sito esistente usa Firebase `hera-app-6cd2b`. La configurazione Firebase
+**web** non è equivalente alla configurazione **Apple/iOS**. Occorre registrare
+una app iOS nel progetto Firebase esistente con Bundle ID
+`it.vargacantieri.hera`, mantenendo il database e gli utenti già presenti.
+
+1. Firebase Console → Progetto `hera-app-6cd2b` → Impostazioni progetto →
+   Le tue app → Aggiungi app **iOS**.
+2. Inserire Bundle ID esatto `it.vargacantieri.hera`, scaricare
+   `GoogleService-Info.plist` della nuova app iOS.
+3. Controllare che contenga `BUNDLE_ID`, `PROJECT_ID`, `GOOGLE_APP_ID`,
+   `CLIENT_ID` e `REVERSED_CLIENT_ID`. Non usare il file Android né
+   ricreare manualmente una configurazione a partire dal web.
+4. Per una build diagnostica privata, creare il secret GitHub Actions
+   `IOS_FIREBASE_CONFIG_BASE64` contenente il plist codificato in Base64.
+   Il workflow lo usa **solo quando avviato manualmente** (`workflow_dispatch`),
+   mai durante una pull request automatica. L'app con la configurazione inclusa
+   non viene caricata come artefatto pubblico.
+5. Gli script `configure-ios-firebase.py` e `register-ios-firebase-plist.rb`
+   verificano la registrazione, il Google URL scheme e la presenza del plist
+   nelle risorse native generate. Non cambiano login, database o token.
+6. Provare login, logout e sessione su iPhone reale. Non considerare questa
+   procedura una conferma che l'autenticazione WKWebView funzioni.
+
+**Attenzione:** la CI senza il secret continua a costruire il simulatore, ma
+questa modalità non è una prova valida dell'autenticazione Firebase nativa.
+Gli errori d'avvio devono risultare visibili come fallimenti del test di
+foreground, non essere aggirati da un'immagine fittizia.
+
 ## Blocchi da superare PRIMA della pubblicazione
 
 1. **Login iPhone:** verificare su un dispositivo reale il login Google/Firebase

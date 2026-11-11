@@ -32,8 +32,34 @@ permissions:
   contents: read
 
 jobs:
+  preflight:
+    name: Preflight on Linux (no Apple secrets or upload)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate manual input before allocating a macOS runner
+        shell: bash
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_commit_sha }}
+          ACTUAL_SHA: ${{ github.sha }}
+          IOS_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$ACTUAL_SHA" ]]; then
+            echo "::error::Reviewed SHA must match the exact commit running this workflow."
+            exit 1
+          fi
+          if [[ ! "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,5}$ ]] || (( 10#$IOS_BUILD_NUMBER < 5 )); then
+            echo "::error::Enter an unused numeric build number (at least 5)."
+            exit 1
+          fi
+          echo "Preflight OK: workflow parsed, Linux job started and manual inputs validated."
+          echo "No App Store Connect upload or iPhone app modification performed."
+
   upload-appstore-candidate:
     name: Sign and upload App Store-eligible candidate (NO submission)
+    needs: preflight
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY' }}
     runs-on: macos-26
     timeout-minutes: 90

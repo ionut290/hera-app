@@ -1,0 +1,199 @@
+name: Varga Cantieri iOS Private TestFlight (manual only)
+
+# This workflow cannot publish to the public App Store.
+# It runs only after an explicit manual approval, with internal TestFlight only.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Explicit authorization: private/internal TestFlight only"
+        type: choice
+        required: true
+        default: DO_NOT_UPLOAD
+        options:
+          - DO_NOT_UPLOAD
+          - UPLOAD_INTERNAL_TESTFLIGHT_ONLY
+      reviewed_commit_sha:
+        description: "Exact 40-character reviewed commit SHA shown in GitHub"
+        required: true
+        type: string
+
+concurrency:
+  group: varga-ios-private-testflight
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  upload-internal-testflight:
+    name: Sign and upload to internal TestFlight only
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_INTERNAL_TESTFLIGHT_ONLY' }}
+    runs-on: macos-26
+    timeout-minutes: 90
+    environment: ios-internal-testflight
+
+    env:
+      IOS_FIREBASE_CONFIG_BASE64: ${{ secrets.IOS_FIREBASE_CONFIG_BASE64 }}
+      IOS_APPLE_TEAM_ID: ${{ secrets.IOS_APPLE_TEAM_ID }}
+      IOS_APPSTORE_KEY_ID: ${{ secrets.IOS_APPSTORE_KEY_ID }}
+      IOS_APPSTORE_ISSUER_ID: ${{ secrets.IOS_APPSTORE_ISSUER_ID }}
+      IOS_APPSTORE_PRIVATE_KEY_BASE64: ${{ secrets.IOS_APPSTORE_PRIVATE_KEY_BASE64 }}
+
+    steps:
+      - name: Checkout reviewed commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Require explicit source and signing prerequisites
+        shell: bash
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_commit_sha }}
+          ACTUAL_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$ACTUAL_SHA" ]]; then
+            echo "::error::The exact reviewed SHA must match this workflow checkout. No upload performed."
+            exit 1
+          fi
+          for key in IOS_FIREBASE_CONFIG_BASE64 IOS_APPLE_TEAM_ID IOS_APPSTORE_KEY_ID IOS_APPSTORE_ISSUER_ID IOS_APPSTORE_PRIVATE_KEY_BASE64; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "::error::Missing required private GitHub Actions secret: $key"
+              exit 1
+            fi
+          done
+          [[ "$IOS_APPLE_TEAM_ID" =~ ^[A-Za-z0-9]{10}$ ]] || { echo "::error::Invalid Apple Team ID"; exit 1; }
+          [[ "$IOS_APPSTORE_KEY_ID" =~ ^[A-Za-z0-9]{10}$ ]] || { echo "::error::Invalid App Store Connect Key ID"; exit 1; }
+          XCODE_MAJOR="$(xcodebuild -version | awk '/^Xcode / { print $2 }' | cut -d. -f1)"
+          SDK_MAJOR="$(xcrun --sdk iphoneos --show-sdk-version | cut -d. -f1)"
+          [[ -n "$XCODE_MAJOR" && "$XCODE_MAJOR" -ge 26 && -n "$SDK_MAJOR" && "$SDK_MAJOR" -ge 26 ]] ||
+            { echo "::error::Xcode 26 / iOS 26 SDK or later required"; exit 1; }
+          echo "Commit and supported Xcode verified; no app upload yet."
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install and verify protected application flows
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run check:fatto-whazzup-immutable
+          npm run check:fatto-isolation
+          npm run check:auth-stability
+          npm run check:auth-login
+          npm run check:security-privacy
+          npm run check:syntax
+          bash -n scripts/smoke-ios-simulator.sh
+          python3 -m py_compile scripts/configure-ios-plist.py scripts/configure-ios-firebase.py
+          ruby -c scripts/register-ios-firebase-plist.rb
+          npm run android:aab:prepare
+          test -s www/index.html
+          test -s www/icons/varga-cantieri-512.png
+
+      - name: Generate native iOS with safe patched Capacitor
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --no-audit --no-fund @capacitor/core@7.6.10 @capacitor/ios@7.6.10
+          node -e "const c=require('@capacitor/core/package.json').version,i=require('@capacitor/ios/package.json').version;if(c!==i)throw Error('Capacitor mismatch');"
+          npx cap add ios
+          npx cap sync ios
+          python3 scripts/configure-ios-plist.py
+          swift scripts/prepare-ios-app-icon.swift icons/varga-cantieri-512.png ios/App/App/Assets.xcassets/AppIcon.appiconset
+
+      - name: Inject real registered Firebase Apple configuration (never publish artifact)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$IOS_FIREBASE_CONFIG_BASE64" | base64 --decode > ios/App/App/GoogleService-Info.plist
+          python3 scripts/configure-ios-firebase.py
+          ruby scripts/register-ios-firebase-plist.rb
+          test -s ios/App/App/GoogleService-Info.plist
+
+      - name: Prepare temporary App Store Connect API authentication
+        id: apple_auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          KEY_DIR="$RUNNER_TEMP/varga-apple-api"
+          mkdir -p "$KEY_DIR"
+          KEY_PATH="$KEY_DIR/AuthKey_$IOS_APPSTORE_KEY_ID.p8"
+          printf '%s' "$IOS_APPSTORE_PRIVATE_KEY_BASE64" | base64 --decode > "$KEY_PATH"
+          grep -q 'BEGIN PRIVATE KEY' "$KEY_PATH" || { echo "::error::Invalid Apple API key format"; exit 1; }
+          chmod 600 "$KEY_PATH"
+          echo "key_path=$KEY_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Archive signed iPhone app on GitHub macOS
+        shell: bash
+        env:
+          APPLE_API_KEY_PATH: ${{ steps.apple_auth.outputs.key_path }}
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/VargaCantieri.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$APPLE_API_KEY_PATH" \
+            -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$IOS_APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION=1.0 \
+            CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            archive > "$RUNNER_TEMP/ios-private-archive.log" 2>&1 ||
+            { tail -n 80 "$RUNNER_TEMP/ios-private-archive.log"; exit 1; }
+          test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
+            grep -Fx 'it.vargacantieri.hera'
+          test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/GoogleService-Info.plist"
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app"
+          echo "iOS Release archive signed and verified; no artifact exposed publicly."
+
+      - name: Upload strictly internal TestFlight build (NEVER public App Store)
+        shell: bash
+        env:
+          APPLE_API_KEY_PATH: ${{ steps.apple_auth.outputs.key_path }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, plistlib
+          from pathlib import Path
+          options = {
+              "method": "app-store-connect",
+              "destination": "upload",
+              "signingStyle": "automatic",
+              "teamID": os.environ["IOS_APPLE_TEAM_ID"],
+              "testFlightInternalTestingOnly": True,
+              "uploadSymbols": True,
+          }
+          with Path(os.environ["RUNNER_TEMP"], "varga-internal-testflight-options.plist").open("wb") as f:
+              plistlib.dump(options, f)
+          PY
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/VargaCantieri.xcarchive" \
+            -exportPath "$RUNNER_TEMP/varga-testflight-upload" \
+            -exportOptionsPlist "$RUNNER_TEMP/varga-internal-testflight-options.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$APPLE_API_KEY_PATH" \
+            -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
+            > "$RUNNER_TEMP/ios-private-upload.log" 2>&1 ||
+            { tail -n 80 "$RUNNER_TEMP/ios-private-upload.log"; exit 1; }
+          echo "Uploaded ONLY to App Store Connect internal TestFlight; Apple processing and device tests still required."
+
+      - name: Remove temporary App Store Connect API key
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/varga-apple-api"
+          rm -f ios/App/App/GoogleService-Info.plist

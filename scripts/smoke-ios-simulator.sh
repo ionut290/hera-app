@@ -47,6 +47,16 @@ fi
 xcrun simctl bootstatus "$SIMULATOR_UDID" -b
 xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
 
+# This automated smoke test must inspect the app, not the first-run iOS
+# location permission dialog. Grant only foreground location access on the
+# ephemeral CI simulator; a real iPhone will still ask the user normally.
+# No sign-in, location tracking, Firebase writes or production access occurs.
+xcrun simctl privacy "$SIMULATOR_UDID" grant location "$BUNDLE_ID"
+echo "Permesso posizione in uso concesso solo al simulatore CI per screenshot leggibile."
+mkdir -p "$(dirname "$SCREENSHOT_PATH")"
+BEFORE_SCREENSHOT="${SCREENSHOT_PATH%.png}-before.png"
+xcrun simctl io "$SIMULATOR_UDID" screenshot "$BEFORE_SCREENSHOT"
+
 LAUNCH_OUTPUT="$(xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID")"
 echo "Avvio: $LAUNCH_OUTPUT"
 if [[ "$LAUNCH_OUTPUT" != "$BUNDLE_ID:"* ]]; then
@@ -56,10 +66,28 @@ fi
 
 # Do not enter demo/production accounts. Capture a non-authenticated launch only.
 sleep 8
-mkdir -p "$(dirname "$SCREENSHOT_PATH")"
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH"
 test -s "$SCREENSHOT_PATH"
 sips -g pixelWidth -g pixelHeight "$SCREENSHOT_PATH"
 
-echo "App installata e avviata; screenshot per revisione visiva: $SCREENSHOT_PATH"
-echo "ATTENZIONE: screenshot e launch NON provano login, WebView, funzioni o assenza di schermata bianca."
+if ! swift scripts/check-ios-simulator-foreground.swift "$BEFORE_SCREENSHOT" "$SCREENSHOT_PATH"; then
+  # Allow slow WebView/Firebase initialization without treating an 8-second blank as final.
+  cp "$SCREENSHOT_PATH" "${SCREENSHOT_PATH%.png}-after8s.png"
+  echo "Avvio iOS non ancora visibile: nuova verifica dopo ulteriori 15 secondi."
+  sleep 15
+  xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH"
+  if swift scripts/check-ios-simulator-foreground.swift "$BEFORE_SCREENSHOT" "$SCREENSHOT_PATH"; then
+    echo "Schermata iniziale caricata alla seconda verifica (23 secondi)."
+    exit 0
+  fi
+  DIAGNOSTIC_DIR="$(dirname "$SCREENSHOT_PATH")/varga-ios-simulator-diagnostics"
+  mkdir -p "$DIAGNOSTIC_DIR"
+  xcrun simctl spawn "$SIMULATOR_UDID" log show --last 1m --style compact \
+    --predicate 'process == "App" OR eventMessage CONTAINS[c] "vargacantieri"' \
+    2>&1 | tail -n 250 > "$DIAGNOSTIC_DIR/app-launch-log.txt" || true
+  echo "App iOS non risulta in primo piano: screenshot e diagnostica salvati." >&2
+  exit 1
+fi
+
+echo "App installata, lanciata e schermo modificato; screenshot per revisione: $SCREENSHOT_PATH"
+echo "ATTENZIONE: il test NON prova login, WebView interattiva o funzioni operative."

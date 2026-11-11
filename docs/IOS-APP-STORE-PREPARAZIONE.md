@@ -68,8 +68,77 @@ Il comando `bash scripts/smoke-ios-simulator.sh /percorso/App.app /percorso/scre
 installa e avvia il pacchetto NON firmato su un simulatore iPhone disponibile.
 La CI carica una schermata iniziale in GitHub Actions. Il test **non**
 dimostra che login, Firebase, interfaccia interattiva o WhatsApp funzionino
-su un dispositivo reale e non rileva automaticamente una schermata bianca.
-La screenshot richiede una revisione visiva prima della pubblicazione.
+su un dispositivo reale. Un controllo dedicato confronta le schermate e
+rifiuta una Home del simulatore immutata oppure una schermata bianca.
+In una CI senza interazione, dopo l'installazione il simulatore concede
+**solo a questa app e solo nel simulatore** il permesso di localizzazione
+"mentre è in uso" mediante `simctl privacy grant location`: così la finestra
+di autorizzazione non copre il login nello screenshot. Questo NON modifica
+i permessi dell'app o il comportamento di richiesta su un iPhone reale.
+La schermata finale richiede comunque una revisione visiva manuale.
+
+### Esito documentato, 11 novembre 2026
+
+- Esecuzione PR `42966987534`: build riuscita ma test avvio fallito; la
+  schermata rimaneva Home. L'esito negativo non è prova di un difetto del
+  login, ma richiede una nuova prova del simulatore.
+- Esecuzione manuale `43007574007`: **successo**; Xcode compila l'app,
+  il vero `GoogleService-Info.plist` Apple viene verificato nel bundle,
+  e al secondo controllo l'app lascia la Home e mostra una schermata non
+  bianca. Revisione umana dello screenshot: visibili **VARGA CANTIERI**,
+  il formulario **Login richiesto** e un avviso GPS nativo iOS.
+- Dopo tale prova, il test CI concede in anticipo il permesso GPS **solo
+  nel simulatore** per permettere di vedere il login senza l'avviso sovrapposto.
+  La nuova versione del test deve ancora superare GitHub Actions.
+- Screenshot e build log restano disponibili fra gli artefatti GitHub per
+  **7 giorni**. Il controllo non effettua login né utilizza account reali.
+
+Risultato: **avvio senza autenticazione verificato, rilascio ancora bloccato**.
+Non confondere il successo del workflow con un collaudo completo su iPhone.
+
+### Collaudo iPhone reale ancora necessario
+
+1. Installazione privata con firma Apple e profilo idoneo, senza pubblicazione.
+2. Aprire/chiudere l'app e accertare che l'avviso di localizzazione appaia
+   soltanto nelle condizioni previste, e che funzioni anche con rifiuto.
+3. Login con account di prova autorizzato; verificarne logout,
+   riapertura e persistenza, anche con accesso Google.
+4. Verificare visibilità dei cantieri e ricerca senza modificare dati;
+   poi provare GPS/mappa, immagini, Drive e notifiche con dati di prova.
+5. Testare FATTO e invio WhatsApp su dati di prova, senza bypassare
+   il flusso protetto e senza toccare impianti reali.
+6. Solo dopo i test, predisporre build firmata e TestFlight con
+   autorizzazione esplicita del titolare.
+
+## Configurazione Firebase iOS verificabile (collaudo login ancora da fare)
+
+Il sito esistente usa Firebase `hera-app-6cd2b`. La configurazione Firebase
+**web** non è equivalente alla configurazione **Apple/iOS**. Occorre registrare
+una app iOS nel progetto Firebase esistente con Bundle ID
+`it.vargacantieri.hera`, mantenendo il database e gli utenti già presenti.
+
+1. Firebase Console → Progetto `hera-app-6cd2b` → Impostazioni progetto →
+   Le tue app → Aggiungi app **iOS**.
+2. Inserire Bundle ID esatto `it.vargacantieri.hera`, scaricare
+   `GoogleService-Info.plist` della nuova app iOS.
+3. Controllare che contenga `BUNDLE_ID`, `PROJECT_ID`, `GOOGLE_APP_ID`,
+   `CLIENT_ID` e `REVERSED_CLIENT_ID`. Non usare il file Android né
+   ricreare manualmente una configurazione a partire dal web.
+4. Per una build diagnostica privata, creare il secret GitHub Actions
+   `IOS_FIREBASE_CONFIG_BASE64` contenente il plist codificato in Base64.
+   Il workflow lo usa **solo quando avviato manualmente** (`workflow_dispatch`),
+   mai durante una pull request automatica. L'app con la configurazione inclusa
+   non viene caricata come artefatto pubblico.
+5. Gli script `configure-ios-firebase.py` e `register-ios-firebase-plist.rb`
+   verificano la registrazione, il Google URL scheme e la presenza del plist
+   nelle risorse native generate. Non cambiano login, database o token.
+6. Provare login, logout e sessione su iPhone reale. Non considerare questa
+   procedura una conferma che l'autenticazione WKWebView funzioni.
+
+**Attenzione:** la CI senza il secret continua a costruire il simulatore, ma
+questa modalità non è una prova valida dell'autenticazione Firebase nativa.
+Gli errori d'avvio devono risultare visibili come fallimenti del test di
+foreground, non essere aggirati da un'immagine fittizia.
 
 ## Blocchi da superare PRIMA della pubblicazione
 

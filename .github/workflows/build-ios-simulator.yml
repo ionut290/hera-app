@@ -1,13 +1,14 @@
 name: Varga Cantieri iOS Simulator (no deploy)
 
 on:
-  push:
-    branches:
-      - feature/ios-app-store-prep-20261111
   pull_request:
     branches:
       - main
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -60,6 +61,7 @@ jobs:
           test -s www/firebase-config.js
           test -s www/icons/varga-cantieri-512.png
           python3 -m py_compile scripts/configure-ios-plist.py
+          bash -n scripts/smoke-ios-simulator.sh
 
       - name: Add patched Capacitor iOS 7 platform for this build only
         run: |
@@ -69,6 +71,33 @@ jobs:
           npx cap sync ios
           python3 scripts/configure-ios-plist.py
           test -f ios/App/App.xcworkspace/contents.xcworkspacedata
+
+      - name: Prepare opaque Varga Cantieri iOS app icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift scripts/prepare-ios-app-icon.swift \
+            icons/varga-cantieri-512.png \
+            ios/App/App/Assets.xcassets/AppIcon.appiconset
+          test -s ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json
+
+      - name: Configure registered Firebase iOS app when provided
+        shell: bash
+        env:
+          IOS_FIREBASE_CONFIG_BASE64: ${{ github.event_name == 'workflow_dispatch' && secrets.IOS_FIREBASE_CONFIG_BASE64 || '' }}
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/configure-ios-firebase.py
+          ruby -c scripts/register-ios-firebase-plist.rb
+          if [[ -z "${IOS_FIREBASE_CONFIG_BASE64}" ]]; then
+            echo "::warning::Firebase iOS config absent. The simulator build does not validate native Firebase sign-in."
+          else
+            umask 077
+            printf '%s' "${IOS_FIREBASE_CONFIG_BASE64}" | base64 --decode > ios/App/App/GoogleService-Info.plist
+            python3 scripts/configure-ios-firebase.py
+            ruby scripts/register-ios-firebase-plist.rb
+            echo "FIREBASE_IOS_CONFIG_INJECTED=true" >> "$GITHUB_ENV"
+          fi
 
       - name: Build for iOS Simulator without Apple certificates
         shell: bash
@@ -84,7 +113,19 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build 2>&1 | tee "$RUNNER_TEMP/varga-ios-build.log"
 
+      - name: Assert native Firebase config packaged when supplied
+        if: env.FIREBASE_IOS_CONFIG_INJECTED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PLIST="$RUNNER_TEMP/varga-ios-derived/Build/Products/Debug-iphonesimulator/App.app/GoogleService-Info.plist"
+          test -s "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c 'Print :BUNDLE_ID' "$APP_PLIST" | grep -Fx 'it.vargacantieri.hera'
+
+      # A build without the private Firebase Apple plist is compile-only.
+      # Do not report an unconfigured app's Home screen as a release smoke test.
       - name: Install and launch on iPhone Simulator (no sign-in)
+        if: env.FIREBASE_IOS_CONFIG_INJECTED == 'true'
         shell: bash
         timeout-minutes: 12
         run: |
@@ -98,12 +139,21 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: varga-cantieri-ios-launch-screenshot
-          path: ${{ runner.temp }}/varga-ios-simulator-launch.png
+          path: ${{ runner.temp }}/varga-ios-simulator-*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload launch diagnostics only when available
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: varga-cantieri-ios-launch-diagnostics
+          path: ${{ runner.temp }}/varga-ios-simulator-diagnostics/
           if-no-files-found: ignore
           retention-days: 7
 
       - name: Upload unsigned simulator app
-        if: success()
+        if: success() && env.FIREBASE_IOS_CONFIG_INJECTED != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: varga-cantieri-ios-simulator-unsigned

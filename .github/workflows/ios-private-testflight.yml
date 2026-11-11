@@ -148,6 +148,7 @@ jobs:
             -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
             DEVELOPMENT_TEAM="$IOS_APPLE_TEAM_ID" \
             CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             MARKETING_VERSION=1.0 \
             CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
             archive > "$RUNNER_TEMP/ios-private-archive.log" 2>&1 ||

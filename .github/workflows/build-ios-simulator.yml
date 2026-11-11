@@ -51,9 +51,9 @@ jobs:
           test -s www/icons/varga-cantieri-512.png
           python3 -m py_compile scripts/configure-ios-plist.py
 
-      - name: Add matching Capacitor iOS 7 platform for this build only
+      - name: Add patched Capacitor iOS 7 platform for this build only
         run: |
-          npm install --no-save --package-lock=false --no-audit --no-fund @capacitor/ios@7.6.8
+          npm install --no-save --package-lock=false --no-audit --no-fund @capacitor/ios@7.6.10 @capacitor/core@7.6.10
           node -e "const c=require('@capacitor/core/package.json').version; const i=require('@capacitor/ios/package.json').version; if(c!==i)throw Error('Capacitor core/iOS mismatch: '+c+' vs '+i);"
           npx cap add ios
           npx cap sync ios

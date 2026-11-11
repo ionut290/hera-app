@@ -99,7 +99,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: varga-cantieri-ios-launch-screenshot
-          path: ${{ runner.temp }}/varga-ios-simulator-launch.png
+          path: ${{ runner.temp }}/varga-ios-simulator-*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload launch diagnostics only when available
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: varga-cantieri-ios-launch-diagnostics
+          path: ${{ runner.temp }}/varga-ios-simulator-diagnostics/
           if-no-files-found: ignore
           retention-days: 7
 

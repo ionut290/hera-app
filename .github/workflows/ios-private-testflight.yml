@@ -175,7 +175,8 @@ jobs:
           security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F 'Apple Distribution:' >/dev/null ||
             { echo "::error::Apple Distribution private key/certificate not usable in keychain."; exit 1; }
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$IOS_PROFILE_UUID.mobileprovision"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c "Print :UUID" "$PROFILE_PLIST")"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
           echo "IOS_SIGNING_KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
           echo "App Store certificate and profile installed only on the temporary macOS runner."
 

@@ -16,5 +16,13 @@ assert.match(privacy, /90 giorni/);
 assert.match(privacy, /24 mesi/);
 assert.match(privacy, /10 anni/);
 assert.match(storage, /match \/lavori-occasionali\/\{plantId\}\/\{ownerUserId\}\/\{documentId\}\/\{fileName\}/);
-assert.match(storage, /allow read: if request.auth != null && request.auth.uid == ownerUserId;/);
+// Reviewer-only Firebase Auth claim must deny every live Storage path.
+assert.match(rules, /function isAppleReviewAccount\(\)\s*\{[\s\S]*?token\.get\("apple_review", false\) == true/);
+assert.match(rules, /function signedIn\(\)\s*\{[\s\S]*?!isAppleReviewAccount\(\)/);
+assert.match(rules, /match \/appleReviewDemo\/\{demoId\}\s*\{\s*allow read: if isAppleReviewAccount\(\);\s*allow create, update, delete: if false;/);
+assert.match(storage, /function isAppleReviewAccount\(\)\s*\{[\s\S]*?token\.get\("apple_review", false\) == true/);
+assert.match(storage, /allow read: if request.auth != null && !isAppleReviewAccount\(\) && request.auth.uid == ownerUserId;/);
+assert.match(storage, /allow read: if request.auth != null && !isAppleReviewAccount\(\) && \(/);
+assert.equal((storage.match(/allow write: if request\.auth != null && !isAppleReviewAccount\(\)/g) || []).length, 2,
+  "Both document upload paths must block Apple reviewer writes.");
 console.log("Security policy and privacy content regression checks passed.");

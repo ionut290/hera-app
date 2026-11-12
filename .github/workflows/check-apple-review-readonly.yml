@@ -1,0 +1,38 @@
+name: Verify Apple reviewer isolation (emulator only)
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  apple-review-firestore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout safe review branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Set up Java for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install local Firebase emulator and Rules test kit
+        run: npm install --no-save --package-lock=false --no-audit --no-fund firebase-tools@14.23.0 @firebase/rules-unit-testing@4.0.1
+      - name: Check syntax and immutable protected flows
+        run: |
+          node --check scripts/test-apple-review-firestore-rules.cjs
+          node --check scripts/test-apple-review-storage-rules.cjs
+          node scripts/check-fatto-whazzup-immutable.js
+          node scripts/check-fatto-whazzup-isolation.js
+          node scripts/check-auth-stability-contract.js
+      - name: Test read-only reviewer claims in local Firestore and Storage emulators (never production)
+        run: npx firebase emulators:exec --only firestore,storage --project demo-review-isolation "node scripts/test-apple-review-firestore-rules.cjs && node scripts/test-apple-review-storage-rules.cjs"

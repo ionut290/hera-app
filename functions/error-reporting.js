@@ -1,4 +1,5 @@
 "use strict";
+const { assertNotAppleReviewer } = require("./apple-review-guard");
 
 const crypto = require("node:crypto");
 const admin = require("firebase-admin");
@@ -192,6 +193,7 @@ exports.reportClientError = functions
   .region(REGION)
   .runWith({ secrets: [RESEND_API_KEY, ERROR_REPORT_FROM] })
   .https.onCall(async (data, context) => {
+  assertNotAppleReviewer(context?.auth);
     if (!context.auth?.uid) {
       throw new functions.https.HttpsError("unauthenticated", "Accesso necessario per inviare la diagnostica.");
     }

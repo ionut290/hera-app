@@ -127,6 +127,13 @@ service cloud.firestore {
       );
     }
 
+    // Dedicated synthetic review-only records; never mirror live operational data.
+    // Writes are prohibited from all mobile/browser clients, including reviewers.
+    match /appleReviewDemo/{demoId} {
+      allow read: if isAppleReviewAccount();
+      allow create, update, delete: if false;
+    }
+
     match /commesse/{commessaId} {
       allow read: if signedIn();
       allow write: if isAdmin();

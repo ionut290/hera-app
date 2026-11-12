@@ -6,8 +6,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // App Review accounts use only the synthetic, standalone demonstration.
+    // The server-minted claim is authoritative; client-side roles are not.
+    function isAppleReviewAccount() {
+      return authPresent() && request.auth.token.apple_review == true;
+    }
+
     function signedIn() {
       return authPresent()
+        && !isAppleReviewAccount()
         && (isAdmin() || (request.auth.token.email_verified == true && !isBannedUser() && hasActiveAccount()));
     }
 
@@ -28,6 +35,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return authPresent()
+        && !isAppleReviewAccount()
         && (
           request.auth.token.email in ["ionut29019@gmail.com", "Ionut29019@gmail.com"]
           || (
@@ -38,7 +46,7 @@ service cloud.firestore {
     }
 
     function isSelf(userId) {
-      return authPresent() && request.auth.uid == userId;
+      return authPresent() && !isAppleReviewAccount() && request.auth.uid == userId;
     }
 
     // Amministratore limitato esclusivamente alla sezione Verde Levato.

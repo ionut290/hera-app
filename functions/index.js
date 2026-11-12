@@ -1,3 +1,4 @@
+const { assertNotAppleReviewer } = require("./apple-review-guard");
 const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
@@ -20,7 +21,8 @@ const INVALID_FCM_TOKEN_CODES = new Set([
   "messaging/registration-token-not-registered"
 ]);
 exports.registerTester = functions.region("europe-west1").https.onCall(
-  async (data) => {
+  async (data, context) => {
+    assertNotAppleReviewer(context?.auth);
     const email = String(data?.email || "").trim().toLowerCase();
     const password = String(data?.temporaryPassword || "");
     const firstName = String(data?.firstName || "").trim().slice(0, 80);
@@ -242,6 +244,7 @@ function generateTemporaryPassword() {
 }
 
 exports.createTesterAccounts = functions.https.onCall(async (data, context) => {
+  assertNotAppleReviewer(context?.auth);
   const db = admin.firestore();
   await assertAdmin(context, db);
 
@@ -398,6 +401,7 @@ async function getOrCreateFolder(db, drive, name, parentId = "") {
 exports.uploadCentralDriveFile = functions
   .runWith({ secrets: [RUNTIME_CONFIG] })
   .https.onCall(async (data, context) => {
+  assertNotAppleReviewer(context?.auth);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Login richiesto.");
   }
@@ -451,6 +455,7 @@ exports.uploadCentralDriveFile = functions
   });
 
 exports.configureCentralDrive = functions.https.onCall(async (data, context) => {
+  assertNotAppleReviewer(context?.auth);
   const db = admin.firestore();
   await assertAdmin(context, db);
   const ownerEmail = String(context.auth.token.email || ADMIN_EMAIL);

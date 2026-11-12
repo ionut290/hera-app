@@ -15,9 +15,20 @@ const REGION = "europe-west1";
 
 const cleanEmail = (input) => String(input || "").trim().toLowerCase();
 function randomPassword() {
-  const source = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%";
-  const bytes = crypto.randomBytes(26);
-  return [...bytes].map((b) => source[b % source.length]).join("");
+  const groups = [
+    "abcdefghjkmnpqrstuvwxyz",
+    "ABCDEFGHJKLMNPQRSTUVWXYZ",
+    "23456789",
+    "!@#$%"
+  ];
+  const source = groups.join("");
+  const chars = groups.map((group) => group[crypto.randomInt(group.length)]);
+  while (chars.length < 26) chars.push(source[crypto.randomInt(source.length)]);
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = crypto.randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join("");
 }
 async function assertAdmin(auth) {
   if (!auth || auth.token?.apple_review === true || auth.token?.email_verified !== true) {

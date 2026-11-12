@@ -13,7 +13,7 @@
   };
   const $ = (id) => document.getElementById(id);
   let config = load(), watchId = null, windowTimer = null, soundTimer = null;
-  let audio = null, ringing = "", waitingUntil = {}, done = {};
+  let audio = null, ringing = "", waitingUntil = {}, done = {}, nativePending = false;
   try { done = JSON.parse(localStorage.getItem(KEY + "-ack") || "{}") || {}; } catch (_) {}
   function saveAck() {
     try { localStorage.setItem(KEY + "-ack", JSON.stringify(done)); } catch (_) {}
@@ -110,7 +110,7 @@
             <button type="button" class="btn" id="timbratura-test">🔊 Prova suono</button>
           </div>
           <p id="timbratura-feedback" role="status"></p>
-          <p class="timbratura-note">Versione di prova: suono continuo e tasti Ferma/Rimanda quando l'app è aperta. Su iOS e Android, con app chiusa o schermo bloccato, il GPS e l'audio non sono garantiti finché non viene installato e verificato il modulo nativo. Non si tratta di una timbratura reale.</p>
+          <p class="timbratura-note">Se il GPS rileva il magazzino mentre l'app è aperta, iOS 26+ può creare un avviso AlarmKit e Android può richiedere una sveglia nell'app Orologio, da fermare manualmente. Senza supporto nativo suona nell'app con Ferma/Rimanda. Il GPS a schermo bloccato richiede una successiva integrazione di geofencing in background. Non esegue la timbratura reale.</p>
         </div>
       </section>
       <section id="timbratura-ringing" class="timbratura-overlay timbratura-alarm" role="alertdialog" aria-modal="true" aria-label="Promemoria timbratura" hidden>
@@ -215,10 +215,55 @@
       if(meters>Number(config.radius)) return;
       for(const which of ["arrival","return"]) {
         const k=dayKey()+":"+which;
-        if(inWindow(which) && !done[k] && Date.now()>=(waitingUntil[k]||0) && !ringing) ring(which);
+        if(inWindow(which) && !done[k] && Date.now()>=(waitingUntil[k]||0) && !ringing) void notify(which);
       }
     },()=>{ if(watchId!==null) navigator.geolocation.clearWatch(watchId);watchId=null;},
     {enableHighAccuracy:true,maximumAge:0,timeout:15000});
+  }
+  async function tryNativeAlarm(which) {
+    const c = window.Capacitor;
+    if (!c?.isNativePlatform?.() || !c?.isPluginAvailable?.("CapgoAlarm")) return false;
+    const alarm = c.Plugins?.CapgoAlarm || c.registerPlugin?.("CapgoAlarm");
+    if (!alarm?.getOSInfo || !alarm?.createAlarm) return false;
+    const capabilities = await alarm.getOSInfo();
+    if (!capabilities?.supportsNativeAlarms) return false;
+    if (c.getPlatform?.() === "ios") {
+      const permission = await alarm.requestPermissions();
+      if (!permission?.granted) return false;
+    }
+    // Non è una sveglia giornaliera a ora fissa: viene creata SOLTANTO dopo il
+    // rilevamento GPS, dentro la fascia. Il plugin nativo accetta ore/minuti.
+    // Programmare il minuto successivo evita di perdere l'allarme mentre si salva.
+    const when = new Date(Date.now() + 65000);
+    const title = which === "arrival"
+      ? "VARGA CANTIERI - sei in magazzino: timbra ENTRATA"
+      : "VARGA CANTIERI - sei in magazzino: timbra USCITA";
+    const response = await alarm.createAlarm({
+      hour: when.getHours(), minute: when.getMinutes(), label: title,
+      vibrate: true, skipUi: true
+    });
+    if (!response?.success) return false;
+    status("Avviso nativo richiesto al sistema. Controlla che Android abbia creato la sveglia in Orologio.");
+    return true;
+  }
+  async function notify(which) {
+    if (ringing || nativePending || !inWindow(which)) return;
+    const key = dayKey() + ":" + which;
+    if (done[key] || Date.now() < (waitingUntil[key] || 0)) return;
+    nativePending = true;
+    try {
+      if (await tryNativeAlarm(which)) {
+        done[key] = true;
+        saveAck();
+        return;
+      }
+    } catch (error) {
+      console.warn("Avviso sonoro nativo non disponibile; uso l'avviso in-app.", error);
+    } finally {
+      nativePending = false;
+    }
+    // Fallback: suono a ripetizione e stop in app solo quando è visibile.
+    if (!document.hidden && !done[key]) ring(which);
   }
   function playBeep() {
     if(!ringing || document.hidden) return;

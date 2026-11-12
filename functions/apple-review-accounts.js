@@ -48,6 +48,7 @@ async function assertAdmin(auth) {
 
 exports.createAppleReviewAccount = onCall({
   region: REGION,
+  invoker: "public", // callable transport; Firebase ID token + admin check still required
   timeoutSeconds: 40,
   maxInstances: 2
 }, async (request) => {

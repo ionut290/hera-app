@@ -12,6 +12,10 @@ ROOT = Path(__file__).resolve().parent.parent
 INFO_PLIST = ROOT / "ios" / "App" / "App" / "Info.plist"
 
 PURPOSE_STRINGS = {
+    "NSAlarmKitUsageDescription": (
+        "VARGA CANTIERI usa sveglie sonore per ricordarti di timbrare "
+        "quando ti trovi al magazzino durante la fascia oraria scelta."
+    ),
     "NSCameraUsageDescription": (
         "Varga Cantieri utilizza la fotocamera per fotografare impianti, "
         "interventi e documenti quando lo richiedi."

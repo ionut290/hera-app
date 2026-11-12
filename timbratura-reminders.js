@@ -170,7 +170,18 @@
     try { localStorage.setItem(KEY, JSON.stringify(config)); }
     catch (_) { config=old; return status("Non riesco a salvare le impostazioni sul telefono.",true); }
     stopWatching();
-    if(config.enabled) startWatching();
+    if (config.enabled) {
+      // Consenti l'audio con il gesto esplicito usato per salvare.
+      try {
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtor) {
+          if (!audio) audio = new AudioCtor();
+          void audio.resume().catch(() => {});
+        }
+      } catch (_) {}
+      startWatching();
+      void prepareAlarmPermission();
+    }
     status(config.enabled ? "Promemoria GPS attivo mentre l'app è aperta." : "Promemoria disattivato.");
   }
   function locate(use) {
@@ -220,6 +231,16 @@
     },()=>{ if(watchId!==null) navigator.geolocation.clearWatch(watchId);watchId=null;},
     {enableHighAccuracy:true,maximumAge:0,timeout:15000});
   }
+  async function prepareAlarmPermission() {
+    try {
+      const c=window.Capacitor;
+      if (c?.isNativePlatform?.() && c.getPlatform?.() === "ios" && c.isPluginAvailable?.("CapgoAlarm")) {
+        const alarm=c.Plugins?.CapgoAlarm || c.registerPlugin?.("CapgoAlarm");
+        const result=await alarm.requestPermissions();
+        if (!result?.granted) status("Consenso suoneria iPhone negato: resta l'avviso nell'app aperta.",true);
+      }
+    } catch (_) {}
+  }
   async function tryNativeAlarm(which) {
     const c = window.Capacitor;
     if (!c?.isNativePlatform?.() || !c?.isPluginAvailable?.("CapgoAlarm")) return false;
@@ -243,7 +264,9 @@
       vibrate: true, skipUi: true
     });
     if (!response?.success) return false;
-    status("Avviso nativo richiesto al sistema. Controlla che Android abbia creato la sveglia in Orologio.");
+    status(c.getPlatform?.() === "ios"
+      ? "Avviso sonoro nativo richiesto dopo la verifica GPS; fermalo tramite i comandi di iOS."
+      : "Avviso richiesto ad Android: verifica in Orologio la creazione. Alcuni telefoni richiedono conferma.");
     return true;
   }
   async function notify(which) {

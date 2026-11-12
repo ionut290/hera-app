@@ -34,6 +34,9 @@ assert.match(server, /throw new HttpsError\("already-exists"/);
 const main = read("functions/main.js");
 assert.match(main, /appleReviewAccountFunctions = require\("\.\/apple-review-accounts"\)/);
 assert.match(main, /appleReviewAccountFunctions/);
+const netlifyGate = read("netlify/functions/_firebase-token.js");
+assert.match(netlifyGate, /user\.apple_review === true/);
+assert.match(netlifyGate, /Utente Firebase non autorizzato/);
 const guard = read("functions/apple-review-guard.js");
 assert.match(guard, /auth\?\.token\?\.apple_review === true/);
 

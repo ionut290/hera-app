@@ -3,7 +3,7 @@ const CACHE_RESET_VERSION = "20261104-rdi-buffering3";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=20261006-ripristino-elenco1",
+  "./style.css?v=20261111-ios-safe-area1",
   "./management-v2.css?v=20260731",
   "./notification-center.css?v=20260729a",
   "./approval-access.css?v=20260828-email1",

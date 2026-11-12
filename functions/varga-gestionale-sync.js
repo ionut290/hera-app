@@ -1,4 +1,5 @@
 "use strict";
+const { assertNotAppleReviewer } = require("./apple-review-guard");
 
 const crypto = require("node:crypto");
 const admin = require("firebase-admin");
@@ -462,6 +463,7 @@ exports.rebuildVargaGestionaleSnapshot = onCall({
     "http://localhost:8080"
   ]
 }, async (request) => {
+    assertNotAppleReviewer(request?.auth);
   await assertAdmin(request);
   const manifest = await buildSnapshot();
   console.log("Snapshot Varga Gestionale completato", manifest);
@@ -515,6 +517,7 @@ exports.getVargaGestionaleSnapshotManifest = onCall({
   invoker: "public",
   cors: true
 }, async (request) => {
+    assertNotAppleReviewer(request?.auth);
   await assertGestionaleReader(request);
   const state = await admin.firestore().collection(STATE_COLLECTION).doc(STATE_DOC).get();
   if (!state.exists) return { available: false };
@@ -527,6 +530,7 @@ exports.getVargaGestionaleSnapshotChunk = onCall({
   invoker: "public",
   cors: true
 }, async (request) => {
+    assertNotAppleReviewer(request?.auth);
   await assertGestionaleReader(request);
   const snapshotId = String(request.data?.snapshotId || "").trim();
   const index = Number(request.data?.index);
@@ -546,6 +550,7 @@ exports.getVargaGestionaleChanges = onCall({
   invoker: "public",
   cors: true
 }, async (request) => {
+    assertNotAppleReviewer(request?.auth);
   await assertGestionaleReader(request);
   const cursor = String(request.data?.cursor || "").trim();
   if (!cursor) {

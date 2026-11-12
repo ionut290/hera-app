@@ -82,7 +82,11 @@ async function verifyFirebaseToken(token, projectId) {
 
 async function authenticateEvent(event) {
   const projectId = String(process.env.FIREBASE_PROJECT_ID || "hera-app-6cd2b").trim();
-  return verifyFirebaseToken(bearerToken(event.headers || {}), projectId);
+  const user = await verifyFirebaseToken(bearerToken(event.headers || {}), projectId);
+  if (user.apple_review === true) {
+    throw new Error("Utente Firebase non autorizzato: account Apple Review limitato.");
+  }
+  return user;
 }
 
 module.exports = { authenticateEvent, verifyFirebaseToken, bearerToken };

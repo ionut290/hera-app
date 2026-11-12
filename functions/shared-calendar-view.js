@@ -1,4 +1,5 @@
 "use strict";
+const { assertNotAppleReviewer } = require("./apple-review-guard");
 
 const crypto = require("crypto");
 const admin = require("firebase-admin");
@@ -437,6 +438,7 @@ exports.syncSharedCalendarFromLavorazioni = onDocumentWritten(
 exports.getAdministrativeCalendarMonth = onCall(
   { region: REGION, timeoutSeconds: 60, memory: "256MiB", invoker: "public" },
   async (request) => {
+    assertNotAppleReviewer(request?.auth);
     if (!request.auth) throw new HttpsError("unauthenticated", "Login richiesto.");
     return recoverCalendarMonth(text(request.data?.month));
   }

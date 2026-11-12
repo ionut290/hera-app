@@ -12263,3 +12263,11 @@ main.container {
     padding-top: calc(22px + env(safe-area-inset-top, 0px));
   }
 }
+
+/* Additional fallback only for the native iPhone app when WKWebView reports a zero top inset. */
+/* Do not apply to Safari, installed PWAs, Android, or desktop browsers. */
+@media (max-width: 560px) and (orientation: portrait) {
+  html.varga-ios-native-safe-area main.container {
+    padding-top: max(calc(14px + env(safe-area-inset-top, 0px)), 70px);
+  }
+}

@@ -1,9 +1,9 @@
-const CACHE_NAME = "varga-cantieri-shell-v225";
+const CACHE_NAME = "varga-cantieri-shell-v226";
 const CACHE_RESET_VERSION = "20261104-rdi-buffering3";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=20261111-ios-safe-area1",
+  "./style.css?v=20261112-ios-safe-area-fallback2",
   "./management-v2.css?v=20260731",
   "./notification-center.css?v=20260729a",
   "./approval-access.css?v=20260828-email1",

@@ -83,6 +83,7 @@
     "@capacitor/cli": "^7.2.0"
   },
   "dependencies": {
+    "@capgo/capacitor-alarm": "7.3.15",
     "@capacitor-firebase/authentication": "^7.5.0",
     "@capacitor/android": "^7.2.0",
     "@capacitor/core": "^7.2.0",

@@ -146,6 +146,7 @@ jobs:
           node -e "const c=require('@capacitor/core/package.json').version,i=require('@capacitor/ios/package.json').version;if(c!==i)throw Error('Capacitor mismatch');"
           npx cap add ios
           npx cap sync ios
+          python3 scripts/mark-ios-native-safe-area.py
           python3 scripts/configure-ios-plist.py
           swift scripts/prepare-ios-app-icon.swift icons/varga-cantieri-512.png ios/App/App/Assets.xcassets/AppIcon.appiconset
 

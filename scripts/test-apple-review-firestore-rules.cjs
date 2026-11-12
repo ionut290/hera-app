@@ -39,6 +39,7 @@ async function run() {
       await db.doc("utenti/staff").set({ displayName: "Private user" });
       await db.doc("oreReports/one").set({ date: "2026-11-12" });
       await db.doc("sharedStaticViews/currentTeam").set({ demo: false });
+      await db.doc("appleReviewDemo/onlySynthetic").set({title: "Synthetic exercise", demo: true});
     });
 
     const normal = testEnv.authenticatedContext("normalUser", {
@@ -51,6 +52,13 @@ async function run() {
     const reviewAdminEmail = testEnv.authenticatedContext("reviewerUser", {
       email: "ionut29019@gmail.com", email_verified: true, apple_review: true
     }).firestore();
+
+    await assertSucceeds(review.doc("appleReviewDemo/onlySynthetic").get());
+    await assertSucceeds(review.collection("appleReviewDemo").get());
+    await assertFails(review.doc("appleReviewDemo/onlySynthetic").set({ demo: false }));
+    await assertFails(review.doc("appleReviewDemo/onlySynthetic").update({ demo: false }));
+    await assertFails(review.doc("appleReviewDemo/onlySynthetic").delete());
+    await assertFails(normal.doc("appleReviewDemo/onlySynthetic").get());
 
     await assertSucceeds(normal.doc("commesse/syntheticJob").get());
     await assertSucceeds(normal.doc("sharedStaticViews/currentTeam").get());
@@ -75,7 +83,7 @@ async function run() {
     await assertFails(reviewAdminEmail.doc("appConfig/adminUsers").set({ emails: [] }));
     await assertFails(review.collection("commesse").get());
     await assertFails(review.collection("personale").get());
-    console.log("✅ Apple-review Firebase claim cannot read/write live Firestore; normal access unchanged.");
+    console.log("Apple reviewer can only read synthetic demo data; live Firestore read/write denied and normal access unchanged.");
   } finally {
     await testEnv.cleanup();
   }

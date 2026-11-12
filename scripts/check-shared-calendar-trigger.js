@@ -37,6 +37,9 @@ vm.runInNewContext(source, {
   require: (id) => {
     if (id === "crypto") return require("node:crypto");
     if (id === "firebase-admin") return {};
+    if (id === "./apple-review-guard") return {
+      assertNotAppleReviewer: (auth) => { if (auth?.token?.apple_review === true) throw new Error("REVIEWER_DENIED"); }
+    };
     if (id === "firebase-functions/v2/firestore") return { onDocumentWritten: (_options, handler) => handler };
     if (id === "firebase-functions/v2/https") return {
       onCall: (_options, handler) => handler,

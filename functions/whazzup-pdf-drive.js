@@ -1,4 +1,5 @@
 "use strict";
+const { assertNotAppleReviewer } = require("./apple-review-guard");
 
 const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
@@ -71,6 +72,7 @@ exports.uploadWhazzupPdfToDrive = functions
     secrets: [RUNTIME_CONFIG]
   })
   .https.onCall(async (data, context) => {
+  assertNotAppleReviewer(context?.auth);
     if (!context.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Login richiesto.");
     }

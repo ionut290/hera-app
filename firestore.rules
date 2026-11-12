@@ -9,7 +9,7 @@ service cloud.firestore {
     // App Review accounts use only the synthetic, standalone demonstration.
     // The server-minted claim is authoritative; client-side roles are not.
     function isAppleReviewAccount() {
-      return authPresent() && request.auth.token.apple_review == true;
+      return authPresent() && request.auth.token.get("apple_review", false) == true;
     }
 
     function signedIn() {

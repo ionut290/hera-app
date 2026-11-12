@@ -1,0 +1,139 @@
+/*
+ * Native iOS safe areas: one common top inset for the main screen and
+ * independent full-screen overlays. Only Capacitor iOS gets the fallback.
+ * WKWebView can report 0 for env(safe-area-inset-top) on iPhones.
+ */
+html.varga-ios-native-safe-area {
+  --varga-ios-safe-top: env(safe-area-inset-top, 0px);
+}
+@media (max-width: 560px) and (orientation: portrait) {
+  html.varga-ios-native-safe-area {
+    --varga-ios-safe-top: max(56px, env(safe-area-inset-top, 0px));
+  }
+}
+
+/* Regular pages are children of main.container; don't add the inset twice. */
+html.varga-ios-native-safe-area main.container {
+  padding-top: calc(14px + var(--varga-ios-safe-top));
+}
+@media (min-width: 760px) {
+  html.varga-ios-native-safe-area main.container {
+    padding-top: calc(22px + var(--varga-ios-safe-top));
+  }
+}
+
+/* Independent full-screen pages start at viewport top, not inside main. */
+html.varga-ios-native-safe-area .side-menu-header {
+  padding-top: calc(14px + var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .management-page-head,
+html.varga-ios-native-safe-area .chat-modal-header {
+  padding-top: calc(12px + var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .tree-search-header,
+html.varga-ios-native-safe-area .green-areas-header,
+html.varga-ios-native-safe-area .urban-furniture-header,
+html.varga-ios-native-safe-area .wastewater-plants-header {
+  padding-top: calc(12px + var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .green-assistant-header {
+  padding-top: calc(10px + var(--varga-ios-safe-top));
+}
+
+/* Fullscreen commessa map: offset the controls with padding only, not sticky top too. */
+html.varga-ios-native-safe-area #map-fullscreen-page {
+  --map-fullscreen-toolbar-space: calc(48px + var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area #map-fullscreen-page .map-fullscreen-toolbar {
+  top: 0;
+  min-height: calc(48px + var(--varga-ios-safe-top));
+  padding-top: calc(6px + var(--varga-ios-safe-top));
+}
+@media (max-width: 759px) {
+  html.varga-ios-native-safe-area #map-fullscreen-page {
+    --map-fullscreen-toolbar-space: calc(44px + var(--varga-ios-safe-top));
+  }
+  html.varga-ios-native-safe-area #map-fullscreen-page .map-fullscreen-toolbar {
+    min-height: calc(44px + var(--varga-ios-safe-top));
+    padding-top: calc(5px + var(--varga-ios-safe-top));
+  }
+}
+/* Biogas map is already within main.container: it must not add another inset. */
+html.varga-ios-native-safe-area #biogas-map-page .map-fullscreen-toolbar {
+  top: 0;
+  min-height: 48px;
+  padding-top: 6px;
+}
+@media (max-width: 759px) {
+  html.varga-ios-native-safe-area #biogas-map-page .map-fullscreen-toolbar {
+    min-height: 44px;
+    padding-top: 5px;
+  }
+}
+
+/* Fullscreen map cards own their layout and viewport position. */
+html.varga-ios-native-safe-area .tree-map-card--fullscreen,
+html.varga-ios-native-safe-area .green-areas-map-card--fullscreen,
+html.varga-ios-native-safe-area .urban-furniture-map-card--fullscreen,
+html.varga-ios-native-safe-area .wastewater-plants-map-card--fullscreen {
+  padding-top: max(8px, var(--varga-ios-safe-top));
+}
+
+/* Crop, identity, PIN and document viewers. */
+html.varga-ios-native-safe-area .identity-crop-dialog,
+html.varga-ios-native-safe-area .identity-image-fullscreen {
+  padding-top: max(10px, var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .identity-card-viewer,
+html.varga-ios-native-safe-area .fuel-pin-viewer {
+  padding-top: max(12px, var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .fuel-pin-viewer.fuel-pin-summary-only {
+  padding-top: max(18px, var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .fuel-pin-summary-only .fuel-pin-viewer-head {
+  top: calc(10px + var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .document-viewer header {
+  padding-top: calc(8px + var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .document-viewer-content {
+  height: calc(100dvh - 64px - var(--varga-ios-safe-top));
+}
+@media (max-width: 640px) {
+  html.varga-ios-native-safe-area .document-viewer-content {
+    height: calc(100dvh - 116px - var(--varga-ios-safe-top));
+  }
+}
+
+/* Standalone modal actions and full-screen interactive maps. */
+html.varga-ios-native-safe-area .squadre-impianto-detail {
+  padding-top: calc(12px + var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .worklimate-board-modal.worklimate-board-page {
+  padding-top: max(16px, var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .worklimate-page-header {
+  top: calc(-1 * max(16px, var(--varga-ios-safe-top)));
+  margin-top: calc(-1 * max(16px, var(--varga-ios-safe-top)));
+  padding-top: max(12px, var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .heat-map-close,
+html.varga-ios-native-safe-area .whazzup-photo-preview-close {
+  top: calc(10px + var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .map-impianto-detail-panel {
+  top: calc(12px + var(--varga-ios-safe-top));
+  max-height: calc(100% - 24px - var(--varga-ios-safe-top));
+}
+html.varga-ios-native-safe-area .weather-layer-selector {
+  top: calc(8px + var(--varga-ios-safe-top));
+}
+
+/* Document navigation overlay may reach the status bar on small screens. */
+html.varga-ios-native-safe-area .cantiere-doc-navigation-overlay {
+  padding-top: var(--varga-ios-safe-top);
+}
+html.varga-ios-native-safe-area .cantiere-doc-navigation-panel {
+  max-height: calc(100dvh - var(--varga-ios-safe-top) - env(safe-area-inset-bottom, 0px));
+}

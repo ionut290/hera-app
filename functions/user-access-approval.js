@@ -1,3 +1,4 @@
+const { assertNotAppleReviewer } = require("./apple-review-guard");
 "use strict";
 
 const crypto = require("node:crypto");
@@ -275,6 +276,7 @@ exports.approveUserAccess = functions
   .region(REGION)
   .runWith({ secrets: [RUNTIME_CONFIG] })
   .https.onCall(async (data, context) => {
+    assertNotAppleReviewer(context?.auth);
     const db = admin.firestore();
     const administrator = await resolveAdministrator(context, db, data?.administratorName);
     const targetUid = cleanText(data?.targetUid, 160);

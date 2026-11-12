@@ -1,0 +1,34 @@
+name: Check Apple reviewer account and backend restrictions (no deploy)
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+
+jobs:
+  reviewer-account-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify Apple reviewer login, admin provisioning, and server-side guards
+        run: node scripts/check-apple-review-account.js
+      - name: Verify immutable FATTO and Whazzup
+        run: |
+          node scripts/check-fatto-whazzup-immutable.js
+          node scripts/check-fatto-whazzup-isolation.js
+      - name: Verify login contract
+        run: node scripts/check-auth-stability-contract.js
+      - name: Verify native bundle contains all Apple Review screens
+        run: |
+          node scripts/prepare-capacitor-web.js
+          for asset in apple-review-signin.html apple-review-signin.js apple-review-admin.html apple-review-admin.js apple-review-auth.css apple-review-auth-config.js; do
+            test -s "www/$asset" || exit 1
+          done

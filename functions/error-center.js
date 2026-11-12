@@ -1,4 +1,5 @@
 "use strict";
+const { assertNotAppleReviewer } = require("./apple-review-guard");
 
 const crypto = require("node:crypto");
 const admin = require("firebase-admin");
@@ -297,6 +298,7 @@ function serializeGroup(id, data = {}) {
 }
 
 exports.recordClientErrorGroup = functions.region(REGION).runWith(PUBLIC_CALLABLE_OPTIONS).https.onCall(async (data, context) => {
+  assertNotAppleReviewer(context?.auth);
   if (!context.auth?.uid) throw new functions.https.HttpsError("unauthenticated", "Accesso richiesto per registrare la diagnostica.");
   if (!enforceRateLimit(context.auth.uid)) return { recorded: false, rateLimited: true };
 
@@ -370,6 +372,7 @@ exports.recordClientErrorGroup = functions.region(REGION).runWith(PUBLIC_CALLABL
 });
 
 exports.getErrorCenterSummary = functions.region(REGION).runWith(PUBLIC_CALLABLE_OPTIONS).https.onCall(async (_data, context) => {
+  assertNotAppleReviewer(context?.auth);
   await requireAdmin(context);
   const snapshot = await db().collection(SUMMARY_COLLECTION).doc(SUMMARY_DOCUMENT).get();
   const data = snapshot.exists ? snapshot.data() || {} : {};
@@ -385,6 +388,7 @@ exports.getErrorCenterSummary = functions.region(REGION).runWith(PUBLIC_CALLABLE
 });
 
 exports.markErrorCenterSeen = functions.region(REGION).runWith(PUBLIC_CALLABLE_OPTIONS).https.onCall(async (_data, context) => {
+  assertNotAppleReviewer(context?.auth);
   await requireAdmin(context);
   await db().collection(SUMMARY_COLLECTION).doc(SUMMARY_DOCUMENT).set({
     unseenAlerts: 0,
@@ -397,6 +401,7 @@ exports.markErrorCenterSeen = functions.region(REGION).runWith(PUBLIC_CALLABLE_O
 });
 
 exports.getErrorCenterDashboard = functions.region(REGION).runWith(PUBLIC_CALLABLE_OPTIONS).https.onCall(async (data, context) => {
+  assertNotAppleReviewer(context?.auth);
   await requireAdmin(context);
   const input = data && typeof data === "object" ? data : {};
   const status = String(input.status || "all");
@@ -448,6 +453,7 @@ exports.getErrorCenterDashboard = functions.region(REGION).runWith(PUBLIC_CALLAB
 });
 
 exports.updateErrorCenterStatus = functions.region(REGION).runWith(PUBLIC_CALLABLE_OPTIONS).https.onCall(async (data, context) => {
+  assertNotAppleReviewer(context?.auth);
   await requireAdmin(context);
   const input = data && typeof data === "object" ? data : {};
   const groupId = safeFingerprint(input.groupId, "");

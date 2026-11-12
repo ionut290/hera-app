@@ -1,4 +1,5 @@
 "use strict";
+const { assertNotAppleReviewer } = require("./apple-review-guard");
 
 const admin = require("firebase-admin");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
@@ -148,6 +149,7 @@ exports.rebuildAllSharedStaticViews = onCall({
     "http://localhost:5173"
   ]
 }, async (request) => {
+    assertNotAppleReviewer(request?.auth);
   await assertAdmin(request);
   const requestedDate = dateKey(request.data?.date || "2026-08-04") || "2026-08-04";
   const requestedMonth = String(request.data?.month || requestedDate.slice(0, 7));

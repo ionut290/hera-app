@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://www.gstatic.com; style-src 'self'; img-src 'self' data:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; frame-src 'none'; object-src 'none'; form-action 'self'; base-uri 'none'">
+<title>VARGA CANTIERI — Accesso revisori Apple</title>
+<link rel="stylesheet" href="./apple-review-auth.css">
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js"></script>
+<script src="./apple-review-auth-config.js"></script>
+<script src="./apple-review-signin.js" defer></script>
+</head>
+<body>
+<main class="auth-shell">
+  <section class="auth-card" aria-labelledby="review-login-heading">
+    <p class="eyebrow">VARGA CANTIERI · App Review</p>
+    <h1 id="review-login-heading">Accesso revisori Apple</h1>
+    <p>Utilizzare le credenziali fornite nello spazio App Review Information. Questo accesso mostra esclusivamente commesse, squadre, impianti e ore <strong>inventati</strong>, senza operazioni reali.</p>
+    <form id="review-login-form">
+      <label for="review-email">Email revisore</label>
+      <input id="review-email" type="email" autocomplete="username" required>
+      <label for="review-password">Password revisore</label>
+      <input id="review-password" type="password" autocomplete="current-password" required>
+      <button id="review-enter-btn" type="submit">Entra nella modalità di revisione</button>
+      <p id="review-login-message" class="feedback" role="status" aria-live="polite"></p>
+    </form>
+    <a href="./index.html">← Torna all'accesso normale</a>
+    <p class="fine-print">L'accesso è verificato da Firebase Authentication, ma non concede permessi ai dati aziendali. Le operazioni della demo sono simulate su dati fittizi.</p>
+  </section>
+</main>
+</body>
+</html>

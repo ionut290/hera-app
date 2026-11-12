@@ -1,4 +1,5 @@
 "use strict";
+const { assertNotAppleReviewer } = require("./apple-review-guard");
 
 const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
@@ -27,7 +28,10 @@ const LOCK_MS = 30 * 60 * 1000;
 const CHALLENGE_MS = 10 * 60 * 1000;
 
 function callable(handler) {
-  return functions.region(REGION).runWith({ timeoutSeconds: 30, memory: "256MB" }).https.onCall(handler);
+  return functions.region(REGION).runWith({ timeoutSeconds: 30, memory: "256MB" }).https.onCall((data, context) => {
+    assertNotAppleReviewer(context?.auth);
+    return handler(data, context);
+  });
 }
 
 function normalizeEmail(value) {

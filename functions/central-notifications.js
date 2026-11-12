@@ -1,9 +1,11 @@
 "use strict";
+const { assertNotAppleReviewer } = require("./apple-review-guard");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 
 const TYPES = new Set(["IMPIANTO_COMPLETATO", "NAVIGAZIONE", "ORE", "SQUADRA", "MEZZO", "SEGNALAZIONE", "INFO"]);
 exports.createCentralNotification = onCall({ region: "europe-west1" }, async (request) => {
+    assertNotAppleReviewer(request?.auth);
   if (!request.auth) throw new HttpsError("unauthenticated", "Accesso richiesto.");
   const input = request.data || {};
   if (!TYPES.has(String(input.type || ""))) throw new HttpsError("invalid-argument", "Tipo notifica non consentito.");

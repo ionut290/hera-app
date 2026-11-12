@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://www.gstatic.com; style-src 'self'; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://europe-west1-hera-app-6cd2b.cloudfunctions.net; img-src 'self' data:; frame-src 'none'; object-src 'none'; form-action 'self'; base-uri 'none'">
+<title>VARGA CANTIERI — Crea account Apple Review</title>
+<link rel="stylesheet" href="./apple-review-auth.css">
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-functions-compat.js"></script>
+<script src="./apple-review-auth-config.js"></script>
+<script src="./apple-review-admin.js" defer></script>
+</head>
+<body>
+<main class="auth-shell"><section class="auth-card">
+  <p class="eyebrow">VARGA CANTIERI · SOLO AMMINISTRATORE</p>
+  <h1>Crea account di revisione Apple</h1>
+  <p>Questa procedura crea un <strong>nuovo account Firebase dedicato</strong> con permessi limitati ai dati fittizi. Nessuna password viene salvata da questa pagina.</p>
+  <p id="review-admin-status" role="status" aria-live="polite">Verifica della sessione amministratore...</p>
+  <form id="review-admin-create" hidden>
+    <label for="new-review-email">Email dedicata al revisore</label>
+    <input id="new-review-email" type="email" autocomplete="off" placeholder="appreview@tuodominio.it" required>
+    <button id="create-review-btn" type="submit">Genera account Apple Review</button>
+  </form>
+  <div id="review-admin-result" hidden>
+    <p><strong>Account creato.</strong> Copia queste credenziali direttamente nella sezione App Review Information di Apple. La password è mostrata una sola volta.</p>
+    <label for="result-review-email">Username</label>
+    <input id="result-review-email" type="text" readonly>
+    <label for="result-review-password">Password temporanea di revisione</label>
+    <input id="result-review-password" type="password" readonly autocomplete="off">
+    <button type="button" id="toggle-review-password">Mostra/nascondi password</button>
+    <button type="button" id="copy-review-credentials">Copia credenziali</button>
+  </div>
+  <a href="./index.html">← Torna a VARGA CANTIERI</a>
+  <p class="fine-print">Accesso consentito soltanto agli amministratori già autenticati. In caso di schermata di accesso, entra prima nell'app normalmente e riapri questa pagina.</p>
+</section></main>
+</body>
+</html>

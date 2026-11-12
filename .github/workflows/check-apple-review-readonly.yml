@@ -30,8 +30,9 @@ jobs:
       - name: Check syntax and immutable protected flows
         run: |
           node --check scripts/test-apple-review-firestore-rules.cjs
+          node --check scripts/test-apple-review-storage-rules.cjs
           node scripts/check-fatto-whazzup-immutable.js
           node scripts/check-fatto-whazzup-isolation.js
           node scripts/check-auth-stability-contract.js
-      - name: Test reviewer claim in local Firestore emulator (never production)
-        run: npx firebase emulators:exec --only firestore --project demo-review-isolation "node scripts/test-apple-review-firestore-rules.cjs"
+      - name: Test read-only reviewer claims in local Firestore and Storage emulators (never production)
+        run: npx firebase emulators:exec --only firestore,storage --project demo-review-isolation "node scripts/test-apple-review-firestore-rules.cjs && node scripts/test-apple-review-storage-rules.cjs"

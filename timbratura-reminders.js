@@ -13,8 +13,11 @@
   };
   const $ = (id) => document.getElementById(id);
   let config = load(), watchId = null, windowTimer = null, soundTimer = null;
-  let audio = null, ringing = "", waitingUntil = {}, done = {}, lastFix = null;
-  let checking = false, muted = false;
+  let audio = null, ringing = "", waitingUntil = {}, done = {};
+  try { done = JSON.parse(localStorage.getItem(KEY + "-ack") || "{}") || {}; } catch (_) {}
+  function saveAck() {
+    try { localStorage.setItem(KEY + "-ack", JSON.stringify(done)); } catch (_) {}
+  }
 
   function load() {
     try {
@@ -26,7 +29,7 @@
   const two = n => String(n).padStart(2,"0");
   function dayKey() { const d = new Date(); return [d.getFullYear(), two(d.getMonth()+1), two(d.getDate())].join("-"); }
   function clockMinutes(s) {
-    if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(s)) return null;
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(s)) return null;
     const [h,m] = s.split(":").map(Number); return h*60+m;
   }
   function inWindow(which, date = new Date()) {
@@ -136,7 +139,7 @@
     $("timbratura-snooze").addEventListener("click", snooze);
     window.addEventListener("pagehide", () => { silence(); stopWatching(); });
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) { stopWatching(); silence(); }
+      if (document.hidden) { stopWatching(); silence(); if (ringing) { ringing=""; $("timbratura-ringing").hidden=true; } }
       else if (config.enabled) startWatching();
     });
     if (config.enabled) startWatching();
@@ -198,7 +201,6 @@
   function stopWatching() {
     if(windowTimer!==null) {clearInterval(windowTimer);windowTimer=null;}
     if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
-    checking=false;
   }
   function tick() {
     if(document.hidden || !config.enabled) return;
@@ -208,7 +210,6 @@
     }
     if(watchId!==null) return;
     watchId=navigator.geolocation.watchPosition(pos=>{
-      lastFix=pos;
       if(pos.coords.accuracy>Number(config.radius)) return; // posizione troppo imprecisa
       const meters=distance(Number(config.lat),Number(config.lon),pos.coords.latitude,pos.coords.longitude);
       if(meters>Number(config.radius)) return;
@@ -234,7 +235,7 @@
   }
   function ring(which) {
     if(ringing) return;
-    ringing=which; muted=false;
+    ringing=which;
     $("timbratura-ringing-title").textContent=which==="arrival"?"🟢 Ricordati di timbrare l'ENTRATA!":
       which==="return"?"🔵 Ricordati di timbrare l'USCITA!":"🔔 Prova avviso acustico";
     $("timbratura-ringing").hidden=false;
@@ -249,7 +250,7 @@
   function stop() {
     const which=ringing;
     silence();ringing="";$("timbratura-ringing").hidden=true;
-    if(which && which!=="test") done[dayKey()+":"+which]=true;
+    if(which && which!=="test") { done[dayKey()+":"+which]=true; saveAck(); }
   }
   function snooze() {
     const which=ringing;

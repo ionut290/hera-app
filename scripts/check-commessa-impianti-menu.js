@@ -148,7 +148,7 @@ assert.match(css, /\.commessa-mobile-plant-form/);
 assert.doesNotMatch(feature, /\bdb\.|\bfirebase\.|\.collection\(|\.onSnapshot\(/);
 assert.match(serviceWorker, /commessa-impianti-menu\.js\?v=20260826c/);
 assert.match(serviceWorker, /accounting-v2\.js\?v=20260901-current-gps1/);
-const currentStyleVersion = html.match(/href="(style\\.css\\?v=[^"]+)"/)?.[1];
+const currentStyleVersion = html.match(/href="(style\.css\?v=[^"]+)"/)?.[1];
 assert.ok(currentStyleVersion && serviceWorker.includes(`"./${currentStyleVersion}"`),
   "Il Service Worker deve precaricare la stessa versione CSS mostrata nella pagina.");
 assert.match(html, /accounting-v2\.js\?v=20260901-current-gps1/);

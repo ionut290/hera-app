@@ -26,7 +26,7 @@ jobs:
           distribution: temurin
           java-version: "21"
       - name: Install local Firebase emulator and Rules test kit
-        run: npm install --no-save --package-lock=false --no-audit --no-fund firebase-tools@14.23.0 @firebase/rules-unit-testing@5.0.0
+        run: npm install --no-save --package-lock=false --no-audit --no-fund firebase-tools@14.23.0 @firebase/rules-unit-testing@4.0.1
       - name: Check syntax and immutable protected flows
         run: |
           node --check scripts/test-apple-review-firestore-rules.cjs

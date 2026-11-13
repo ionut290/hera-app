@@ -1,0 +1,38 @@
+/* Promemoria GPS timbratura: stile isolato. */
+.timbratura-overlay[hidden] { display:none !important; }
+.timbratura-overlay {
+  position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;
+  overflow-y:auto;padding:max(84px,env(safe-area-inset-top,0px)) 12px max(18px,env(safe-area-inset-bottom,0px));
+  background:rgba(7,29,32,.66);
+}
+.timbratura-overlay .timbratura-shell {
+  width:min(720px,100%);max-height:calc(100dvh - 95px);overflow-y:auto;
+  padding:18px;border-radius:20px;background:#fff;color:#183d38;
+  border:1px solid #cbddd3;box-shadow:0 24px 70px rgba(0,0,0,.24);
+}
+.timbratura-header { display:flex;align-items:start;justify-content:space-between;gap:12px; }
+.timbratura-header h2 {font-size:1.28rem;margin:0 0 6px;}
+.timbratura-header p {font-size:.9rem;margin:0;color:#477065;}
+.timbratura-enable {display:flex;gap:10px;align-items:center;margin-top:16px;font-weight:800;}
+.timbratura-enable input,.timbratura-days input {accent-color:#147052;width:20px;height:20px;}
+.timbratura-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px;}
+.timbratura-card {padding:12px;border:1px solid #d1e4d9;background:#f8fcf9;border-radius:14px;}
+.timbratura-card h3 {font-size:1.04rem;margin:0 0 10px;}
+.timbratura-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+.timbratura-fields label {min-width:0;display:grid;gap:4px;font-size:.85rem;font-weight:700;}
+.timbratura-fields input {width:100%;min-width:0;min-height:45px;padding:9px;border-radius:9px;border:1px solid #b9d0c4;background:#fff;color:#193e37;font-size:16px;}
+.timbratura-wide {grid-column:1/-1;}
+.timbratura-actions {display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;}
+.timbratura-actions .btn,.timbratura-header .btn {min-height:44px;white-space:normal;}
+.timbratura-primary {background:#176c4a !important;color:white !important;border-color:#176c4a !important;}
+.timbratura-days {display:flex;gap:8px;flex-wrap:wrap;}
+.timbratura-days label {display:flex;gap:4px;align-items:center;padding:5px 7px;border:1px solid #d5e4da;border-radius:10px;}
+.timbratura-note {font-size:.83rem;line-height:1.45;color:#526b5e;margin:12px 0 0;}
+#timbratura-feedback {font-weight:700;min-height:22px;color:#086d49;}
+#timbratura-feedback[data-error="1"] {color:#9c2626;}
+.timbratura-alarm {z-index:2147483200;}
+.timbratura-alarm .timbratura-shell {text-align:center;max-width:500px;}
+.timbratura-alarm h2 {font-size:1.6rem;}
+.timbratura-alarm-icon {font-size:4rem;}
+.timbratura-alarm .timbratura-actions {justify-content:center;}
+@media (max-width:580px) {.timbratura-grid {grid-template-columns:1fr;}}

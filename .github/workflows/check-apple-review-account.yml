@@ -1,4 +1,4 @@
-name: Check Apple reviewer account and backend restrictions (no deploy)
+name: Check legacy reviewer backend restrictions and iOS bundle (no deploy)
 on:
   pull_request:
     branches: [main]
@@ -18,7 +18,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Verify Apple reviewer login, admin provisioning, and server-side guards
+      - name: Verify existing reviewer identities remain denied by backend guards
         run: node scripts/check-apple-review-account.js
       - name: Verify immutable FATTO and Whazzup
         run: |
@@ -26,9 +26,7 @@ jobs:
           node scripts/check-fatto-whazzup-isolation.js
       - name: Verify login contract
         run: node scripts/check-auth-stability-contract.js
-      - name: Verify native bundle contains all Apple Review screens
+      - name: Verify native bundle EXCLUDES Apple reviewer-only behavior
         run: |
           node scripts/prepare-capacitor-web.js
-          for asset in apple-review-signin.html apple-review-signin.js apple-review-admin.html apple-review-admin.js apple-review-auth.css apple-review-auth-config.js; do
-            test -s "www/$asset" || exit 1
-          done
+          node scripts/check-appstore-2519-clean.js

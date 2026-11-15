@@ -1,30 +1,15 @@
 #!/usr/bin/env node
 "use strict";
 
+// Keep legacy Apple reviewer identities blocked server-side while removing
+// all reviewer-only login and demo features from the shipped client.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const cp = require("node:child_process");
-const read = (path) => fs.readFileSync(path, "utf8");
+const read = (file) => fs.readFileSync(file, "utf8");
 
 const index = read("index.html");
-assert.match(index, /id="apple-review-signin-link"[^>]*href="\.\/apple-review-signin\.html"/);
-assert.match(index, /id="apple-review-demo-link"[^>]*href="\.\/apple-review-demo\.html"/);
-
-const signin = read("apple-review-signin.html");
-assert.match(signin, /Content-Security-Policy/);
-assert.match(signin, /firebase-auth-compat\.js/);
-assert.doesNotMatch(signin, /firebase-firestore|firebase-storage|app\.js|approval-access\.js/i);
-const reviewJS = read("apple-review-signin.js");
-for(const marker of ["getIdTokenResult(true)", "claims.apple_review !== true", "firebase.auth.Auth.Persistence.NONE", "signOut()", "apple-review-demo.html"]) {
-  assert.ok(reviewJS.includes(marker), "Missing reviewer-only check: " + marker);
-}
-assert.doesNotMatch(reviewJS, /\b(?:firebase\.firestore|\.collection\(|\.httpsCallable\()/);
-const adminHTML = read("apple-review-admin.html");
-const adminJS = read("apple-review-admin.js");
-assert.match(adminHTML, /create-review-btn/);
-assert.match(adminJS, /httpsCallable\("createAppleReviewAccount"\)/);
-assert.match(adminJS, /navigator\.clipboard/);
-assert.doesNotMatch(adminJS, /localStorage|sessionStorage|indexedDB|cookie/i);
+assert.doesNotMatch(index, /apple-review-(?:signin|demo)-link/);
 
 const server = read("functions/apple-review-accounts.js");
 assert.match(server, /await assertAdmin\(request.auth\);/);
@@ -68,10 +53,10 @@ assert.match(firestore, /token\.get\("apple_review", false\)/);
 assert.match(storage, /token\.get\("apple_review", false\)/);
 
 for (const file of [
-  "apple-review-auth-config.js", "apple-review-signin.js",
-  "apple-review-admin.js", "functions/apple-review-accounts.js",
-  "functions/apple-review-guard.js",...Object.keys(rawModules)
+  "functions/apple-review-accounts.js",
+  "functions/apple-review-guard.js",
+  ...Object.keys(rawModules)
 ]) {
   cp.execFileSync(process.execPath, ["--check", file], { stdio:"inherit" });
 }
-console.log("Apple Review: all reviewer login, admin provisioning and callable backend guards are covered.");
+console.log("Legacy reviewer identity remains restricted server-side; client-only reviewer access is removed.");

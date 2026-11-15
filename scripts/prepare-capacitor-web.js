@@ -6,6 +6,8 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const output = path.join(root, "www");
 const extensions = new Set([".css", ".html", ".js", ".json", ".webmanifest"]);
+// App Store 2.5.19: reviewer-only pages and scripts must never enter native assets.
+const excludedFilePrefixes = ["apple-review-"];
 const excludedDirectories = new Set(["android", "android-resources", "docs", "functions", "netlify", "node_modules", "scripts", "tools", "www", ".git", ".github"]);
 
 fs.rmSync(output, { recursive: true, force: true });
@@ -13,6 +15,7 @@ fs.mkdirSync(output, { recursive: true });
 
 for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
   if (!entry.isFile() || !extensions.has(path.extname(entry.name))) continue;
+  if (excludedFilePrefixes.some((prefix) => entry.name.startsWith(prefix))) continue;
   fs.copyFileSync(path.join(root, entry.name), path.join(output, entry.name));
 }
 
@@ -63,4 +66,8 @@ for (const relativePath of requiredFiles) {
   }
 }
 
-console.log(`Bundle web Android preparato in www (${fs.readdirSync(output).length} elementi principali).`);
+// Fail closed if any special reviewer authentication, demo, or access restriction
+// is introduced into the native web bundle in a future change.
+require("./check-appstore-2519-clean.js");
+
+console.log(`Bundle web Android/iOS preparato in www (${fs.readdirSync(output).length} elementi principali).`);

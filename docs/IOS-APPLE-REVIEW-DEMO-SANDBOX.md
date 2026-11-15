@@ -1,3 +1,5 @@
+> **ARCHIVIATO DOPO IL RIFIUTO APPLE 2.5.19 (15/11/2026).** Le schermate reviewer-only e la demo descritti qui sono stati rimossi dal client. Non riattivare questi flussi. Usare un account di prova normale e verificato con dati sintetici. Vedere `docs/IOS-APPSTORE-2519-REMEDIATION.md`. Le limitazioni server per eventuali vecchie identità reviewer restano per proteggere i dati.
+
 # VARGA CANTIERI — modalità demo isolata per App Review
 
 **Stato:** ramo di sviluppo; non distribuire, non usare come account Firebase reale, non dichiarare ancora pronta per la revisione Apple.

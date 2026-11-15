@@ -8,6 +8,7 @@ const sharedOperationalViewFunctions = require("./shared-operational-views");
 const adminPasswordPrivateRequestFunctions = require("./admin-password-private-requests");
 const passwordRecoveryCodeFunctions = require("./password-recovery-code");
 const impiantoChangeIndexFunctions = require("./impianto-change-index");
+const impiantoCoordinateSyncFunctions = require("./impianto-coordinate-sync");
 const errorReportingFunctions = require("./error-reporting");
 const errorCenterFunctions = require("./error-center");
 const errorCenterResetFunctions = require("./error-center-reset");
@@ -29,6 +30,7 @@ Object.assign(
   adminPasswordPrivateRequestFunctions,
   passwordRecoveryCodeFunctions,
   impiantoChangeIndexFunctions,
+  impiantoCoordinateSyncFunctions,
   errorReportingFunctions,
   errorCenterFunctions,
   errorCenterResetFunctions,

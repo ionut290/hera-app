@@ -1,0 +1,44 @@
+name: Deploy canonical plant coordinate sync
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "functions/impianto-coordinate-sync.js"
+      - "functions/main.js"
+      - ".github/workflows/deploy-canonical-plant-coordinate-sync.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-canonical-plant-coordinate-sync
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+      - name: Validate coordinate sync
+        run: |
+          node --check functions/impianto-coordinate-sync.js
+          node -e "const f=require('./functions/main.js'); if(typeof f.syncPhysicalPlantCoordinates!=='function'||typeof f.syncOperationalPlantCoordinates!=='function') process.exit(1)"
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+      - name: Deploy coordinate sync functions
+        run: >-
+          npx --yes firebase-tools@latest deploy
+          --only functions:syncPhysicalPlantCoordinates,functions:syncOperationalPlantCoordinates
+          --project hera-app-6cd2b
+          --non-interactive

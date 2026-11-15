@@ -1,4 +1,4 @@
-name: Check Apple reviewer account and backend restrictions (no deploy)
+name: Check legacy reviewer backend restrictions and iOS bundle (no deploy)
 on:
   pull_request:
     branches: [main]
@@ -18,7 +18,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Verify Apple reviewer login, admin provisioning, and server-side guards
+      - name: Verify existing reviewer identities remain denied by backend guards
         run: node scripts/check-apple-review-account.js
       - name: Verify immutable FATTO and Whazzup
         run: |

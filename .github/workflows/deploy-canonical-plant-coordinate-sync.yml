@@ -25,18 +25,54 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install function dependencies
-        working-directory: functions
-        run: npm install --no-audit --no-fund
-      - name: Validate coordinate sync
+      - name: Validate canonical GPS code
         run: |
           node --check functions/impianto-coordinate-sync.js
-          node -e "const f=require('./functions/main.js'); if(typeof f.syncPhysicalPlantCoordinates!=='function'||typeof f.syncOperationalPlantCoordinates!=='function') process.exit(1)"
+          test -f functions/impianto-coordinate-sync.js
+      - name: Stage isolated GPS deployment
+        run: |
+          mkdir -p .coordinate-sync-deploy/functions
+          cp functions/impianto-coordinate-sync.js .coordinate-sync-deploy/functions/index.js
+          cat > .coordinate-sync-deploy/functions/package.json <<'JSON'
+          {
+            "name": "varga-coordinate-sync-deploy",
+            "private": true,
+            "version": "1.0.0",
+            "main": "index.js",
+            "engines": { "node": "22" },
+            "dependencies": {
+              "firebase-admin": "13.10.0",
+              "firebase-functions": "7.3.2"
+            }
+          }
+          JSON
+          cat > .coordinate-sync-deploy/firebase.json <<'JSON'
+          {
+            "functions": {
+              "source": "functions",
+              "ignore": [".git", "node_modules", "firebase-debug.log", "firebase-debug.*.log"]
+            }
+          }
+          JSON
+          node --check .coordinate-sync-deploy/functions/index.js
+      - name: Install isolated function dependencies
+        working-directory: .coordinate-sync-deploy/functions
+        run: npm install --no-audit --no-fund
+      - name: Confirm bundle only exposes coordinate sync
+        run: |
+          node - <<'JS'
+          const expected = ["syncPhysicalPlantCoordinates", "syncOperationalPlantCoordinates"];
+          const actual = Object.keys(require("./.coordinate-sync-deploy/functions/index.js")).filter(k => k !== "__test").sort();
+          if (JSON.stringify(actual) !== JSON.stringify(expected.slice().sort())) {
+            throw new Error("Unexpected functions exposed: " + actual.join(","));
+          }
+          JS
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
-      - name: Deploy coordinate sync functions
+      - name: Deploy only coordinate sync (no unrelated email secrets)
+        working-directory: .coordinate-sync-deploy
         run: >-
           npx --yes firebase-tools@latest deploy
           --only functions:syncPhysicalPlantCoordinates,functions:syncOperationalPlantCoordinates

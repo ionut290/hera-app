@@ -61,6 +61,9 @@
         const info = payload?.notification?.extra ||
           payload?.notification?.userInfo || payload?.notification || {};
         if (info.feature !== "varga-timbratura") return;
+        // Do not open another app if the user DISMISSES the alert.
+        const action = payload?.actionId;
+        if (action !== "tap" && action !== "OPEN_EASYBOX") return;
         pending = info.which === "return" ? "return" : "arrival";
         // A real notification tap is required for the optional Easy-Box redirect.
         window.dispatchEvent(new CustomEvent("varga:apri-timbratura", {

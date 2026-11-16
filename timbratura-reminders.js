@@ -9,7 +9,7 @@
     enabled: false, lat: "", lon: "", radius: 150,
     arrivalFrom: "06:30", arrivalTo: "07:15",
     returnFrom: "15:15", returnTo: "16:15",
-    days: [1, 2, 3, 4, 5], tone: "pulse", snooze: 5, iosScheduled: false
+    days: [1, 2, 3, 4, 5], tone: "pulse", snooze: 5, iosScheduled: false, iosGeofence: false
   };
   const $ = (id) => document.getElementById(id);
   let config = load(), watchId = null, windowTimer = null, soundTimer = null;
@@ -69,8 +69,9 @@
             <button type="button" class="btn" id="timbratura-close">Chiudi</button>
           </header>
           <label class="timbratura-enable"><input id="timbratura-enabled" type="checkbox"> Attiva promemoria GPS quando l'app è aperta</label>
-          <label class="timbratura-enable"><input id="timbratura-ios-scheduled" type="checkbox"> 🔔 Notifiche iPhone agli orari impostati, anche con app chiusa</label>
-          <p class="timbratura-note">Notifiche settimanali all'inizio delle fasce orarie, anche senza GPS. Il suono rispetta Silenzioso e Full Immersion di iOS.</p>
+          <label class="timbratura-enable"><input id="timbratura-ios-geofence" type="checkbox"> 📍🔔 Controlla GPS anche con app chiusa: avvisa solo quando entro nel magazzino durante le fasce impostate</label>
+          <label class="timbratura-enable"><input id="timbratura-ios-scheduled" type="checkbox"> 🕒 Avvisi a orario fisso senza controllo GPS (alternativa)</label>
+          <p class="timbratura-note">Il GPS con app chiusa richiede il permesso Posizione «Sempre» e notifiche autorizzate. iOS rileva l'ingresso nel raggio e controlla giorno e fascia oraria. Non è GPS continuo: può esserci ritardo e se rimani già dentro senza uscire e rientrare non arriva un nuovo evento. La seconda opzione invia avvisi a orario anche lontano dal magazzino.</p>
           <div class="timbratura-grid">
             <div class="timbratura-card timbratura-wide">
               <h3>📍 Posizione magazzino</h3>
@@ -112,7 +113,7 @@
             <button type="button" class="btn" id="timbratura-test">🔊 Prova suono</button>
           </div>
           <p id="timbratura-feedback" role="status"></p>
-          <p class="timbratura-note">Se il GPS rileva il magazzino mentre l'app è aperta, iOS 26+ può creare un avviso AlarmKit e Android può richiedere una sveglia nell'app Orologio, da fermare manualmente. Senza supporto nativo suona nell'app con Ferma/Rimanda. Il GPS a schermo bloccato richiede una successiva integrazione di geofencing in background. Non esegue la timbratura reale.</p>
+          <p class="timbratura-note">Con la nuova modalità GPS iPhone, iOS controlla gli ingressi nel raggio anche quando Varga Cantieri è in background: le notifiche arrivano solo nei giorni e nelle fasce scelte. Serve «Posizione Sempre». Se scegli il precedente controllo GPS con l'app aperta, l'avviso può usare AlarmKit oppure il suono nell'app. Nessuna funzione registra la timbratura reale.</p>
         </div>
       </section>
       <section id="timbratura-ringing" class="timbratura-overlay timbratura-alarm" role="alertdialog" aria-modal="true" aria-label="Promemoria timbratura" hidden>
@@ -172,16 +173,19 @@
       if (pending) { showEasyBoxReminder(pending); window.VargaTimbraturaIOS.clearPending(); }
     });
     if (config.iosScheduled) void window.VargaTimbraturaIOS?.sync(config, { prompt: false });
+    // Il processo iOS può essere stato riavviato dal GPS prima della pagina web.
+    void window.VargaTimbraturaGeofence?.status({ consumePending: true });
     window.addEventListener("pagehide", () => { silence(); stopWatching(); });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) { stopWatching(); silence(); if (ringing) { ringing=""; $("timbratura-ringing").hidden=true; } }
-      else if (config.enabled) startWatching();
+      else if (config.enabled && !(config.iosGeofence && window.VargaTimbraturaGeofence?.isAvailable())) startWatching();
     });
-    if (config.enabled) startWatching();
+    if (config.enabled && !(config.iosGeofence && window.VargaTimbraturaGeofence?.isAvailable())) startWatching();
   }
   function render() {
     $("timbratura-enabled").checked = !!config.enabled;
     $("timbratura-ios-scheduled").checked = !!config.iosScheduled;
+    $("timbratura-ios-geofence").checked = !!config.iosGeofence;
     for (const key of ["lat","lon","radius","arrivalFrom","arrivalTo","returnFrom","returnTo"]) {
       $("timbratura-"+key).value = config[key] ?? "";
     }
@@ -192,6 +196,12 @@
     const next={...config};
     next.enabled=$("timbratura-enabled").checked;
     next.iosScheduled=$("timbratura-ios-scheduled").checked;
+    next.iosGeofence=$("timbratura-ios-geofence").checked;
+    // Il GPS native mode non deve mai pianificare avvisi soltanto a orario.
+    if (next.iosGeofence) {
+      next.iosScheduled=false;
+      $("timbratura-ios-scheduled").checked=false;
+    }
     next.lat=$("timbratura-lat").value.trim().replace(",",".");
     next.lon=$("timbratura-lon").value.trim().replace(",",".");
     next.radius=Number($("timbratura-radius").value);
@@ -203,11 +213,12 @@
     }
     if (!next.days.length) return status("Seleziona almeno un giorno.",true);
     const old=config; config=next;
-    if(next.enabled && !valid()) { config=old;return status("Inserisci coordinate valide e un raggio fra 30 e 2000 metri.",true); }
+    if((next.enabled || next.iosGeofence) && !valid()) { config=old;return status("Inserisci coordinate valide e un raggio fra 30 e 2000 metri.",true); }
+    if (next.iosGeofence && next.radius < 100) { config=old;return status("Per gli avvisi GPS con app chiusa imposta almeno 100 metri (consigliati 150–300).",true); }
     try { localStorage.setItem(KEY, JSON.stringify(config)); }
     catch (_) { config=old; return status("Non riesco a salvare le impostazioni sul telefono.",true); }
     stopWatching();
-    if (config.enabled) {
+    if (config.enabled && !(config.iosGeofence && window.VargaTimbraturaGeofence?.isAvailable())) {
       // Consenti l'audio con il gesto esplicito usato per salvare.
       try {
         const AudioCtor = window.AudioContext || window.webkitAudioContext;
@@ -231,6 +242,19 @@
     } else if (config.iosScheduled) {
       status("Per gli avvisi a app chiusa installa la nuova versione iPhone di Varga Cantieri.", true);
     }
+    if (window.VargaTimbraturaGeofence) {
+      void window.VargaTimbraturaGeofence.sync(config).then(result => {
+        if (result.error) return status("GPS background non attivato: " + result.error, true);
+        if (config.iosGeofence && result.supported === false)
+          return status(result.reason || "Geofencing non disponibile. Aggiorna Varga Cantieri iPhone.", true);
+        if (config.iosGeofence && result.permission !== "always")
+          return status("Per il GPS con app chiusa vai in Impostazioni iPhone → Varga Cantieri → Posizione → Sempre. Poi riapri l'app.", true);
+        if (config.iosGeofence && !result.monitoring)
+          return status("GPS in attivazione: controlla permessi, localizzazione e raggio.", true);
+        if (config.iosGeofence)
+          return status("📍 GPS magazzino attivo anche con app chiusa: avvisa solo entrando nel raggio, nei giorni e orari scelti.");
+      });
+    }
   }
   function locate(use) {
     if(!navigator.geolocation) return status("GPS non disponibile su questo dispositivo.",true);
@@ -251,7 +275,7 @@
     {enableHighAccuracy:true,maximumAge:0,timeout:15000});
   }
   function startWatching() {
-    if(!config.enabled || !valid() || watchId!==null || document.hidden) return;
+    if(!config.enabled || !valid() || watchId!==null || document.hidden || (config.iosGeofence && window.VargaTimbraturaGeofence?.isAvailable())) return;
     if(!navigator.geolocation) return;
     // GPS non interrogato continuamente: solo nelle due fasce e con pagina visibile.
     tick();

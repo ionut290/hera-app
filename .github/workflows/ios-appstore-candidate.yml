@@ -133,6 +133,7 @@ jobs:
           bash -n scripts/smoke-ios-simulator.sh
           python3 -m py_compile scripts/configure-ios-plist.py scripts/configure-ios-firebase.py
           ruby -c scripts/register-ios-firebase-plist.rb
+          ruby -c scripts/install-ios-native-geofence.rb
           ruby -c scripts/configure-ios-distribution-signing.rb
           npm run android:aab:prepare
           test -s www/index.html
@@ -147,6 +148,7 @@ jobs:
           npx cap add ios
           npx cap sync ios
           python3 scripts/mark-ios-native-safe-area.py
+          ruby scripts/install-ios-native-geofence.rb
           python3 scripts/configure-ios-plist.py
           swift scripts/prepare-ios-app-icon.swift icons/varga-cantieri-512.png ios/App/App/Assets.xcassets/AppIcon.appiconset
 

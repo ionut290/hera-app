@@ -113,7 +113,7 @@
             <button type="button" class="btn" id="timbratura-test">🔊 Prova suono</button>
           </div>
           <p id="timbratura-feedback" role="status"></p>
-          <p class="timbratura-note">Se il GPS rileva il magazzino mentre l'app è aperta, iOS 26+ può creare un avviso AlarmKit e Android può richiedere una sveglia nell'app Orologio, da fermare manualmente. Senza supporto nativo suona nell'app con Ferma/Rimanda. Il GPS a schermo bloccato richiede una successiva integrazione di geofencing in background. Non esegue la timbratura reale.</p>
+          <p class="timbratura-note">Con la nuova modalità GPS iPhone, iOS controlla gli ingressi nel raggio anche quando Varga Cantieri è in background: le notifiche arrivano solo nei giorni e nelle fasce scelte. Serve «Posizione Sempre». Se scegli il precedente controllo GPS con l'app aperta, l'avviso può usare AlarmKit oppure il suono nell'app. Nessuna funzione registra la timbratura reale.</p>
         </div>
       </section>
       <section id="timbratura-ringing" class="timbratura-overlay timbratura-alarm" role="alertdialog" aria-modal="true" aria-label="Promemoria timbratura" hidden>

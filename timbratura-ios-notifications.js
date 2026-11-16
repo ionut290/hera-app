@@ -56,10 +56,16 @@
         types: [{ id: ACTION, actions: [{ id: "OPEN_EASYBOX", title: "Apri timbratura", foreground: true }] }]
       });
       await local.addListener("localNotificationActionPerformed", payload => {
-        const info = payload?.notification?.extra || {};
+        // Capacitor may surface native Core Location notifications in userInfo.
+        // Never act on an unrelated app notification.
+        const info = payload?.notification?.extra ||
+          payload?.notification?.userInfo || payload?.notification || {};
         if (info.feature !== "varga-timbratura") return;
-        pending = info.which || "arrival";
-        window.dispatchEvent(new CustomEvent("varga:apri-timbratura", { detail: { which: pending } }));
+        pending = info.which === "return" ? "return" : "arrival";
+        // A real notification tap is required for the optional Easy-Box redirect.
+        window.dispatchEvent(new CustomEvent("varga:apri-timbratura", {
+          detail: { which: pending, source: "notification-tap", tapped: true }
+        }));
       });
     } catch (error) {
       listenerReady = false;
@@ -102,6 +108,22 @@
     // Store page is verified. We do not claim this is an undocumented app deep link.
     window.open(APP_STORE, "_blank", "noopener");
   }
+  async function launchEasyBoxFromNotification() {
+    if (!isNativeIOS()) return { opened: false, reason: "Solo sull'iPhone con app installata." };
+    const geofence = window.Capacitor?.Plugins?.VargaGeofence ||
+      window.Capacitor?.registerPlugin?.("VargaGeofence");
+    if (!geofence?.openEasyBoxShortcut) {
+      return { opened: false, reason: "Serve una nuova versione iOS con apertura nativa Easy-Box." };
+    }
+    try {
+      const result = await geofence.openEasyBoxShortcut();
+      return { opened: result?.opened === true, reason: result?.opened ? "" :
+        "Non riesco ad aprire Comandi Rapidi. Verifica che sia installato." };
+    } catch (error) {
+      return { opened: false, reason: String(error?.message || error) };
+    }
+  }
+
   function openEasyBoxShortcut() {
     // Requires a user-created Apple Shortcut named "Apri Easy-Box".
     // No automatic app launch without a user action or a documented app deep link.
@@ -109,7 +131,7 @@
   }
 
   window.VargaTimbraturaIOS = {
-    init, sync, makeNotifications, allIDs, isNativeIOS,
+    init, sync, makeNotifications, allIDs, isNativeIOS, launchEasyBoxFromNotification,
     openEasyBoxStore, openEasyBoxShortcut,
     get pending() { return pending; },
     clearPending() { pending = null; },

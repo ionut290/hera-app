@@ -72,7 +72,17 @@ jobs:
           SDK_MAJOR="$(xcrun --sdk iphoneos --show-sdk-version | cut -d. -f1)"
           [[ -n "$XCODE_MAJOR" && "$XCODE_MAJOR" -ge 26 && -n "$SDK_MAJOR" && "$SDK_MAJOR" -ge 26 ]] ||
             { echo "::error::Xcode 26 / iOS 26 SDK or later required"; exit 1; }
-          echo "Commit and supported Xcode verified; no app upload yet."
+          # Another Varga Cantieri workflow already delivered build 21.
+          # This manual workflow has a separate, smaller GITHUB_RUN_NUMBER (e.g. 5).
+          # Offset to a dedicated monotonically increasing range above old builds.
+          [[ "${GITHUB_RUN_NUMBER}" =~ ^[0-9]+$ ]] || { echo "::error::Invalid GitHub run number"; exit 1; }
+          IOS_BUILD_NUMBER="$((1000 + GITHUB_RUN_NUMBER))"
+          if (( IOS_BUILD_NUMBER <= 21 || IOS_BUILD_NUMBER > 9999 )); then
+            echo "::error::Unsafe iOS build number: $IOS_BUILD_NUMBER"
+            exit 1
+          fi
+          echo "IOS_BUILD_NUMBER=$IOS_BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "Approved commit, Xcode and build $IOS_BUILD_NUMBER validated; no app upload yet."
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -220,10 +230,16 @@ jobs:
             -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
             -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
             MARKETING_VERSION=1.0 \
-            CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
             archive > "$RUNNER_TEMP/ios-private-archive.log" 2>&1 ||
             { tail -n 80 "$RUNNER_TEMP/ios-private-archive.log"; exit 1; }
           test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist"
+          ARCHIVED_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist")"
+          if [[ "$ARCHIVED_BUILD" != "$IOS_BUILD_NUMBER" ]]; then
+            echo "::error::Archive build number '$ARCHIVED_BUILD' differs from expected '$IOS_BUILD_NUMBER'. Stop before Apple upload."
+            exit 1
+          fi
+          echo "Verified native app build number: $ARCHIVED_BUILD"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
             grep -Fx 'it.vargacantieri.hera'
           test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/GoogleService-Info.plist"

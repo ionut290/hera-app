@@ -35,7 +35,7 @@
     "check:shared-calendar-trigger": "node scripts/check-shared-calendar-trigger.js",
     "check:shared-view-client": "node scripts/check-shared-view-client.js",
     "check:app-update": "node scripts/check-app-update.js",
-    "check:notifications": "node scripts/check-notification-experience.js && npm run check:timbratura-ios && npm run check:ios-geofence",
+    "check:notifications": "node scripts/check-notification-experience.js && npm run check:timbratura-ios && npm run check:ios-geofence && npm run check:direct-easybox",
     "check:auth-login": "node scripts/check-auth-login.js",
     "check:auth-stability": "node scripts/check-auth-stability-contract.js && node scripts/check-login-password-vault.js",
     "check:first-login-password": "node scripts/check-first-login-password.js",
@@ -79,7 +79,8 @@
     "check:preventivi-template-fidelity": "node scripts/check-preventivi-template-fidelity.js",
     "check:platform-profile-bootstrap": "node scripts/check-platform-profile-bootstrap-reuse.js",
     "check:timbratura-ios": "node scripts/check-timbratura-ios-reminders.js",
-    "check:ios-geofence": "node --check timbratura-ios-geofence.js && node --check timbratura-reminders.js && node scripts/check-ios-geofence.js"
+    "check:ios-geofence": "node --check timbratura-ios-geofence.js && node --check timbratura-reminders.js && node scripts/check-ios-geofence.js",
+    "check:direct-easybox": "node --check timbratura-ios-notifications.js && node --check timbratura-reminders.js && node scripts/check-direct-easybox.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

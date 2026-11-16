@@ -35,7 +35,7 @@
     "check:shared-calendar-trigger": "node scripts/check-shared-calendar-trigger.js",
     "check:shared-view-client": "node scripts/check-shared-view-client.js",
     "check:app-update": "node scripts/check-app-update.js",
-    "check:notifications": "node scripts/check-notification-experience.js",
+    "check:notifications": "node scripts/check-notification-experience.js && npm run check:timbratura-ios",
     "check:auth-login": "node scripts/check-auth-login.js",
     "check:auth-stability": "node scripts/check-auth-stability-contract.js && node scripts/check-login-password-vault.js",
     "check:first-login-password": "node scripts/check-first-login-password.js",
@@ -77,20 +77,22 @@
     "check:preventivi-matrix-runtime": "node scripts/check-preventivi-matrix-runtime-fix.js",
     "check:preventivi-commessa-search": "node scripts/check-preventivi-commessa-search-bridge.js",
     "check:preventivi-template-fidelity": "node scripts/check-preventivi-template-fidelity.js",
-    "check:platform-profile-bootstrap": "node scripts/check-platform-profile-bootstrap-reuse.js"
+    "check:platform-profile-bootstrap": "node scripts/check-platform-profile-bootstrap-reuse.js",
+    "check:timbratura-ios": "node scripts/check-timbratura-ios-reminders.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"
   },
   "dependencies": {
-    "@capgo/capacitor-alarm": "7.3.15",
     "@capacitor-firebase/authentication": "^7.5.0",
     "@capacitor/android": "^7.2.0",
     "@capacitor/core": "^7.2.0",
     "@capacitor/filesystem": "^7.1.8",
     "@capacitor/geolocation": "^7.1.0",
+    "@capacitor/local-notifications": "^7.0.7",
     "@capacitor/push-notifications": "^7.0.2",
     "@capacitor/share": "^7.0.4",
+    "@capgo/capacitor-alarm": "7.3.15",
     "firebase": "^11.10.0"
   }
 }

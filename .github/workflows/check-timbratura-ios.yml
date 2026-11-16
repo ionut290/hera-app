@@ -1,0 +1,32 @@
+name: Check iOS Timbratura Reminders
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'timbratura-ios-notifications.js'
+      - 'timbratura-reminders.js'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/check-timbratura-ios-reminders.js'
+      - '.github/workflows/check-timbratura-ios.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-timbratura-ios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Installa dipendenze esatte
+        run: npm ci --no-audit --no-fund
+      - name: Controlla sintassi e notifica iOS
+        run: |
+          node --check timbratura-ios-notifications.js
+          node --check timbratura-reminders.js
+          npm run check:notifications

@@ -9,7 +9,7 @@
     enabled: false, lat: "", lon: "", radius: 150,
     arrivalFrom: "06:30", arrivalTo: "07:15",
     returnFrom: "15:15", returnTo: "16:15",
-    days: [1, 2, 3, 4, 5], tone: "pulse", snooze: 5
+    days: [1, 2, 3, 4, 5], tone: "pulse", snooze: 5, iosScheduled: false
   };
   const $ = (id) => document.getElementById(id);
   let config = load(), watchId = null, windowTimer = null, soundTimer = null;
@@ -68,7 +68,9 @@
             <div><h2>🔔 Ricorda di timbrare</h2><p>Suona quando sei al magazzino durante la fascia oraria.</p></div>
             <button type="button" class="btn" id="timbratura-close">Chiudi</button>
           </header>
-          <label class="timbratura-enable"><input id="timbratura-enabled" type="checkbox"> Attiva i promemoria GPS</label>
+          <label class="timbratura-enable"><input id="timbratura-enabled" type="checkbox"> Attiva promemoria GPS quando l'app è aperta</label>
+          <label class="timbratura-enable"><input id="timbratura-ios-scheduled" type="checkbox"> 🔔 Notifiche iPhone agli orari impostati, anche con app chiusa</label>
+          <p class="timbratura-note">Notifiche settimanali all'inizio delle fasce orarie, anche senza GPS. Il suono rispetta Silenzioso e Full Immersion di iOS.</p>
           <div class="timbratura-grid">
             <div class="timbratura-card timbratura-wide">
               <h3>📍 Posizione magazzino</h3>
@@ -126,6 +128,26 @@
         </div>
       </section>`;
     document.body.append(...Array.from(node.children));
+    const easyBoxDialog = document.createElement("section");
+    easyBoxDialog.id = "timbratura-open-easybox";
+    easyBoxDialog.className = "timbratura-overlay";
+    easyBoxDialog.setAttribute("role", "dialog");
+    easyBoxDialog.setAttribute("aria-modal", "true");
+    easyBoxDialog.setAttribute("aria-label", "Apri Easy-Box per timbrare");
+    easyBoxDialog.hidden = true;
+    easyBoxDialog.innerHTML = `
+      <div class="timbratura-shell">
+        <div class="timbratura-alarm-icon">🕒</div>
+        <h2 id="timbratura-open-title">È ora di timbrare!</h2>
+        <p>Apri l'app aziendale Easy-Box ed effettua la timbratura di persona.</p>
+        <div class="timbratura-actions">
+          <button class="btn timbratura-primary" type="button" id="timbratura-shortcut">⚡ Apri Easy-Box con Comandi</button>
+          <button class="btn" type="button" id="timbratura-appstore">📲 Easy-Box su App Store</button>
+          <button class="btn" type="button" id="timbratura-open-close">Chiudi</button>
+        </div>
+        <p class="timbratura-note">Per l'apertura diretta, crea nell'app Apple «Comandi Rapidi» un comando chiamato <strong>Apri Easy-Box</strong> con azione «Apri app» → «Easy-Box». In alternativa, la pagina App Store offre «Apri» se Easy-Box è installata. Non equivale a timbrare.</p>
+      </div>`;
+    document.body.append(easyBoxDialog);
     button.addEventListener("click", () => {
       $("menu-close-btn")?.click();
       render(); $("timbratura-reminder-panel").hidden = false;
@@ -137,6 +159,19 @@
     $("timbratura-test").addEventListener("click", () => ring("test"));
     $("timbratura-stop").addEventListener("click", stop);
     $("timbratura-snooze").addEventListener("click", snooze);
+    $("timbratura-shortcut").addEventListener("click", () => window.VargaTimbraturaIOS?.openEasyBoxShortcut());
+    $("timbratura-appstore").addEventListener("click", () => window.VargaTimbraturaIOS?.openEasyBoxStore());
+    $("timbratura-open-close").addEventListener("click", () => { $("timbratura-open-easybox").hidden = true; });
+    function showEasyBoxReminder(which) {
+      $("timbratura-open-title").textContent = which === "return" ? "È ora di timbrare l'USCITA!" : "È ora di timbrare l'ENTRATA!";
+      $("timbratura-open-easybox").hidden = false;
+    }
+    window.addEventListener("varga:apri-timbratura", e => showEasyBoxReminder(e.detail?.which));
+    void window.VargaTimbraturaIOS?.init().then(() => {
+      const pending = window.VargaTimbraturaIOS?.pending;
+      if (pending) { showEasyBoxReminder(pending); window.VargaTimbraturaIOS.clearPending(); }
+    });
+    if (config.iosScheduled) void window.VargaTimbraturaIOS?.sync(config, { prompt: false });
     window.addEventListener("pagehide", () => { silence(); stopWatching(); });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) { stopWatching(); silence(); if (ringing) { ringing=""; $("timbratura-ringing").hidden=true; } }
@@ -146,6 +181,7 @@
   }
   function render() {
     $("timbratura-enabled").checked = !!config.enabled;
+    $("timbratura-ios-scheduled").checked = !!config.iosScheduled;
     for (const key of ["lat","lon","radius","arrivalFrom","arrivalTo","returnFrom","returnTo"]) {
       $("timbratura-"+key).value = config[key] ?? "";
     }
@@ -155,6 +191,7 @@
   function save() {
     const next={...config};
     next.enabled=$("timbratura-enabled").checked;
+    next.iosScheduled=$("timbratura-ios-scheduled").checked;
     next.lat=$("timbratura-lat").value.trim().replace(",",".");
     next.lon=$("timbratura-lon").value.trim().replace(",",".");
     next.radius=Number($("timbratura-radius").value);
@@ -182,7 +219,18 @@
       startWatching();
       void prepareAlarmPermission();
     }
-    status(config.enabled ? "Promemoria GPS attivo mentre l'app è aperta." : "Promemoria disattivato.");
+    status(config.enabled ? "Promemoria GPS attivo mentre l'app è aperta." : "Impostazioni salvate.");
+    if (window.VargaTimbraturaIOS?.isNativeIOS()) {
+      void window.VargaTimbraturaIOS.sync(config, { prompt: !!config.iosScheduled }).then(result => {
+        if (result.busy) return;
+        if (result.error) return status("Notifiche iPhone non pianificate: " + result.error, true);
+        if (result.permissionDenied) return status("Abilita le notifiche di Varga Cantieri nelle Impostazioni iPhone.", true);
+        if (result.scheduled) return status("🔔 Programmati " + result.scheduled + " avvisi settimanali. Funzionano anche con l'app chiusa.");
+        if (!config.enabled) status("Promemoria disattivati; notifiche future cancellate.");
+      });
+    } else if (config.iosScheduled) {
+      status("Per gli avvisi a app chiusa installa la nuova versione iPhone di Varga Cantieri.", true);
+    }
   }
   function locate(use) {
     if(!navigator.geolocation) return status("GPS non disponibile su questo dispositivo.",true);

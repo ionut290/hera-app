@@ -28,6 +28,12 @@ PURPOSE_STRINGS = {
         "Varga Cantieri salva nella libreria foto soltanto i contenuti "
         "che scegli di esportare."
     ),
+    "NSLocationAlwaysAndWhenInUseUsageDescription": (
+        "Se attivi Ricorda di timbrare con GPS in background, Varga Cantieri "
+        "controlla l'ingresso nell'area del magazzino anche a schermo bloccato "
+        "o con app chiusa, solo per ricordarti di timbrare nelle fasce scelte. "
+        "Non registra spostamenti né effettua timbrature automatiche."
+    ),
     "NSLocationWhenInUseUsageDescription": (
         "Varga Cantieri utilizza la posizione mentre usi l'app per "
         "mostrare i cantieri vicini e le indicazioni sulla mappa."
@@ -64,7 +70,7 @@ def main() -> None:
         if verified.get(key) != value:
             raise SystemExit(f"Permesso iOS non configurato: {key}")
 
-    print("Info.plist iOS predisposto (permessi solo con app in uso).")
+    print("Info.plist iOS configurato: posizione Quando in uso e Sempre (opt-in GPS geofence).")
 
 
 if __name__ == "__main__":

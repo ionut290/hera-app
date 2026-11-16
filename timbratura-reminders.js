@@ -9,7 +9,7 @@
     enabled: false, lat: "", lon: "", radius: 150,
     arrivalFrom: "06:30", arrivalTo: "07:15",
     returnFrom: "15:15", returnTo: "16:15",
-    days: [1, 2, 3, 4, 5], tone: "pulse", snooze: 5, iosScheduled: false, iosGeofence: false
+    days: [1, 2, 3, 4, 5], tone: "pulse", snooze: 5, iosScheduled: false, iosGeofence: false, directEasyBoxTap: false
   };
   const $ = (id) => document.getElementById(id);
   let config = load(), watchId = null, windowTimer = null, soundTimer = null;
@@ -71,6 +71,11 @@
           <label class="timbratura-enable"><input id="timbratura-enabled" type="checkbox"> Attiva promemoria GPS quando l'app è aperta</label>
           <label class="timbratura-enable"><input id="timbratura-ios-geofence" type="checkbox"> 📍🔔 Controlla GPS anche con app chiusa: avvisa solo quando entro nel magazzino durante le fasce impostate</label>
           <label class="timbratura-enable"><input id="timbratura-ios-scheduled" type="checkbox"> 🕒 Avvisi a orario fisso senza controllo GPS (alternativa)</label>
+          <label class="timbratura-enable"><input id="timbratura-easybox-direct" type="checkbox"> ⚡ Apri subito Easy-Box quando tocco la notifica (richiede Comandi Rapidi)</label>
+          <div class="timbratura-actions">
+            <button type="button" class="btn" id="timbratura-easybox-test">📲 Prova apertura Easy-Box</button>
+          </div>
+          <p class="timbratura-note">Prima crea su iPhone, in «Comandi Rapidi», il comando esatto «Apri Easy-Box» con una sola azione «Apri app» → «Easy-Box». Provalo con il pulsante qui sopra. Toccando una notifica, iOS avvia brevemente Varga Cantieri e poi tenta di aprire Easy-Box. Senza il comando non è possibile il passaggio diretto e potrebbe essere richiesta una conferma di iOS. Nessuna timbratura automatica.</p>
           <p class="timbratura-note">Il GPS con app chiusa richiede il permesso Posizione «Sempre» e notifiche autorizzate. iOS rileva l'ingresso nel raggio e controlla giorno e fascia oraria. Non è GPS continuo: può esserci ritardo e se rimani già dentro senza uscire e rientrare non arriva un nuovo evento. La seconda opzione invia avvisi a orario anche lontano dal magazzino.</p>
           <div class="timbratura-grid">
             <div class="timbratura-card timbratura-wide">
@@ -162,15 +167,55 @@
     $("timbratura-snooze").addEventListener("click", snooze);
     $("timbratura-shortcut").addEventListener("click", () => window.VargaTimbraturaIOS?.openEasyBoxShortcut());
     $("timbratura-appstore").addEventListener("click", () => window.VargaTimbraturaIOS?.openEasyBoxStore());
+    $("timbratura-easybox-test").addEventListener("click", () => {
+      if (!window.VargaTimbraturaIOS?.launchEasyBoxFromNotification) {
+        return status("Il collegamento Easy-Box richiede la nuova versione iPhone.", true);
+      }
+      status("Apro il Comando Rapido «Apri Easy-Box»…");
+      void window.VargaTimbraturaIOS.launchEasyBoxFromNotification().then(result => {
+        if (!result.opened) status("Non riesco ad avviare Comandi Rapidi: " + (result.reason || "Verifica la configurazione."), true);
+      });
+    });
     $("timbratura-open-close").addEventListener("click", () => { $("timbratura-open-easybox").hidden = true; });
     function showEasyBoxReminder(which) {
       $("timbratura-open-title").textContent = which === "return" ? "È ora di timbrare l'USCITA!" : "È ora di timbrare l'ENTRATA!";
       $("timbratura-open-easybox").hidden = false;
     }
-    window.addEventListener("varga:apri-timbratura", e => showEasyBoxReminder(e.detail?.which));
+    let openingEasyBox = false;
+    async function onTimbraturaNotification(event) {
+      const detail = event?.detail || {};
+      // Never redirect because GPS entered a region or because Varga Cantieri
+      // was opened normally. Only the actual user notification tap qualifies.
+      if (detail.source !== "notification-tap" || detail.tapped !== true) {
+        if (!config.directEasyBoxTap) showEasyBoxReminder(detail.which);
+        return;
+      }
+      if (!config.directEasyBoxTap || openingEasyBox) {
+        if (!openingEasyBox) showEasyBoxReminder(detail.which);
+        return;
+      }
+      openingEasyBox = true;
+      window.VargaTimbraturaIOS?.clearPending();
+      try {
+        const result = await window.VargaTimbraturaIOS?.launchEasyBoxFromNotification();
+        if (!result?.opened) {
+          showEasyBoxReminder(detail.which);
+          status("Apertura rapida Easy-Box non disponibile: " + (result?.reason || "Prova il pulsante manuale."), true);
+        }
+      } catch (error) {
+        showEasyBoxReminder(detail.which);
+        status("Non riesco ad aprire Easy-Box. Usa il pulsante manuale.", true);
+      } finally { openingEasyBox = false; }
+    }
+    window.addEventListener("varga:apri-timbratura", e => void onTimbraturaNotification(e));
     void window.VargaTimbraturaIOS?.init().then(() => {
       const pending = window.VargaTimbraturaIOS?.pending;
-      if (pending) { showEasyBoxReminder(pending); window.VargaTimbraturaIOS.clearPending(); }
+      if (pending) {
+        // An action listener will dispatch the tap separately. Avoid opening
+        // Easy-Box automatically just because a pending item exists.
+        if (!config.directEasyBoxTap) showEasyBoxReminder(pending);
+        window.VargaTimbraturaIOS.clearPending();
+      }
     });
     if (config.iosScheduled) void window.VargaTimbraturaIOS?.sync(config, { prompt: false });
     // Il processo iOS può essere stato riavviato dal GPS prima della pagina web.
@@ -186,6 +231,7 @@
     $("timbratura-enabled").checked = !!config.enabled;
     $("timbratura-ios-scheduled").checked = !!config.iosScheduled;
     $("timbratura-ios-geofence").checked = !!config.iosGeofence;
+    $("timbratura-easybox-direct").checked = !!config.directEasyBoxTap;
     for (const key of ["lat","lon","radius","arrivalFrom","arrivalTo","returnFrom","returnTo"]) {
       $("timbratura-"+key).value = config[key] ?? "";
     }
@@ -197,6 +243,7 @@
     next.enabled=$("timbratura-enabled").checked;
     next.iosScheduled=$("timbratura-ios-scheduled").checked;
     next.iosGeofence=$("timbratura-ios-geofence").checked;
+    next.directEasyBoxTap=$("timbratura-easybox-direct").checked;
     // Il GPS native mode non deve mai pianificare avvisi soltanto a orario.
     if (next.iosGeofence) {
       next.iosScheduled=false;

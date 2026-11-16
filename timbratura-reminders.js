@@ -173,12 +173,14 @@
       if (pending) { showEasyBoxReminder(pending); window.VargaTimbraturaIOS.clearPending(); }
     });
     if (config.iosScheduled) void window.VargaTimbraturaIOS?.sync(config, { prompt: false });
+    // Il processo iOS può essere stato riavviato dal GPS prima della pagina web.
+    void window.VargaTimbraturaGeofence?.status({ consumePending: true });
     window.addEventListener("pagehide", () => { silence(); stopWatching(); });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) { stopWatching(); silence(); if (ringing) { ringing=""; $("timbratura-ringing").hidden=true; } }
-      else if (config.enabled) startWatching();
+      else if (config.enabled && !(config.iosGeofence && window.VargaTimbraturaGeofence?.isAvailable())) startWatching();
     });
-    if (config.enabled) startWatching();
+    if (config.enabled && !(config.iosGeofence && window.VargaTimbraturaGeofence?.isAvailable())) startWatching();
   }
   function render() {
     $("timbratura-enabled").checked = !!config.enabled;
@@ -216,7 +218,7 @@
     try { localStorage.setItem(KEY, JSON.stringify(config)); }
     catch (_) { config=old; return status("Non riesco a salvare le impostazioni sul telefono.",true); }
     stopWatching();
-    if (config.enabled) {
+    if (config.enabled && !(config.iosGeofence && window.VargaTimbraturaGeofence?.isAvailable())) {
       // Consenti l'audio con il gesto esplicito usato per salvare.
       try {
         const AudioCtor = window.AudioContext || window.webkitAudioContext;
@@ -240,6 +242,19 @@
     } else if (config.iosScheduled) {
       status("Per gli avvisi a app chiusa installa la nuova versione iPhone di Varga Cantieri.", true);
     }
+    if (window.VargaTimbraturaGeofence) {
+      void window.VargaTimbraturaGeofence.sync(config).then(result => {
+        if (result.error) return status("GPS background non attivato: " + result.error, true);
+        if (config.iosGeofence && result.supported === false)
+          return status(result.reason || "Geofencing non disponibile. Aggiorna Varga Cantieri iPhone.", true);
+        if (config.iosGeofence && result.permission !== "always")
+          return status("Per il GPS con app chiusa vai in Impostazioni iPhone → Varga Cantieri → Posizione → Sempre. Poi riapri l'app.", true);
+        if (config.iosGeofence && !result.monitoring)
+          return status("GPS in attivazione: controlla permessi, localizzazione e raggio.", true);
+        if (config.iosGeofence)
+          return status("📍 GPS magazzino attivo anche con app chiusa: avvisa solo entrando nel raggio, nei giorni e orari scelti.");
+      });
+    }
   }
   function locate(use) {
     if(!navigator.geolocation) return status("GPS non disponibile su questo dispositivo.",true);
@@ -260,7 +275,7 @@
     {enableHighAccuracy:true,maximumAge:0,timeout:15000});
   }
   function startWatching() {
-    if(!config.enabled || !valid() || watchId!==null || document.hidden) return;
+    if(!config.enabled || !valid() || watchId!==null || document.hidden || (config.iosGeofence && window.VargaTimbraturaGeofence?.isAvailable())) return;
     if(!navigator.geolocation) return;
     // GPS non interrogato continuamente: solo nelle due fasce e con pagina visibile.
     tick();

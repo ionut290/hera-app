@@ -32,9 +32,11 @@ vm.runInNewContext(source,context);
 (async()=>{
   const api=win.VargaTimbraturaIOS;
   assert.equal(await api.init(),true);
-  listener({ notification: { extra:{ feature:"other-feature",which:"arrival" } } });
+  listener({ actionId:"tap", notification: { extra:{ feature:"other-feature",which:"arrival" } } });
   assert.equal(events.length,0,"unrelated notification must be ignored");
-  listener({ notification: { extra:{ feature:"varga-timbratura",which:"return" } } });
+  listener({ actionId:"dismiss", notification: { extra:{ feature:"varga-timbratura",which:"return" } } });
+  assert.equal(events.length,0,"dismissal must NOT open Easy-Box");
+  listener({ actionId:"tap", notification: { extra:{ feature:"varga-timbratura",which:"return" } } });
   assert.equal(events.length,1);
   assert.equal(events[0].detail.source,"notification-tap");
   assert.equal(events[0].detail.tapped,true);

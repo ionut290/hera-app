@@ -49,3 +49,38 @@ sono un'alternativa **senza GPS** e vengono disattivati scegliendo il GPS.
 
 La build non si distribuisce automaticamente: serve processo manuale TestFlight
 interno autorizzato con SHA esatto dopo esito verde CI.
+
+
+## Apertura Easy-Box al tocco della notifica (opt-in)
+
+**Il collegamento diretto all'app Easy-Box di ICT-GROUP non risulta documentato pubblicamente.**
+Non inventare URL `easybox://` o schemi equivalenti. Varga Cantieri usa il metodo
+documentato da Apple per eseguire un Comando Rapido tramite
+`shortcuts://run-shortcut?name=Apri%20Easy-Box`.
+
+Preparazione **una volta sola sull'iPhone**:
+1. Installa Easy-Box e l'app Apple **Comandi Rapidi**.
+2. Comandi Rapidi → **+** → aggiungi azione **Apri app**, seleziona **Easy-Box**.
+3. Rinomina il comando esattamente **Apri Easy-Box**.
+4. In Varga Cantieri → Ricorda di timbrare → **Prova apertura Easy-Box**:
+   verifica che il comando apra davvero Easy-Box. Se manca o ha un altro nome,
+   iOS può soltanto aprire Comandi Rapidi senza aprire Easy-Box.
+5. Attiva la casella **Apri subito Easy-Box quando tocco la notifica** e salva.
+
+Quando il proprietario **tocca la notifica** (o il pulsante Apri timbratura),
+il plugin Capacitor LocalNotifications consegna l'azione; Varga Cantieri
+richiede al nativo iOS di aprire il link Shortcuts. L'app Varga Cantieri deve
+essere attivata da iOS per ricevere il tocco, anche se l'obiettivo è
+passare subito a Easy-Box. Questo passaggio o una conferma possono essere
+visibili brevemente; non è possibile garantire che non si vedano mai.
+
+Se il collegamento non può aprirsi viene mostrata la schermata già esistente
+con i pulsanti manuali Easy-Box / App Store. L'opzione è disattivata di default
+e non cambia le timbrature: ogni registrazione resta manuale.
+
+**Sicurezza:** notifiche di altre funzionalità, notifiche eliminate/dismiss,
+semplice ingresso GPS e riapertura ordinaria di Varga Cantieri non possono
+causare l'apertura automatica di Easy-Box. È necessario un vero tocco
+dell'utente su una notifica di timbratura e il consenso nell'interfaccia.
+Verificare su iPhone reale perché l'app terza, Comandi Rapidi e la gestione
+delle notifiche dipendono da iOS e dal dispositivo.

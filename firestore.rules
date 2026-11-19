@@ -124,7 +124,7 @@ service cloud.firestore {
       ) && (
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           "statoAccount", "accountStatus", "role", "ruolo", "isAdmin", "admin",
-          "approvatoAt", "approvedAt", "approvatoDa", "approvatoDaEmail",
+          "approvatoAt", "approvedAt", "approvatoDa", "approvedBy", "approvatoDaEmail",
           "rifiutatoAt", "rejectedAt", "rifiutatoDa", "rejectedBy", "motivoRifiuto"
         ]) || (
           resource.data.get("statoAccount", "") in ["in_attesa", "richiesta_inviata"]

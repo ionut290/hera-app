@@ -112,18 +112,29 @@ service cloud.firestore {
     }
 
     function validSelfProfileUpdate() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        "statoAccount", "accountStatus", "role", "ruolo", "isAdmin", "admin",
-        "approvatoAt", "approvedAt", "approvatoDa", "approvedBy", "approvatoDaEmail",
-        "rifiutatoAt", "rejectedAt", "rifiutatoDa", "rejectedBy", "motivoRifiuto"
-      ]) || (
-        resource.data.get("statoAccount", "") in ["in_attesa", "richiesta_inviata"]
-        && request.resource.data.statoAccount == "richiesta_inviata"
-        && request.resource.data.accountStatus == "richiesta_inviata"
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "statoAccount", "accountStatus", "richiestaWhatsappAt", "whatsappRequestedAt",
-          "ultimaRichiestaAt", "lastRequestAt", "numeroRichieste", "requestCount"
-        ])
+      // A normal user must not impersonate another recipient by changing the
+      // profile UID/email consumed by backend notification dispatchers.
+      // A verified Firebase Auth email change may be mirrored into the profile.
+      return (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(["uid"])
+        || request.resource.data.get("uid", "") == request.auth.uid
+      ) && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(["email"])
+        || request.resource.data.get("email", "") == request.auth.token.email
+      ) && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          "statoAccount", "accountStatus", "role", "ruolo", "isAdmin", "admin",
+          "approvatoAt", "approvedAt", "approvatoDa", "approvatoDaEmail",
+          "rifiutatoAt", "rejectedAt", "rifiutatoDa", "rejectedBy", "motivoRifiuto"
+        ]) || (
+          resource.data.get("statoAccount", "") in ["in_attesa", "richiesta_inviata"]
+          && request.resource.data.statoAccount == "richiesta_inviata"
+          && request.resource.data.accountStatus == "richiesta_inviata"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "statoAccount", "accountStatus", "richiestaWhatsappAt", "whatsappRequestedAt",
+            "ultimaRichiestaAt", "lastRequestAt", "numeroRichieste", "requestCount"
+          ])
+        )
       );
     }
 

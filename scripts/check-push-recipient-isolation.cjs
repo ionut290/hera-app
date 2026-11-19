@@ -10,9 +10,9 @@ const src = fs.readFileSync(file, "utf8");
 const normalizeBlock = src.slice(src.indexOf("function normalize(value) {"), src.indexOf("function chunk(items, size) {"));
 const resolverBlock = src.slice(src.indexOf("function userMatches(user, rawValue) {"), src.indexOf("async function clearInvalidTokens("));
 assert.ok(normalizeBlock.includes('function normalize(value)') && resolverBlock.includes('function resolvePrivateChatRecipient('));
-const { normalize, resolveUniquePushUser, resolvePrivateChatRecipient } =
+const { normalize, resolveUniquePushUser, resolvePrivateChatRecipient, hasUniquePushTokenOwner } =
   vm.runInNewContext(normalizeBlock + "\n" + resolverBlock +
-    "\n({normalize,resolveUniquePushUser,resolvePrivateChatRecipient})");
+    "\n({normalize,resolveUniquePushUser,resolvePrivateChatRecipient,hasUniquePushTokenOwner})");
 
 const user = (uid, email, names, pushToken = "synthetic-token") => ({
   uid, email, pushToken,
@@ -22,6 +22,13 @@ const first = user("uid001", "mario.rossi@example.test", ["Mario Rossi", "Mario"
 const second = user("uid002", "mario.bianchi@example.test", ["Mario Bianchi", "Mario"]);
 const third = user("uid003", "lucia@example.test", ["Lucia Verde"], "");
 const users = [first, second, third];
+
+assert.equal(hasUniquePushTokenOwner(users, first), true);
+assert.equal(hasUniquePushTokenOwner(users, third), false, "No FCM token means no personal push");
+const sharedTokenUsers = [...users, user("uid999", "unrelated@example.test", ["Unrelated"], first.pushToken)];
+assert.equal(hasUniquePushTokenOwner(sharedTokenUsers, first), false,
+  "Reused FCM token across profiles must never receive a private worker notification");
+assert.equal(hasUniquePushTokenOwner(sharedTokenUsers, sharedTokenUsers.at(-1)), false);
 
 assert.equal(resolvePrivateChatRecipient(users, "uid001"), first);
 assert.equal(resolvePrivateChatRecipient(users, "mario.rossi@example.test"), first);
@@ -43,6 +50,7 @@ assert.equal(resolveUniquePushUser([...users,
 
 const chat = src.slice(src.indexOf("exports.notifyAndroidChatMessage ="), src.indexOf("function extractHoursRows("));
 assert.match(chat, /resolvePrivateChatRecipient\(users, recipientId\)/);
+assert.match(chat, /hasUniquePushTokenOwner\(users, directRecipient\)/);
 assert.doesNotMatch(chat, /userMatches\(user, recipientId\)/);
 const hours = src.slice(src.indexOf("exports.notifyAndroidHoursInserted ="), src.indexOf("function extractSquadraOperators("));
 assert.match(hours, /resolveUniquePushUser\(users, row.operatorName\)/);

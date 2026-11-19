@@ -12,7 +12,8 @@ class MockHttpsError extends Error {
   }
 }
 
-function setup() {
+function setup(options = {}) {
+  const injected = { storage: false, firestore: false, personnel: false, auth: false };
   const users = new Set(["worker-1", "worker-2"]);
   const docs = [
     { collection: "documents", id: "private-1", ownerUserId: "worker-1", visibility: "personal", storagePath: "documents/worker-1/doc1/private.pdf", thumbnailPath: "documents/worker-1/doc1/thumbnail.jpg" },
@@ -47,6 +48,10 @@ function setup() {
                     ref: {
                       path: d.collection + "/" + d.id,
                       async update(fields) {
+                        if (options.failPersonnelOnce && !injected.personnel) {
+                          injected.personnel = true;
+                          throw new Error("Injected personnel write failure");
+                        }
                         updated.push({ path: this.path, fields: Object.keys(fields) });
                         for (const [key, value] of Object.entries(fields)) {
                           if (value === Symbol.for("firebase-field-delete")) delete d[key];
@@ -66,6 +71,10 @@ function setup() {
       return { path: docPath };
     },
     async recursiveDelete(ref) {
+      if (options.failFirestoreOnce && !injected.firestore) {
+        injected.firestore = true;
+        throw new Error("Injected Firestore deletion failure");
+      }
       removed.push(ref.path);
     }
   };
@@ -79,6 +88,10 @@ function setup() {
         return { uid };
       },
       deleteUser: async (uid) => {
+        if (options.failAuthOnce && !injected.auth) {
+          injected.auth = true;
+          throw new Error("Injected Firebase Auth deletion failure");
+        }
         assert.ok(users.has(uid));
         removedUsers.push(uid);
         users.delete(uid);
@@ -87,8 +100,12 @@ function setup() {
     storage: () => ({
       bucket: () => ({
         file: (name) => ({
-          async delete(options) {
-            assert.equal(options.ignoreNotFound, true);
+          async delete(deleteOptions) {
+            assert.equal(deleteOptions.ignoreNotFound, true);
+            if (options.failStorageOnce && !injected.storage) {
+              injected.storage = true;
+              throw new Error("Injected Storage deletion failure");
+            }
             removedFiles.push(name);
           }
         })
@@ -209,7 +226,22 @@ async function rejectedCode(promise, expected) {
   assert.equal(state.removed.length, 0);
   assert.equal(state.removedFiles.length, 0);
 
-  console.log("PASS: Account deletion simulated — auth, confirmation, UID isolation, retention, storage safety.");
+  // Transient cloud failures cannot produce a false Firebase Auth deletion.
+  for (const [mode, firstPhase] of [
+    ["failStorageOnce", "storage"], ["failFirestoreOnce", "firestore"],
+    ["failPersonnelOnce", "personale"], ["failAuthOnce", "auth"]
+  ]) {
+    state = setup({ [mode]: true });
+    await rejectedCode(state.handler({ auth: goodAuth, data: { confirmation: "ELIMINA" } }), "internal");
+    assert.deepEqual(state.removedUsers, [], firstPhase + " unexpectedly removed Auth user");
+    assert.equal(state.docs.find((d) => d.id === "employee-2").linkedUserId, "worker-2");
+    const retry = await state.handler({ auth: goodAuth, data: { confirmation: "ELIMINA" } });
+    assert.equal(retry.deleted, true);
+    assert.deepEqual(state.removedUsers, ["worker-1"]);
+    assert.equal(state.docs.find((d) => d.id === "employee-2").linkedUserId, "worker-2");
+  }
+
+  console.log("PASS: Account deletion simulated — auth, confirmation, UID isolation, retention, storage safety, failure retry.");
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

@@ -1,0 +1,37 @@
+name: Verify published Storage Rules auditor (offline)
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "scripts/audit-published-storage-rules.cjs"
+      - ".github/workflows/audit-published-storage-rules-protected.yml"
+      - ".github/workflows/check-published-storage-rules-audit.yml"
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test local ruleset analyzer WITHOUT cloud credentials
+        run: |
+          set -euo pipefail
+          node --check scripts/audit-published-storage-rules.cjs
+          node scripts/audit-published-storage-rules.cjs --self-test
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('scripts/audit-published-storage-rules.cjs').read_text()
+          w=Path('.github/workflows/audit-published-storage-rules-protected.yml').read_text()
+          assert 'APPROVE_PUBLISHED_RULES_READ_ONLY' in s and 'APPROVE_PUBLISHED_RULES_READ_ONLY' in w
+          assert 'method:"GET"' in s
+          assert 'setCustomUserClaims' not in s and 'deleteUser' not in s
+          assert 'environment: firebase-account-deletion-production' in w
+          assert 'required_reviewers' in w and 'workflow_dispatch:' in w
+          assert '  push:' not in w and '  schedule:' not in w
+          assert 'firebase-tools deploy' not in w
+          print('PASS: published Storage auditor is reviewer-gated and read-only')
+          PY

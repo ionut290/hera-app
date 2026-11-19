@@ -33,7 +33,9 @@ jobs:
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/varga-e2e-server.log 2>&1 &
           echo $! > /tmp/varga-e2e-server.pid
-          for i in {1..30}; do
+          # GitHub container steps use POSIX sh, not Bash: brace expansion would
+          # run just once and fail before the background server starts.
+          for i in $(seq 1 30); do
             curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0
             sleep 1
           done

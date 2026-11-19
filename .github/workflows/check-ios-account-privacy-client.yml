@@ -1,0 +1,35 @@
+name: iOS account privacy client - isolated synthetic tests
+on:
+  pull_request:
+    paths:
+      - account-privacy-controls.js
+      - index.html
+      - capacitor.config.json
+      - scripts/check-account-privacy-client-runtime.js
+      - scripts/prepare-capacitor-web.js
+      - scripts/install-ios-apple-signin.rb
+      - .github/workflows/ios-private-testflight.yml
+      - .github/workflows/ios-appstore-candidate.yml
+      - .github/workflows/check-ios-account-privacy-client.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  client:
+    name: Apple login and account deletion - synthetic client tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check source and fake-only account deletion scenarios
+        run: |
+          set -euo pipefail
+          node --check account-privacy-controls.js
+          node --check scripts/check-account-privacy-client-runtime.js
+          node --check scripts/prepare-capacitor-web.js
+          node scripts/check-account-privacy-client-runtime.js
+          node -e "const cfg=require('./capacitor.config.json');if(!cfg.plugins.FirebaseAuthentication.providers.includes('apple.com'))throw Error('Apple provider missing')"
+          test -s scripts/install-ios-apple-signin.rb
+          ruby -c scripts/install-ios-apple-signin.rb

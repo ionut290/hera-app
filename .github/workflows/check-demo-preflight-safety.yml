@@ -1,0 +1,43 @@
+name: Check demo-only Firebase live preflight safety (synthetic)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/run-approved-demo-preflight.cjs"
+      - "scripts/prepare-app-review-demo-claims.cjs"
+      - ".github/workflows/verify-demo-deletion-preflight-protected.yml"
+      - ".github/workflows/check-demo-preflight-safety.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  nondestructive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate demo-only login, preflight and lockdown with no credentials
+        run: |
+          set -euo pipefail
+          node --check scripts/run-approved-demo-preflight.cjs
+          node scripts/run-approved-demo-preflight.cjs --self-test
+          node scripts/prepare-app-review-demo-claims.cjs --self-test
+      - name: Preserve immutable production and protected reviewer guard
+        run: |
+          set -euo pipefail
+          grep -Fq 'RUN_SAFE_PREFLIGHT_ONLY' .github/workflows/verify-demo-deletion-preflight-protected.yml
+          grep -Fq 'firebase-account-deletion-production' .github/workflows/verify-demo-deletion-preflight-protected.yml
+          grep -Fq 'required_reviewers' .github/workflows/verify-demo-deletion-preflight-protected.yml
+          grep -Fq 'scripts/run-approved-demo-preflight.cjs --lockdown' .github/workflows/verify-demo-deletion-preflight-protected.yml
+          grep -Fq 'scripts/run-approved-demo-preflight.cjs --preflight' .github/workflows/verify-demo-deletion-preflight-protected.yml
+          grep -Fq 'mode: "preflight"' scripts/run-approved-demo-preflight.cjs
+          grep -Fxq 'const DEMO_ONLY_RELEASE = true;' functions/account-deletion.js
+          # No direct account deletion or Firestore writes in preflight source.
+          if grep -E '\.(deleteUser|recursiveDelete|delete|create|set|batch|runTransaction)\s*\(' scripts/run-approved-demo-preflight.cjs; then
+            echo "::error::Mutating/deletion method forbidden in preflight helper"; exit 1
+          fi

@@ -62,12 +62,15 @@ exports.deleteOwnVargaAccount = onCall({
     const personal = owned.docs.filter((doc) => doc.data()?.visibility === "personal");
     const paths = [];
     for (const doc of personal) {
-      const path = doc.data()?.storagePath;
-      if (!safePersonalStoragePath(path, uid)) {
+      const file = doc.data()?.storagePath;
+      const thumbnail = doc.data()?.thumbnailPath;
+      if (!safePersonalStoragePath(file, uid) ||
+          (thumbnail && !safePersonalStoragePath(thumbnail, uid))) {
         throw new HttpsError("failed-precondition",
           "Un documento personale usa un percorso di archivio non previsto. Contatta l'assistenza per completare l'eliminazione.");
       }
-      paths.push(path);
+      paths.push(file);
+      if (thumbnail) paths.push(thumbnail);
     }
 
     // Do not destroy business files, shared geodata, timesheets, commesse or

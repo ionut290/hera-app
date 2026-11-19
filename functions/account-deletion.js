@@ -93,6 +93,21 @@ async function unlinkSharedAuthor(db, collectionName, identityField, uid, nameFi
   }
 }
 
+
+/**
+ * A deleted account must not remain the explicit addressee of retained chat.
+ * Keep the sender and the message intact: both are needed by other participants.
+ * This only matches Firebase UIDs stored as recipientId. Legacy email aliases,
+ * content text and metadata require separate, contextual review.
+ */
+async function unlinkDeletedChatRecipient(db, uid) {
+  const messages = await db.collection("chatMessages").where("recipientId", "==", uid).get();
+  const remove = admin.firestore.FieldValue.delete();
+  for (const message of messages.docs) {
+    await message.ref.update({ recipientId: remove });
+  }
+}
+
 exports.deleteOwnVargaAccount = onCall({
   region: REGION,
   invoker: "public", // Firebase bearer auth is enforced below
@@ -196,9 +211,11 @@ exports.deleteOwnVargaAccount = onCall({
     await scrubCentralNotifications(db, uid);
 
     // The operator approved minimising identity in retained work communications.
-    // Only author-linked rows are touched; recipientId, message content and
-    // other participants stay unchanged. TTL/retention are separate controls.
+    // Only rows linked by exact author/recipient UID are touched. We retain
+    // message text, enterprise metadata and identities of all other users.
+    // TTL/retention and legacy email aliases are separate controls.
     await unlinkSharedAuthor(db, "chatMessages", "senderId", uid, "senderName", "senderEmail");
+    await unlinkDeletedChatRecipient(db, uid);
     await unlinkSharedAuthor(db, "appNotifications", "createdByUid", uid, "createdByName", "createdByEmail");
 
     // Personal private records and authorization links are always owned by UID.

@@ -152,7 +152,8 @@ const request = (who, data, age = 0) => ({
   const otherChat = (await db.doc("chatMessages/synthetic-chat-other").get()).data();
   assert.equal(otherChat.senderId, otherUid);
   assert.equal(otherChat.senderEmail, "other@example.test");
-  assert.equal(otherChat.recipientId, uid);
+  assert.equal(otherChat.text, "Preserve another worker's message");
+  assert.equal(otherChat.recipientId, undefined);
   const ownedNotice = (await db.doc("appNotifications/synthetic-app-notice-owned").get()).data();
   assert.equal(ownedNotice.createdByUid, undefined);
   assert.equal(ownedNotice.createdByEmail, undefined);

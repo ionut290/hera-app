@@ -6,6 +6,13 @@ on:
       - 'storage.rules'
       - 'privacy.html'
       - 'scripts/check-security-privacy-audit.js'
+      - 'functions/account-deletion.js'
+      - 'functions/main.js'
+      - 'account-privacy-controls.js'
+      - 'scripts/check-account-privacy.js'
+      - 'scripts/check-account-privacy-runtime.js'
+      - 'scripts/install-ios-apple-signin.rb'
+      - 'capacitor.config.json'
       - 'package.json'
       - '.github/workflows/check-security-privacy.yml'
   workflow_dispatch:

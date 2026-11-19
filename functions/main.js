@@ -19,6 +19,7 @@ const userAccessApprovalFunctions = require("./user-access-approval");
 const vargaGestionaleSyncFunctions = require("./varga-gestionale-sync");
 const vargaSessionTransferFunctions = require("./varga-session-transfer");
 const appleReviewAccountFunctions = require("./apple-review-accounts");
+const accountDeletionFunctions = require("./account-deletion");
 
 Object.assign(
   exports,
@@ -40,5 +41,6 @@ Object.assign(
   userAccessApprovalFunctions,
   vargaGestionaleSyncFunctions,
   vargaSessionTransferFunctions,
-  appleReviewAccountFunctions
+  appleReviewAccountFunctions,
+  accountDeletionFunctions
 );

@@ -41,7 +41,6 @@ jobs:
       IOS_APPSTORE_PRIVATE_KEY_BASE64: ${{ secrets.IOS_APPSTORE_PRIVATE_KEY_BASE64 }}
       IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
       IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
-      IOS_APPSTORE_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
 
     steps:
       - name: Checkout reviewed commit
@@ -60,7 +59,7 @@ jobs:
             echo "::error::The exact reviewed SHA must match this workflow checkout. No upload performed."
             exit 1
           fi
-          for key in IOS_FIREBASE_CONFIG_BASE64 IOS_APPLE_TEAM_ID IOS_APPSTORE_KEY_ID IOS_APPSTORE_ISSUER_ID IOS_APPSTORE_PRIVATE_KEY_BASE64 IOS_DISTRIBUTION_CERTIFICATE_BASE64 IOS_DISTRIBUTION_CERTIFICATE_PASSWORD IOS_APPSTORE_PROFILE_BASE64; do
+          for key in IOS_FIREBASE_CONFIG_BASE64 IOS_APPLE_TEAM_ID IOS_APPSTORE_KEY_ID IOS_APPSTORE_ISSUER_ID IOS_APPSTORE_PRIVATE_KEY_BASE64 IOS_DISTRIBUTION_CERTIFICATE_BASE64 IOS_DISTRIBUTION_CERTIFICATE_PASSWORD; do
             if [[ -z "${!key:-}" ]]; then
               echo "::error::Missing required private GitHub Actions secret: $key"
               exit 1
@@ -105,6 +104,7 @@ jobs:
           python3 -m py_compile scripts/configure-ios-plist.py scripts/configure-ios-firebase.py
           ruby -c scripts/register-ios-firebase-plist.rb
           ruby -c scripts/install-ios-native-geofence.rb
+          node --check scripts/fetch-ios-appstore-profile.js
           ruby -c scripts/install-ios-apple-signin.rb
           ruby -c scripts/configure-ios-distribution-signing.rb
           npm run android:aab:prepare
@@ -147,7 +147,7 @@ jobs:
           KEYCHAIN_PATH="$RUNNER_TEMP/varga-apple-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
           printf '%s' "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
-          printf '%s' "$IOS_APPSTORE_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          node scripts/fetch-ios-appstore-profile.js "$PROFILE_PATH"
           openssl pkcs12 -in "$CERT_PATH" -clcerts -nokeys -passin env:IOS_DISTRIBUTION_CERTIFICATE_PASSWORD -out "$RUNNER_TEMP/varga-leaf.pem"
           openssl x509 -in "$RUNNER_TEMP/varga-leaf.pem" -outform DER -out "$RUNNER_TEMP/varga-leaf.der"
           openssl x509 -in "$RUNNER_TEMP/varga-leaf.pem" -noout -subject | grep -F 'Apple Distribution:' >/dev/null ||

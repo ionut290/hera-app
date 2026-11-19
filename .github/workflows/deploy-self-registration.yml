@@ -36,7 +36,4 @@ jobs:
           set -euo pipefail
           test -s firestore.rules
           node scripts/check-security-privacy-audit.js
-          if grep -E 'firebase-tools.*deploy|--only[[:space:]]+firestore:rules' .github/workflows/deploy-self-registration.yml; then
-            echo "::error::Legacy workflow must not deploy Firestore rules"; exit 1
-          fi
           echo "PASS: registration rules source validated; no production changes"

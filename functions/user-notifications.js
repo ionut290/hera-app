@@ -32,13 +32,28 @@ function getDb() {
   return admin.firestore();
 }
 
+// Match the active-account policy used by Firestore security rules. Pending,
+// rejected and banned workers must not receive operational push content.
+// Legacy profiles without either status field remain supported.
+function isEligiblePushProfile(data) {
+  if (data.banned === true) return false;
+  if (Object.prototype.hasOwnProperty.call(data, "statoAccount")) {
+    return data.statoAccount === "attivo";
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "accountStatus")) {
+    return data.accountStatus === "attivo";
+  }
+  return true;
+}
+
 async function loadPushUsers() {
   const snapshot = await getDb().collection("platformUsers").get();
-  return snapshot.docs.map((doc) => {
+  return snapshot.docs
+    .filter((doc) => isEligiblePushProfile(doc.data() || {}))
+    .map((doc) => {
     const data = doc.data() || {};
     const labels = new Set([
       doc.id,
-      data.uid,
       data.email,
       data.displayName,
       data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "",

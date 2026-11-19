@@ -100,3 +100,14 @@ La lettura dei messaggi `userAlerts` rimane oggi globale con filtro destinatari 
 Classificazioni: broadcast, destinatari UID espliciti, UID + nomi legacy, soli nomi legacy non risolti, destinatari sconosciuti, metadati malformati. `needsReview>0` restituisce exit code 2 e blocca l'abilitazione di regole restrittive. Un risultato `needsReview=0` non è sufficiente da solo: restano da verificare destinatari sbagliati, ID non più attivi, client vecchi e indici.
 
 **Procedura di migrazione prevista (non eseguita):** inventariare gli avvisi; validare con un amministratore i `targetMemberNames` contro anagrafiche e UID effettivi; correggere le Cloud Functions che producono assenze per scrivere destinatari UID deterministici; distribuire gli indici e client con query separate (broadcast, UID array, UID singolo); solo dopo i test sul dispositivo e la migrazione degli avvisi storici, applicare regole server-side che non consentano più la query globale. Necessita conferma del titolare del trattamento e non deve modificare automaticamente avvisi personali o dati aziendali.
+
+
+### Audit con approvazione tramite GitHub Actions
+
+In aggiunta al comando manuale locale, è stato preparato il workflow **`.github/workflows/audit-user-alert-targeting-protected.yml`** (non eseguito):
+- Avvio solo manuale `workflow_dispatch` su `main`, con `APPROVE_METADATA_AUDIT`, `RECIPIENT_METADATA_REVIEW_APPROVED` e SHA di commit esatto.
+- Environment protetto `firebase-private-chat-production` con reviewer obbligatorio già creato. Il job verifica nuovamente che l'environment abbia regole `required_reviewers` valide. Se manca, il processo viene interrotto.
+- Il servizio accede solo per leggere i **metadati di destinatari** con identità Firebase del progetto previsto; i risultati del job sono solo conteggi. Non archivia documenti, non genera file di esportazione, non cancella o modifica Firestore e distrugge la credenziale temporanea a fine esecuzione.
+- Un risultato con `needsReview > 0` blocca il job intenzionalmente. Nessuna migrazione automatica per associazione dei nomi, per evitare di divulgare assenze o comunicazioni ad omonimi.
+
+**Stato:** soltanto codice e test sintetici nella PR draft. Non è stato richiesto, approvato o eseguito alcun accesso ai documenti `userAlerts` di produzione.

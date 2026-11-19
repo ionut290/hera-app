@@ -1,0 +1,47 @@
+name: Verify App Review demo claim guard (offline only)
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "scripts/prepare-app-review-demo-claims.cjs"
+      - ".github/workflows/prepare-app-review-demo-claims-protected.yml"
+      - ".github/workflows/check-app-review-demo-claims.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Test disabled-only claim guard without Firebase credentials
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax and isolation contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/prepare-app-review-demo-claims.cjs
+          node scripts/prepare-app-review-demo-claims.cjs --self-test
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path("scripts/prepare-app-review-demo-claims.cjs").read_text()
+          w=Path(".github/workflows/prepare-app-review-demo-claims-protected.yml").read_text()
+          assert "setCustomUserClaims(target.uid,EXPECTED_CLAIMS)" in s
+          assert "assert.equal(after.disabled,true" in s
+          assert "assertNoWorkLinks" in s
+          assert "workflow_dispatch:" in w and "required_reviewers" in w
+          assert "firebase-account-deletion-production" in w
+          assert "SET_TWO_CLAIMS_ONLY" in w and "DRY_RUN" in w
+          assert "  push:" not in w and "  schedule:" not in w
+          assert "firebase-tools deploy" not in w and "deleteUser(" not in s
+          assert ".disable(" not in s and "updateUser(" not in s
+          print("PASS: protected demo claim workflow remains manual, reviewer-gated and non-destructive")
+          PY

@@ -102,7 +102,12 @@
     if (nativePlatform() === "ios" &&
         user.providerData?.some((provider) => provider.providerId === "apple.com")) {
       const plugin = window.Capacitor?.Plugins?.FirebaseAuthentication;
-      if (plugin?.signInWithApple) {
+      if (!plugin || typeof plugin.signInWithApple !== "function" ||
+          typeof plugin.revokeAccessToken !== "function") {
+        alert("Impossibile revocare l'accesso Apple su questo dispositivo. Aggiorna l'app e riprova: l'account non è stato eliminato.");
+        return;
+      }
+      {
         try {
           const fresh = await plugin.signInWithApple({ skipNativeAuth: true });
           const appleProvider = new firebase.auth.OAuthProvider("apple.com");

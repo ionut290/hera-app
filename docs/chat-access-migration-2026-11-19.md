@@ -43,3 +43,18 @@ Il nuovo workflow `.github/workflows/deploy-firestore-chat-protected.yml` richie
 4. **Convalida post-pubblicazione**: messaggi privati accessibili soltanto agli interessati, broadcast visibili, notifica senza duplicati, non interrompere storico e operazioni aziendali. Eventuali `permission-denied` su vecchi client vanno risolti prima della finestra di rilascio.
 
 **IMPORTANTE:** tutte queste fasi sono predisposte come codice. Non sono state attivate né è stata verificata la presenza dell'environment `firebase-private-chat-production` o la reale migrazione di tutte le installazioni. Un merge non conclude la migrazione.
+
+
+## Ulteriori regole per coordinate GPS ed email (19 novembre 2026)
+
+L'audit ha individuato che `gpsUpdateRequests` e `notificationEmailQueue` erano comprese nel fallback `allow read, write: if signedIn()`. **Il solo controllo visuale non protegge Firestore.**
+
+Le regole proposte nella PR eliminano entrambe dal fallback:
+- `gpsUpdateRequests`: un operatore autenticato può creare solo richieste `pending` col proprio `operatorId`, leggere la propria richiesta e interrogare solo il proprio `operatorId` con limite massimo 100; un amministratore può visualizzare l'elenco completo e approvare/rifiutare. Nessun altro lavoratore può leggere le coordinate.
+- `notificationEmailQueue`: lettura/scrittura esclusiva per l'amministratore autenticato. Il codice esistente crea le email dal pannello di gestione; eventuali consumer privilegiati tramite Admin SDK devono essere verificati separatamente.
+- Il client non avvia più il listener globale delle richieste GPS per un operatore. Anche eventuali callback ritardati del vecchio account amministrativo vengono ignorati e i dati vengono azzerati.
+- Prove automatiche Auth/Firestore Emulator e test comportamentale con utenze sintetiche verificano accessi autorizzati, negazioni, creazione di false approvazioni e isolamento dopo cambio utente.
+
+**Rischi di compatibilità da controllare prima del rilascio:** versioni mobili/web obsolete che leggono l'elenco GPS globale o scrivono la coda email fuori dall'interfaccia amministrativa; integrazioni webhook; usi privilegiati non documentati. Non aggiornare le regole in produzione prima delle verifiche e della migrazione dei client.
+
+**Limiti:** non elimina coordinate già salvate, email già inviate, copie Drive o backup. La retention e gli accordi GDPR restano aperti. Questa è una proposta di codice, non un rilascio già avvenuto.

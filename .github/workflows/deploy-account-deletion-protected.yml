@@ -95,7 +95,8 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SHA_APPROVED"
           npm ci --no-audit --no-fund
-          npm run check:account-privacy
+          node --check functions/account-deletion.js
+          node scripts/check-account-privacy-runtime.js
           npm run check:auth-stability
           npm run check:fatto-whazzup-immutable
       - name: Prepare validated Functions

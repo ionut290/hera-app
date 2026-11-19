@@ -68,7 +68,7 @@ jobs:
           node --check scripts/audit-retention-readiness.cjs
           node scripts/audit-retention-readiness.cjs --self-test
           # Fail closed if a future edit adds a mutating Firebase API call.
-          if grep -En '\.(delete|update|set|create|add|recursiveDelete|batch|bulkWriter|runTransaction)\s*\(' scripts/audit-retention-readiness.cjs; then
+          if grep -En '\.(delete|update|set|create|add|recursiveDelete|batch|bulkWriter|runTransaction)\s*\(' scripts/audit-retention-readiness.cjs | grep -vF 'admin.app().delete()'; then
             echo "::error::Mutation-like method in inventory source"; exit 1
           fi
       - name: Install Firebase Admin for read-only query

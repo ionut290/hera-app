@@ -147,6 +147,7 @@ function setup(options = {}) {
     exports: {},
     require: (id) => {
       if (id === "firebase-admin") return admin;
+      if (id === "node:crypto") return require("node:crypto");
       if (id === "firebase-functions/v2/https") {
         return { onCall: (_opts, callback) => callback, HttpsError: MockHttpsError };
       }
@@ -219,7 +220,8 @@ async function rejectedCode(promise, expected) {
   assert.equal(priorChat.metadata.commessaId, "job-test");
   const otherChat = state.docs.find((d) => d.id === "chat-from-other");
   assert.equal(otherChat.senderId, "worker-2");
-  assert.equal(otherChat.recipientId, undefined); // Deleted recipient no longer linked
+  assert.match(otherChat.recipientId, /^deleted-recipient-[0-9a-f-]{36}$/);
+  assert.notEqual(otherChat.recipientId, "worker-1"); // Not accidentally made public
   assert.equal(otherChat.senderEmail, "other@example.test");
   assert.equal(otherChat.text, "Another person's message");
   const priorAppNotice = state.docs.find((d) => d.id === "app-created-by-deleted");

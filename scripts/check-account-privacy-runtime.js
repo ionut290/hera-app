@@ -53,7 +53,7 @@ function setup(options = {}) {
     // The deleted account must be removed from an email queue only when it is
     // the exact addressee or creator; never blank a different user's message.
     { collection: "notificationEmailQueue", id: "mail-to-deleted",
-      to: "worker1@example.test", createdBy: "worker-2", status: "pending",
+      to: "sqadrahera+varga-demo@gmail.com", createdBy: "worker-2", status: "pending",
       html: "<p>Private reminder</p>", text: "Private reminder" },
     { collection: "notificationEmailQueue", id: "mail-created-by-deleted",
       to: "worker2@example.test", createdBy: "worker-1", status: "sent",
@@ -64,7 +64,7 @@ function setup(options = {}) {
     // Security log metadata can be minimised, but business/incident details
     // must not be destroyed by a single user-initiated account deletion.
     { collection: "activityLogs", id: "own-log", userId: "worker-1",
-      userEmail: "worker1@example.test", userName: "Deleted worker",
+      userEmail: "sqadrahera+varga-demo@gmail.com", userName: "Deleted worker",
       deviceInfo: "Synthetic User Agent", detail: "Retain for security review" },
     { collection: "activityLogs", id: "other-log", userId: "worker-2",
       userEmail: "worker2@example.test", userName: "Other worker",
@@ -140,7 +140,9 @@ function setup(options = {}) {
     auth: () => ({
       getUser: async (uid) => {
         if (!users.has(uid)) throw new Error("not found");
-        return { uid, email: uid === "worker-1" ? "worker1@example.test" : "worker2@example.test" };
+        return { uid, email: uid === "worker-1" ? "sqadrahera+varga-demo@gmail.com" : "worker2@example.test",
+          customClaims: uid === "worker-1" && !options.missingServerDemoClaim
+            ? { appReviewDemo: true, apple_review: true } : {} };
       },
       deleteUser: async (uid) => {
         if (options.failAuthOnce && !injected.auth) {
@@ -193,7 +195,9 @@ async function rejectedCode(promise, expected) {
 }
 
 (async () => {
-  const goodAuth = { uid: "worker-1", token: { auth_time: Math.floor(Date.now() / 1000) } };
+  const goodAuth = { uid: "worker-1", token: {
+    auth_time: Math.floor(Date.now() / 1000), appReviewDemo: true, apple_review: true
+  } };
   let state = setup();
   await rejectedCode(state.handler({ data: { confirmation: "ELIMINA" } }), "unauthenticated");
   await rejectedCode(state.handler({ auth: goodAuth, data: {} }), "invalid-argument");
@@ -202,6 +206,33 @@ async function rejectedCode(promise, expected) {
     data: { confirmation: "ELIMINA" }
   }), "failed-precondition");
   assert.equal(state.removedUsers.length, 0);
+
+  // Canary must NEVER read or alter a real account, even for preflight.
+  for (const [claims, label] of [
+    [{}, "no claims"], [{ apple_review: true }, "one reviewer claim"],
+    [{ appReviewDemo: true }, "one demo claim"]
+  ]) {
+    state = setup();
+    await rejectedCode(state.handler({
+      auth: { uid: "worker-1", token: { auth_time: goodAuth.token.auth_time, ...claims } },
+      data: { confirmation: "ELIMINA", mode: "preflight" }
+    }), "permission-denied");
+    assert.deepEqual(state.removed, [], label + " deleted documents");
+    assert.deepEqual(state.removedUsers, [], label + " deleted Auth user");
+    assert.deepEqual(state.updated, [], label + " changed shared records");
+  }
+  state = setup();
+  await rejectedCode(state.handler({
+    auth: { uid: "worker-2", token: goodAuth.token },
+    data: { confirmation: "ELIMINA" }
+  }), "permission-denied");
+  assert.deepEqual(state.removedUsers, [], "second worker cannot be deleted");
+  assert.deepEqual(state.removed, [], "second worker data stays intact");
+  state = setup({ missingServerDemoClaim: true });
+  await rejectedCode(state.handler({ auth: goodAuth, data: { confirmation: "ELIMINA" } }),
+    "permission-denied");
+  assert.deepEqual(state.removedUsers, [], "server-side claims are required");
+  assert.deepEqual(state.removed, [], "no removal when server claims absent");
 
   state = setup();
   const ready = await state.handler({ auth: goodAuth, data: { confirmation: "ELIMINA", mode: "preflight" } });

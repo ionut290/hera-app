@@ -1,0 +1,51 @@
+name: Check protected retention metadata audit (offline only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/audit-retention-readiness.cjs"
+      - ".github/workflows/audit-retention-readonly-protected.yml"
+      - ".github/workflows/check-retention-readonly-audit.yml"
+permissions:
+  contents: read
+jobs:
+  offline-audit-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Syntax and synthetic classifications (never connect to Firebase)
+        run: |
+          set -euo pipefail
+          node --check scripts/audit-retention-readiness.cjs
+          node scripts/audit-retention-readiness.cjs --self-test
+          if node scripts/audit-retention-readiness.cjs --live > "$RUNNER_TEMP/retention-guard.log" 2>&1; then
+            echo "::error::Unapproved live mode must fail"; exit 1
+          fi
+          grep -F 'Retention read-only audit stopped: ERR_ASSERTION' "$RUNNER_TEMP/retention-guard.log"
+      - name: Check fail-closed privacy gates, metadata-only and mandatory reviewer
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path("scripts/audit-retention-readiness.cjs").read_text()
+          w = Path(".github/workflows/audit-retention-readonly-protected.yml").read_text()
+          assert "ALLOW_READ_ONLY_RETENTION_AUDIT" in s
+          assert 'serviceAccount.project_id, PROJECT' in s
+          assert "orderBy(admin.firestore.FieldPath.documentId()).select(...fields).limit(250)" in s
+          assert "MAX_PER_COLLECTION = 10000" in s
+          assert 'admin.app().delete()' in s
+          for word in ['db.recursiveDelete(', 'doc.ref.delete(', 'doc.ref.update(', 'doc.ref.set(', 'batch.commit(', 'bulkWriter(']:
+              assert word not in s, f"Potential write in retention source: {word}"
+          assert "workflow_dispatch:" in w and "  push:" not in w and "  schedule:" not in w
+          assert "github.ref == 'refs/heads/main'" in w
+          assert "APPROVE_AGGREGATE_READ_ONLY_AUDIT" in w
+          assert "RETENTION_METADATA_AUDIT_APPROVED" in w
+          assert "required_reviewers" in w
+          assert "environment: firebase-private-chat-production" in w
+          assert "firebase deploy" not in w
+          print("PASS: read-only retention metadata audit is protected and offline-safe")
+          PY

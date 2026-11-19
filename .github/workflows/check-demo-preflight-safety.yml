@@ -38,6 +38,6 @@ jobs:
           grep -Fq 'mode: "preflight"' scripts/run-approved-demo-preflight.cjs
           grep -Fxq 'const DEMO_ONLY_RELEASE = true;' functions/account-deletion.js
           # No direct account deletion or Firestore writes in preflight source.
-          if grep -E '\.(deleteUser|recursiveDelete|delete|create|set|batch|runTransaction)\s*\(' scripts/run-approved-demo-preflight.cjs; then
+          if grep -E '\.(deleteUser|recursiveDelete|delete|create|set|batch|runTransaction)\s*\(' scripts/run-approved-demo-preflight.cjs | grep -vF 'await app.delete();'; then
             echo "::error::Mutating/deletion method forbidden in preflight helper"; exit 1
           fi

@@ -68,6 +68,9 @@ async function run() {
         eventType: "hours-deadline-missing", createdByUid: "system", createdAt: 4,
         title: "Synthetic system deadline", body: "Synthetic system notice"
       });
+      await setDoc(doc(db, "hoursDeadlineAlerts/demoDeadline"), {
+        alertId: "demoDeadline", recipient: "all", date: "2026-11-19"
+      });
       await setDoc(doc(db, "sharedStaticViews/currentTeam"), { demo: false });
       await setDoc(doc(db, "appleReviewDemo/onlySynthetic"), {title: "Synthetic exercise", demo: true});
       // Each fixture is synthetic; the tombstone must stay private after
@@ -211,6 +214,17 @@ async function run() {
     await assertSucceeds(setDoc(doc(administrator, "appNotifications/systemNew"), {
       eventType: "hours-deadline-missing", createdByUid: "system",
       createdAt: serverTimestamp(), title: "Authentic admin notice"
+    }));
+
+    await assertSucceeds(getDoc(doc(normal, "hoursDeadlineAlerts/demoDeadline")));
+    await assertFails(getDoc(doc(review, "hoursDeadlineAlerts/demoDeadline")));
+    await assertFails(setDoc(doc(normal, "hoursDeadlineAlerts/forgedDeadline"), {
+      alertId: "forgedDeadline", recipient: "all"
+    }));
+    await assertFails(updateDoc(doc(normal, "hoursDeadlineAlerts/demoDeadline"), { date: "2099-01-01" }));
+    await assertFails(deleteDoc(doc(normal, "hoursDeadlineAlerts/demoDeadline")));
+    await assertSucceeds(setDoc(doc(administrator, "hoursDeadlineAlerts/authenticDeadline"), {
+      alertId: "authenticDeadline", recipient: "all"
     }));
 
     await assertSucceeds(getDoc(doc(normal, "commesse/syntheticJob")));

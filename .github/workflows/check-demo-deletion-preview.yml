@@ -1,0 +1,34 @@
+name: Isolated demo deletion UI - excluded native asset
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apple-review-demo-deletion-ui.js"
+      - "scripts/check-demo-deletion-preview-isolation.cjs"
+      - ".github/workflows/check-demo-deletion-preview.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  excluded-demo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Synthetic demo-only validation (no Firebase)
+        run: |
+          set -euo pipefail
+          node --check apple-review-demo-deletion-ui.js
+          node --check scripts/check-demo-deletion-preview-isolation.cjs
+          node scripts/check-demo-deletion-preview-isolation.cjs
+      - name: Confirm normal Android/iOS packaging excludes the entire demo UI
+        run: |
+          set -euo pipefail
+          node scripts/prepare-capacitor-web.js
+          test ! -e www/apple-review-demo-deletion-ui.js
+          node scripts/check-appstore-2519-clean.js

@@ -1,6 +1,6 @@
 # VARGA CANTIERI — Proposta di decisione sulla conservazione e cancellazione dei dati
 
-**Stato:** BOZZA DA APPROVARE. Data: 19 novembre 2026.
+**Stato:** CRITERI DI CONSERVAZIONE APPROVATI DAL REFERENTE IL 19 NOVEMBRE 2026. **Implementazione tecnica, verifica dei ruoli GDPR e collaudo in produzione ancora da completare.**
 **Responsabile della decisione dichiarato nel dialogo:** gestore autorizzato di VARGA CANTIERI. La dichiarazione di poter approvare le regole dell'app **non prova automaticamente** di essere il titolare GDPR dei dati delle aziende o dei loro dipendenti: i ruoli e gli accordi con eventuali aziende utilizzatrici devono essere verificati.
 **Ambito:** Firebase Authentication, Firestore, Cloud Storage, Google Drive/Sheets, esportazioni e backup. Non costituisce un parere legale né esegue cancellazioni.
 **Fonti esaminate:** `privacy.html` del repository (ultimo aggiornamento 11 ottobre 2026), `docs/account-deletion-data-inventory-2026-11-19.md`, codice `functions/account-deletion.js`, test Firebase Auth/Firestore Emulator, norme GDPR art. 5 e 17 e indicazioni del Garante per i dati GPS dei lavoratori.
@@ -36,19 +36,21 @@
 - [x] Test reali di cancellazione su Firebase Auth e Firestore **emulatori**; due utenti sintetici isolati.
 - [x] CI PR #1606: 20/20 verdi alla data dell'ultimo controllo.
 - [x] Environment GitHub `firebase-account-deletion-production` configurato: reviewer obbligatorio `ionut290`, solo `main`, bypass disattivato.
-- [ ] **Approvazione esplicita di questa proposta** da parte del responsabile, con eventuali modifiche ai tempi.
+- [x] **Approvazione esplicita dei criteri di questa proposta:** l'utente, dopo essersi dichiarato autorizzato a prendere le decisioni per VARGA CANTIERI, ha risposto «Approvo» il 19 novembre 2026. Nessuna modifica ai periodi proposti è stata richiesta.
 - [ ] Verifica dei ruoli GDPR con le aziende e coerenza delle basi giuridiche.
 - [ ] Implementazione e test delle nuove minimizzazioni/retention approvate nei dati reali, oppure processo manuale temporaneo documentato e conforme.
 - [ ] Prova di cancellazione end-to-end con account dimostrativo **in produzione**, non collegato a personale o dati aziendali.
 - [ ] Video iPhone/iPad richiesto da Apple e nuova presentazione App Review.
 
-**Regola di sicurezza:** finché A e C non sono approvati e verificati, lasciare PR #1606 in bozza e non distribuire `deleteOwnVargaAccount` ai lavoratori.
+**Regola di sicurezza:** i criteri del punto A sono approvati, ma i controlli e le implementazioni del punto C restano incompleti. Lasciare PR #1606 in bozza e non distribuire `deleteOwnVargaAccount` ai lavoratori prima di una verifica dei ruoli GDPR, del collaudo e dell'approvazione di produzione.
 
-## D. Decisione formale (DA COMPILARE DOPO RISPOSTA ESPLICITA)
+## D. Decisione del referente (registrata)
 
-**Esito:** IN ATTESA DI APPROVAZIONE. La sola conferma di essere autorizzato a decidere **non** vale come approvazione dei periodi sopra proposti.
+**Esito:** APPROVAZIONE DEI CRITERI DI CONSERVAZIONE PROPOSTI (non autorizzazione alla distribuzione della funzione).
 
-**Approvatore:** da confermare; **data:** da registrare; **modifiche approvate:** da registrare; **ruoli GDPR/accordi:** da verificare.
+**Approvazione:** il referente di VARGA CANTIERI, che ha confermato di avere il potere di decidere sul prodotto, ha risposto **«Approvo»** in chat il **19 novembre 2026**. Non sono state comunicate modifiche ai periodi.
+
+**Limiti:** l'approvazione non certifica la base giuridica di ogni trattamento, la posizione di titolare per dati di altre aziende, l'esecuzione di pulizie automatiche o il completamento della prova di eliminazione su iPhone. Questi punti restano aperti nel ticket #1609.
 
 ## Riferimenti ufficiali
 

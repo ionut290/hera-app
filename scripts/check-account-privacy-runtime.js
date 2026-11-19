@@ -20,6 +20,8 @@ function setup() {
     { collection: "documents", id: "other-1", ownerUserId: "worker-2", visibility: "personal", storagePath: "documents/worker-2/doc3/other.pdf" },
     { collection: "documentReminderAcknowledgements", id: "ack-1", userId: "worker-1" },
     { collection: "documentReminderAcknowledgements", id: "ack-2", userId: "worker-2" },
+    { collection: "passwordRecoveryChallenges", id: "challenge-1", uid: "worker-1" },
+    { collection: "passwordRecoveryChallenges", id: "challenge-2", uid: "worker-2" },
     { collection: "platformUsers", id: "worker-1" },
     { collection: "platformUsers", id: "worker-2" },
     { collection: "privateDocuments", id: "worker-1" },
@@ -162,6 +164,8 @@ async function rejectedCode(promise, expected) {
   assert.equal(otherEmployee.linkedUserId, "worker-2");
   assert.equal(state.updated.length, 2);
   assert.ok(state.removed.includes("documentReminderAcknowledgements/ack-1"));
+  assert.ok(state.removed.includes("passwordRecoveryChallenges/challenge-1"));
+  assert.ok(!state.removed.includes("passwordRecoveryChallenges/challenge-2"));
   for (const protectedPath of ["documents/shared-1", "documents/other-1", "platformUsers/worker-2",
     "documentReminderAcknowledgements/ack-2"]) {
     assert.ok(!state.removed.includes(protectedPath), "must preserve " + protectedPath);

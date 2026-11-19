@@ -45,6 +45,12 @@ Il nuovo workflow `.github/workflows/deploy-firestore-chat-protected.yml` richie
 **IMPORTANTE:** tutte queste fasi sono predisposte come codice. Non sono state attivate né è stata verificata la presenza dell'environment `firebase-private-chat-production` o la reale migrazione di tutte le installazioni. Un merge non conclude la migrazione.
 
 
+## Verifica del vecchio workflow di registrazione — 19 novembre 2026
+
+Durante l'audit è emerso un **secondo percorso di pubblicazione automatica**: `.github/workflows/deploy-self-registration.yml` eseguiva `firebase-tools deploy --only firestore:rules` a ogni push su `main` che modificava le regole, aggirando la nuova procedura a fasi. È stato convertito in workflow di **sola verifica** `Verify Firestore registration rules (NEVER deploy)`, senza credenziali, secrets o comando deploy. Il controllo `scripts/check-account-privacy.js` impedisce la reintroduzione del vecchio deploy. Il nuovo workflow di rilascio protetto `deploy-firestore-chat-protected.yml` rimane l'unico percorso **previsto** per cambiare queste regole.
+
+L'environment GitHub `firebase-private-chat-production` è stato **creato e verificato dal browser** con reviewer `ionut290`, distribuzione consentita soltanto da `main`, bypass amministrativo disabilitato. **Nessun deploy Firestore è avvenuto** in questa preparazione.
+
 ## Ulteriori regole per coordinate GPS ed email (19 novembre 2026)
 
 L'audit ha individuato che `gpsUpdateRequests` e `notificationEmailQueue` erano comprese nel fallback `allow read, write: if signedIn()`. **Il solo controllo visuale non protegge Firestore.**

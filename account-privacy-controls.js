@@ -151,7 +151,7 @@
 
   function mount() {
     const gateGoogle = document.getElementById("auth-gate-login-btn");
-    if (gateGoogle && !document.getElementById("auth-apple-login-btn") && nativePlatform() !== "android") {
+    if (gateGoogle && !document.getElementById("auth-apple-login-btn") && nativePlatform() === "ios") {
       const apple = makeButton("auth-apple-login-btn", "Accedi con Apple", "btn");
       apple.setAttribute("aria-label", "Accedi con Apple");
       gateGoogle.insertAdjacentElement("afterend", apple);

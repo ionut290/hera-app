@@ -22,11 +22,15 @@ function setup() {
     { collection: "documentReminderAcknowledgements", id: "ack-2", userId: "worker-2" },
     { collection: "platformUsers", id: "worker-1" },
     { collection: "platformUsers", id: "worker-2" },
-    { collection: "privateDocuments", id: "worker-1" }
+    { collection: "privateDocuments", id: "worker-1" },
+    { collection: "personale", id: "employee-1", linkedUserId: "worker-1", linkedAuthProvider: "google.com", googleLastLoginAt: 123, googleDisplayName: "Test", emailVerified: true, profilePhotoSource: "google", photoURL: "https://example.test/google.jpg", contractCode: "business-retained" },
+    { collection: "personale", id: "employee-2", linkedUserId: "worker-2", linkedAuthProvider: "google.com", contractCode: "other-employee" },
+    { collection: "personale", id: "employee-3", linkedUserId: "worker-1", linkedAuthProvider: "apple.com", profilePhotoSource: "operator", photoURL: "https://example.test/business.jpg", contractCode: "another-retained" }
   ];
   const removed = [];
   const removedFiles = [];
   const removedUsers = [];
+  const updated = [];
   const db = {
     collection(collection) {
       return {
@@ -38,7 +42,16 @@ function setup() {
                 docs: docs.filter((d) => d.collection === collection && d[field] === value)
                   .map((d) => ({
                     id: d.id,
-                    ref: { path: d.collection + "/" + d.id },
+                    ref: {
+                      path: d.collection + "/" + d.id,
+                      async update(fields) {
+                        updated.push({ path: this.path, fields: Object.keys(fields) });
+                        for (const [key, value] of Object.entries(fields)) {
+                          if (value === Symbol.for("firebase-field-delete")) delete d[key];
+                          else d[key] = value;
+                        }
+                      }
+                    },
                     data: () => d
                   }))
               };
@@ -54,8 +67,10 @@ function setup() {
       removed.push(ref.path);
     }
   };
+  const mockFirestore = () => db;
+  mockFirestore.FieldValue = { delete: () => Symbol.for("firebase-field-delete") };
   const admin = {
-    firestore: () => db,
+    firestore: mockFirestore,
     auth: () => ({
       getUser: async (uid) => {
         if (!users.has(uid)) throw new Error("not found");
@@ -95,7 +110,7 @@ function setup() {
   vm.runInNewContext(code, sandbox, { filename: "functions/account-deletion.js" });
   handler = sandbox.exports.deleteOwnVargaAccount;
   assert.equal(typeof handler, "function");
-  return { handler, docs, removed, removedFiles, removedUsers };
+  return { handler, docs, removed, removedFiles, removedUsers, updated };
 }
 
 async function rejectedCode(promise, expected) {
@@ -120,6 +135,7 @@ async function rejectedCode(promise, expected) {
   assert.deepEqual(state.removedUsers, []);
   assert.deepEqual(state.removedFiles, []);
   assert.deepEqual(state.removed, []);
+  assert.deepEqual(state.updated, []);
 
   state = setup();
   const result = await state.handler({
@@ -132,6 +148,19 @@ async function rejectedCode(promise, expected) {
   assert.ok(state.removed.includes("documents/private-1"));
   assert.ok(state.removed.includes("platformUsers/worker-1"));
   assert.ok(state.removed.includes("privateDocuments/worker-1"));
+  // Employee registry records survive, but the deleted login is unlinked.
+  const employee = state.docs.find((d) => d.id === "employee-1");
+  assert.equal(employee.linkedUserId, undefined);
+  assert.equal(employee.linkedAuthProvider, undefined);
+  assert.equal(employee.photoURL, undefined);
+  assert.equal(employee.contractCode, "business-retained");
+  const businessPortrait = state.docs.find((d) => d.id === "employee-3");
+  assert.equal(businessPortrait.linkedUserId, undefined);
+  assert.equal(businessPortrait.photoURL, "https://example.test/business.jpg");
+  assert.equal(businessPortrait.contractCode, "another-retained");
+  const otherEmployee = state.docs.find((d) => d.id === "employee-2");
+  assert.equal(otherEmployee.linkedUserId, "worker-2");
+  assert.equal(state.updated.length, 2);
   assert.ok(state.removed.includes("documentReminderAcknowledgements/ack-1"));
   for (const protectedPath of ["documents/shared-1", "documents/other-1", "platformUsers/worker-2",
     "documentReminderAcknowledgements/ack-2"]) {

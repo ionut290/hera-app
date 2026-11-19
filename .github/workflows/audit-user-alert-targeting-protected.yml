@@ -1,0 +1,71 @@
+name: Private user alerts - approved read-only inventory
+
+# Never triggered on push or PR. Produces counts only, not employee data.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Type APPROVE_METADATA_AUDIT (read-only)"
+        type: string
+        required: true
+      reviewed_sha:
+        description: "Exact 40-character SHA currently on main"
+        type: string
+        required: true
+      privacy_signoff:
+        description: "Type RECIPIENT_METADATA_REVIEW_APPROVED"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-user-alerts-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit recipient metadata without exporting notifications
+    if: ${{ github.ref == 'refs/heads/main' && inputs.approval == 'APPROVE_METADATA_AUDIT' && inputs.privacy_signoff == 'RECIPIENT_METADATA_REVIEW_APPROVED' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: firebase-private-chat-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require exact reviewed main SHA
+        env:
+          APPROVED_SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "ionut290/hera-app" ]] || exit 1
+          [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ && "$APPROVED_SHA" == "$GITHUB_SHA" ]] ||
+            { echo "::error::Run only at the exact reviewed commit on main"; exit 1; }
+      - name: Verify pure synthetic classification
+        run: node scripts/audit-user-alert-targeting.cjs --self-test
+      - name: Install isolated Firebase Admin dependency
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Prepare restricted credentials and validate project
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          set -euo pipefail
+          [[ -n "$FIREBASE_SERVICE_ACCOUNT" ]] || { echo "::error::Missing credential"; exit 1; }
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/alerts-audit-account.json"
+          python3 - "$RUNNER_TEMP/alerts-audit-account.json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              account = json.load(stream)
+          assert account.get("project_id") == "hera-app-6cd2b", "Wrong Firebase project"
+          PY
+      - name: Count only notification targeting categories (read-only)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/alerts-audit-account.json
+          ALLOW_READ_ONLY_USER_ALERT_AUDIT: "1"
+        run: node scripts/audit-user-alert-targeting.cjs --live
+      - name: Destroy temporary credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/alerts-audit-account.json"

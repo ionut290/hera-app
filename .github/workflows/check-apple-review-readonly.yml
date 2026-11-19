@@ -37,4 +37,4 @@ jobs:
           node scripts/check-fatto-whazzup-isolation.js
           node scripts/check-auth-stability-contract.js
       - name: Test reviewer isolation and real synthetic Auth+Firestore account deletion (emulators only)
-        run: npx firebase emulators:exec --only auth,firestore,storage --project demo-review-isolation "node scripts/test-apple-review-firestore-rules.cjs && node scripts/test-apple-review-storage-rules.cjs && node scripts/test-account-deletion-firestore-emulator.cjs && node scripts/test-account-deletion-auth-firestore-emulator.cjs"
+        run: npx firebase emulators:exec --config firebase.account-deletion-emulators.json --only auth,firestore,storage --project demo-review-isolation "node scripts/test-apple-review-firestore-rules.cjs && node scripts/test-apple-review-storage-rules.cjs && node scripts/test-account-deletion-firestore-emulator.cjs && node scripts/test-account-deletion-auth-firestore-emulator.cjs"

@@ -47,7 +47,9 @@ async function loadPushUsers() {
     ].map(normalize).filter(Boolean));
     return {
       ref: doc.ref,
-      uid: String(data.uid || doc.id),
+      // Firestore document ID is the Auth UID. Profile data.uid is not an
+      // authority and could be stale or self-edited in a legacy client.
+      uid: doc.id,
       email: String(data.email || ""),
       displayName: String(data.displayName || data.userName || data.email || "Utente"),
       pushToken: String(data.pushToken || "").trim(),

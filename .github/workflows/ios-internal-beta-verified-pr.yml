@@ -111,10 +111,10 @@ jobs:
             { echo "::error::Xcode 26 / iOS 26 SDK or later required"; exit 1; }
           # Another Varga Cantieri workflow already delivered build 21.
           # This manual workflow has a separate, smaller GITHUB_RUN_NUMBER (e.g. 5).
-          # Offset to a dedicated monotonically increasing range above old builds.
+          # Dedicated non-overlapping 10000+ build-number range for this workflow.
           [[ "${GITHUB_RUN_NUMBER}" =~ ^[0-9]+$ ]] || { echo "::error::Invalid GitHub run number"; exit 1; }
-          IOS_BUILD_NUMBER="$((1000 + GITHUB_RUN_NUMBER))"
-          if (( IOS_BUILD_NUMBER <= 21 || IOS_BUILD_NUMBER > 9999 )); then
+          IOS_BUILD_NUMBER="$((10000 + GITHUB_RUN_NUMBER))"
+          if (( IOS_BUILD_NUMBER <= 21 || IOS_BUILD_NUMBER > 999999 )); then
             echo "::error::Unsafe iOS build number: $IOS_BUILD_NUMBER"
             exit 1
           fi

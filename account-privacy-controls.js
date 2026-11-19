@@ -7,6 +7,12 @@
   // Fail closed until the deletion backend and privacy release are actually live.
   // This does NOT gate Sign in with Apple; only the destructive account-deletion UI.
   const deletionEnabled = window.__VARGA_ACCOUNT_DELETION_ENABLED === true;
+  // Opt-in for an internal demo build only. The server independently
+  // checks both reviewer claims AND the exact disposable account identity.
+  // Ordinary client releases leave this false and show no deletion action.
+  const demoPreviewEnabled = window.__VARGA_DEMO_DELETION_PREVIEW_ENABLED === true;
+  let demoObserverRegistered = false;
+  let demoCheckVersion = 0;
   let deleting = false;
   let signingIn = false;
 
@@ -92,6 +98,22 @@
     // Lock immediately, including preflight and Apple revocation. A second tap
     // must not start a concurrent deletion or revoke the same Apple code twice.
     deleting = true;
+    if (demoPreviewEnabled && !deletionEnabled) {
+      // Visible UI is NOT authorization; refresh claims before the first
+      // preflight. Firebase enforces the identity independently.
+      try {
+        const token = await user.getIdTokenResult(true);
+        if (auth().currentUser !== user ||
+            token?.claims?.appReviewDemo !== true ||
+            token?.claims?.apple_review !== true) {
+          throw new Error("Account di prova non autorizzato.");
+        }
+      } catch (_error) {
+        deleting = false;
+        alert("Il test della cancellazione è riservato a un account dimostrativo autorizzato.");
+        return;
+      }
+    }
     // Preflight first: do not revoke Apple access if the server already knows
     // that personal files cannot be safely removed.
     let callable;
@@ -157,16 +179,7 @@
     }
   }
 
-  function mount() {
-    const gateGoogle = document.getElementById("auth-gate-login-btn");
-    if (gateGoogle && !document.getElementById("auth-apple-login-btn") && nativePlatform() === "ios") {
-      const apple = makeButton("auth-apple-login-btn", "Accedi con Apple", "btn");
-      apple.setAttribute("aria-label", "Accedi con Apple");
-      gateGoogle.insertAdjacentElement("afterend", apple);
-      apple.addEventListener("click", signInWithApple);
-    }
-
-    if (!deletionEnabled) return;
+  function mountDeleteButtons() {
     // Provide deletion in the profile, normal menu, AND pending-user view.
     const locations = [
       ["user-details-panel", "varga-account-delete-profile", "btn"],
@@ -193,6 +206,57 @@
     attach(gateAnchor?.parentElement, "varga-account-delete-gate", "btn", gateAnchor);
   }
 
+  function removeDeleteButtons() {
+    document.querySelectorAll("[data-delete-varga-account]").forEach((button) => button.remove());
+  }
+
+  async function refreshDemoButtons() {
+    const version = ++demoCheckVersion;
+    let current;
+    try { current = auth().currentUser; } catch (_) { removeDeleteButtons(); return; }
+    if (!current || typeof current.getIdTokenResult !== "function") {
+      removeDeleteButtons();
+      return;
+    }
+    try {
+      const token = await current.getIdTokenResult(true);
+      // Prevent a stale token response re-showing a destructive control
+      // after logout or a switch to another user.
+      if (version !== demoCheckVersion || auth().currentUser !== current) return;
+      if (token?.claims?.appReviewDemo === true && token?.claims?.apple_review === true) {
+        mountDeleteButtons();
+      } else {
+        removeDeleteButtons();
+      }
+    } catch (_) {
+      if (version === demoCheckVersion) removeDeleteButtons();
+    }
+  }
+
+  function mount() {
+    const gateGoogle = document.getElementById("auth-gate-login-btn");
+    if (gateGoogle && !document.getElementById("auth-apple-login-btn") && nativePlatform() === "ios") {
+      const apple = makeButton("auth-apple-login-btn", "Accedi con Apple", "btn");
+      apple.setAttribute("aria-label", "Accedi con Apple");
+      gateGoogle.insertAdjacentElement("afterend", apple);
+      apple.addEventListener("click", signInWithApple);
+    }
+
+    if (deletionEnabled) { mountDeleteButtons(); return; }
+    if (!demoPreviewEnabled || demoObserverRegistered) return;
+    try {
+      const firebaseAuth = auth();
+      if (typeof firebaseAuth.onAuthStateChanged === "function") {
+        demoObserverRegistered = true;
+        firebaseAuth.onAuthStateChanged(() => { void refreshDemoButtons(); });
+      } else {
+        void refreshDemoButtons();
+      }
+    } catch (_) {
+      // Firebase startup may be delayed. Never display the demo button
+      // unless a validated identity is actually available.
+    }
+  }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", mount, { once: true });
   } else {

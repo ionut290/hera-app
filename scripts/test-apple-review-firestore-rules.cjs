@@ -49,6 +49,17 @@ async function run() {
       await setDoc(doc(db, "personale/staff"), { displayName: "Private staff" });
       await setDoc(doc(db, "utenti/staff"), { displayName: "Private user" });
       await setDoc(doc(db, "oreReports/one"), { date: "2026-11-12" });
+      await setDoc(doc(db, "gpsUpdateRequests/gpsNormal"), {
+        operatorId: "normalUser", status: "pending", createdAt: 1,
+        operatorLat: 44.1, operatorLng: 11.1
+      });
+      await setDoc(doc(db, "gpsUpdateRequests/gpsOther"), {
+        operatorId: "otherUser", status: "pending", createdAt: 2,
+        operatorLat: 44.2, operatorLng: 11.2
+      });
+      await setDoc(doc(db, "notificationEmailQueue/emailOther"), {
+        to: "other@example.test", status: "pending", html: "synthetic text"
+      });
       await setDoc(doc(db, "sharedStaticViews/currentTeam"), { demo: false });
       await setDoc(doc(db, "appleReviewDemo/onlySynthetic"), {title: "Synthetic exercise", demo: true});
       // Each fixture is synthetic; the tombstone must stay private after
@@ -128,6 +139,42 @@ async function run() {
       { senderId: "normalUser", recipientId: "otherUser", createdAt: 6, text: "Valid synthetic" }));
     await assertFails(updateDoc(doc(normal, "chatMessages/outgoing"), { recipientId: "" }));
     await assertFails(deleteDoc(doc(normal, "chatMessages/incoming")));
+
+    // GPS updates and notification emails must not be global Firestore collections.
+    await assertFails(getDoc(doc(anonymous, "gpsUpdateRequests/gpsNormal")));
+    await assertFails(getDoc(doc(review, "gpsUpdateRequests/gpsNormal")));
+    await assertFails(getDoc(doc(normal, "gpsUpdateRequests/gpsOther")));
+    await assertSucceeds(getDoc(doc(normal, "gpsUpdateRequests/gpsNormal")));
+    await assertSucceeds(getDocs(collection(administrator, "gpsUpdateRequests")));
+    await assertFails(getDocs(collection(normal, "gpsUpdateRequests")));
+    await assertSucceeds(getDocs(query(collection(normal, "gpsUpdateRequests"),
+      where("operatorId", "==", "normalUser"), limit(100))));
+    await assertSucceeds(setDoc(doc(normal, "gpsUpdateRequests/gpsNew"), {
+      operatorId: "normalUser", status: "pending", operatorLat: 44.3, operatorLng: 11.3
+    }));
+    await assertFails(setDoc(doc(normal, "gpsUpdateRequests/gpsSpoof"), {
+      operatorId: "otherUser", status: "pending", operatorLat: 44.3, operatorLng: 11.3
+    }));
+    await assertFails(setDoc(doc(normal, "gpsUpdateRequests/gpsForgedApproval"), {
+      operatorId: "normalUser", status: "approved"
+    }));
+    await assertFails(updateDoc(doc(normal, "gpsUpdateRequests/gpsNormal"), { status: "approved" }));
+    await assertSucceeds(updateDoc(doc(administrator, "gpsUpdateRequests/gpsNormal"), { status: "approved" }));
+    await assertFails(deleteDoc(doc(normal, "gpsUpdateRequests/gpsNormal")));
+
+    await assertFails(getDoc(doc(anonymous, "notificationEmailQueue/emailOther")));
+    await assertFails(getDoc(doc(review, "notificationEmailQueue/emailOther")));
+    await assertFails(getDoc(doc(normal, "notificationEmailQueue/emailOther")));
+    await assertFails(getDocs(collection(normal, "notificationEmailQueue")));
+    await assertFails(setDoc(doc(normal, "notificationEmailQueue/emailSpoof"), {
+      to: "other@example.test", status: "pending", html: "fake"
+    }));
+    await assertFails(updateDoc(doc(normal, "notificationEmailQueue/emailOther"), { to: "normal@example.test" }));
+    await assertFails(deleteDoc(doc(normal, "notificationEmailQueue/emailOther")));
+    await assertSucceeds(getDocs(collection(administrator, "notificationEmailQueue")));
+    await assertSucceeds(setDoc(doc(administrator, "notificationEmailQueue/emailAdmin"), {
+      to: "normal@example.test", status: "pending", html: "only admin sends"
+    }));
 
     await assertSucceeds(getDoc(doc(normal, "commesse/syntheticJob")));
     await assertSucceeds(getDoc(doc(normal, "sharedStaticViews/currentTeam")));

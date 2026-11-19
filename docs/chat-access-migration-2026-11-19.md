@@ -86,3 +86,17 @@ La collezione `userAlertAcknowledgements` conteneva identificativi e nomi dei la
 - La vecchia autorizzazione generica è eliminata; emulatori Firebase testano account proprietario, altro lavoratore, reviewer Apple e amministratore.
 
 Questa restrizione non risolve da sola la raccolta `userAlerts`: il client ordinario carica ancora il feed generale e filtra sul dispositivo le notifiche dirette ad altri utenti. Per evitare interruzioni o mancata consegna degli avvisi legacy basati su nomi di squadra, occorre **progettare e collaudare una migrazione della lettura con regole server-side e query per destinatari** prima di applicare restrizioni simili. La revisione di `userAlerts` rimane un elemento privacy **aperto**, non una funzione dichiarata sicura. Non distribuire automaticamente la nuova regola delle conferme a client che non hanno superato i test di compatibilità.
+
+
+## Inventario obbligatorio prima di separare gli avvisi personali `userAlerts`
+
+La lettura dei messaggi `userAlerts` rimane oggi globale con filtro destinatari nel dispositivo, anche per notifiche con contenuti personali (inclusi gli avvisi automatici sulle assenze). Limitare immediatamente `allow read` in Firestore bloccherebbe i vecchi client che usano la query generale. Inoltre la Cloud Function `functions/user-notifications.js` crea gli avvisi `calendar-absence` basandosi su `targetMemberNames` (nomi testuali), non UID Firebase. **Non associare automaticamente nomi e UID con corrispondenza fuzzy**: nomi omonimi, alias o squadre variate potrebbero consegnare una notifica al dipendente sbagliato.
+
+È stato aggiunto `scripts/audit-user-alert-targeting.cjs` con due modalità:
+
+- `node scripts/audit-user-alert-targeting.cjs --self-test`: test di classificazione con sole fixture sintetiche; parte della CI `check:account-privacy`.
+- `ALLOW_READ_ONLY_USER_ALERT_AUDIT=1 GOOGLE_APPLICATION_CREDENTIALS=<credenziale> node scripts/audit-user-alert-targeting.cjs --live`: futuro audit *in sola lettura*, bloccato senza esplicita variabile di abilitazione e credenziale con `project_id=hera-app-6cd2b`. Richiede `firebase-admin` installato nella cartella `functions`. La query seleziona solo i campi di indirizzamento `sendToAllRegistered`, `targetUserIds`, `targetUserId`, `targetMemberNames` e `source`; stampa esclusivamente i **conteggi aggregati**, senza messaggi, nomi o ID. **Non è stato lanciato su Firebase produzione.** Programmarlo solo con un account di servizio a privilegi minimi e procedura privacy approvata.
+
+Classificazioni: broadcast, destinatari UID espliciti, UID + nomi legacy, soli nomi legacy non risolti, destinatari sconosciuti, metadati malformati. `needsReview>0` restituisce exit code 2 e blocca l'abilitazione di regole restrittive. Un risultato `needsReview=0` non è sufficiente da solo: restano da verificare destinatari sbagliati, ID non più attivi, client vecchi e indici.
+
+**Procedura di migrazione prevista (non eseguita):** inventariare gli avvisi; validare con un amministratore i `targetMemberNames` contro anagrafiche e UID effettivi; correggere le Cloud Functions che producono assenze per scrivere destinatari UID deterministici; distribuire gli indici e client con query separate (broadcast, UID array, UID singolo); solo dopo i test sul dispositivo e la migrazione degli avvisi storici, applicare regole server-side che non consentano più la query globale. Necessita conferma del titolare del trattamento e non deve modificare automaticamente avvisi personali o dati aziendali.

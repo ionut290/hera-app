@@ -575,10 +575,16 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Missing-hours warnings are generated only in administrator workflows.
+    // Ordinary workers must not forge, overwrite or suppress deadline alerts.
+    match /hoursDeadlineAlerts/{alertId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /{collection}/{docId} {
       allow read, write: if signedIn() && collection in [
         "commessaResources",
-        "hoursDeadlineAlerts",
         "items",
         "noteCommessa",
         "oreApprovalRequests",

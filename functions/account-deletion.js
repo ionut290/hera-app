@@ -72,9 +72,11 @@ exports.deleteOwnVargaAccount = onCall({
 
     // Do not destroy business files, shared geodata, timesheets, commesse or
     // records belonging to other people. Remove personal files before metadata.
-    const bucket = admin.storage().bucket();
-    for (const path of new Set(paths)) {
-      await bucket.file(path).delete({ ignoreNotFound: true });
+    if (paths.length) {
+      const bucket = admin.storage().bucket();
+      for (const path of new Set(paths)) {
+        await bucket.file(path).delete({ ignoreNotFound: true });
+      }
     }
     for (const doc of personal) await db.recursiveDelete(doc.ref);
 

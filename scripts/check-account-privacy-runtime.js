@@ -154,6 +154,28 @@ async function rejectedCode(promise, expected) {
     "failed-precondition");
   assert.equal(state.removedUsers.length, 0);
   assert.equal(state.removedFiles.length, 0);
+  // Older document records have no visibility field but are rendered as private.
+  // Their metadata and files must be included in the deletion plan.
+  state = setup();
+  delete state.docs.find((x) => x.id === "private-1").visibility;
+  const legacyReady = await state.handler({ auth: goodAuth, data: { confirmation: "ELIMINA", mode: "preflight" } });
+  assert.equal(legacyReady.personalDocuments, 1);
+  await state.handler({ auth: goodAuth, data: { confirmation: "ELIMINA" } });
+  assert.ok(state.removed.includes("documents/private-1"));
+  assert.equal(state.removedFiles.length, 2);
+
+  // Legacy records lacking a valid Storage path cannot be silently orphaned.
+  // Fail closed; an operator must resolve the legacy attachment before deletion.
+  state = setup();
+  const legacyNoStorage = state.docs.find((x) => x.id === "private-1");
+  delete legacyNoStorage.visibility;
+  delete legacyNoStorage.storagePath;
+  await rejectedCode(state.handler({ auth: goodAuth, data: { confirmation: "ELIMINA", mode: "preflight" } }),
+    "failed-precondition");
+  assert.equal(state.removedUsers.length, 0);
+  assert.equal(state.removed.length, 0);
+  assert.equal(state.removedFiles.length, 0);
+
   console.log("PASS: Account deletion simulated — auth, confirmation, UID isolation, retention, storage safety.");
 })().catch((error) => {
   console.error(error);

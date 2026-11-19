@@ -4,6 +4,9 @@
   window.__vargaAccountPrivacyInstalled = true;
 
   const REGION = "europe-west1";
+  // Fail closed until the deletion backend and privacy release are actually live.
+  // This does NOT gate Sign in with Apple; only the destructive account-deletion UI.
+  const deletionEnabled = window.__VARGA_ACCOUNT_DELETION_ENABLED === true;
   let deleting = false;
   let signingIn = false;
 
@@ -163,6 +166,7 @@
       apple.addEventListener("click", signInWithApple);
     }
 
+    if (!deletionEnabled) return;
     // Provide deletion in the profile, normal menu, AND pending-user view.
     const locations = [
       ["user-details-panel", "varga-account-delete-profile", "btn"],

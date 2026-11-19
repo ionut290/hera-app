@@ -26385,16 +26385,21 @@ function subscribeGpsRequests() {
   // broad read of workers' precise coordinates for an ordinary user session.
   if (!currentUser || !canManageData()) {
     gpsUpdateRequests = [];
+    renderGpsRequests();
     return;
   }
+  const subscribedUid = currentUser.uid;
   unsubscribeGpsRequests = db
     .collection("gpsUpdateRequests")
     .orderBy("createdAt", "desc")
     .limit(200)
     .onSnapshot((snapshot) => {
+      // Ignore queued callbacks after logout or a different account signs in.
+      if (!currentUser || currentUser.uid !== subscribedUid || !canManageData()) return;
       gpsUpdateRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       renderGpsRequests();
     }, (error) => {
+      if (!currentUser || currentUser.uid !== subscribedUid || !canManageData()) return;
       console.error("Errore caricamento richieste GPS:", error);
       if (ui.gpsRequestsList) ui.gpsRequestsList.innerHTML = "<p class='muted'>Errore caricamento richieste GPS.</p>";
     });

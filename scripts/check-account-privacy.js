@@ -18,6 +18,7 @@ execFileSync(process.execPath, ["--check", path.join(root, "functions/account-de
 
 contains("index.html", 'src="account-privacy-controls.js?');
 contains("account-privacy-controls.js", '"auth-apple-login-btn"');
+contains("account-privacy-controls.js", 'nativePlatform() === "ios"');
 contains("account-privacy-controls.js", "signInWithApple({ skipNativeAuth: true })");
 contains("account-privacy-controls.js", "new firebase.auth.OAuthProvider");
 contains("account-privacy-controls.js", "reauthenticateWithCredential");

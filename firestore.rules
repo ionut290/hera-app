@@ -531,15 +531,39 @@ service cloud.firestore {
       }
     }
 
+    // GPS requests contain precise worker coordinates and personal details.
+    // Operators may submit their own request; only admins may approve, reject,
+    // list all requests or access other workers' locations.
+    match /gpsUpdateRequests/{requestId} {
+      allow get: if signedIn() && (
+        isAdmin() || resource.data.get("operatorId", "") == request.auth.uid
+      );
+      allow list: if isAdmin() || (
+        signedIn() && request.query.limit <= 100
+        && resource.data.get("operatorId", "") == request.auth.uid
+      );
+      allow create: if signedIn() && (
+        isAdmin() || (
+          request.resource.data.get("operatorId", "") == request.auth.uid
+          && request.resource.data.get("status", "") == "pending"
+        )
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // Email queue bodies/addresses are administrative data, not global data
+    // for any signed-in user. Firebase Admin/privileged delivery bypass rules.
+    match /notificationEmailQueue/{emailId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
     match /{collection}/{docId} {
       allow read, write: if signedIn() && collection in [
         "appNotifications",
         "commessaResources",
-        "gpsUpdateRequests",
         "hoursDeadlineAlerts",
         "items",
         "noteCommessa",
-        "notificationEmailQueue",
         "oreApprovalRequests",
         "oreLocks",
         "oreReports",

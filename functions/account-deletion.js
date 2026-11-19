@@ -51,7 +51,9 @@ async function scrubCentralNotifications(db, uid) {
     ["actorId", "==", uid],
     ["recipientUserIds", "array-contains", uid],
     ["readBy." + uid, "==", true],
-    ["deletedBy." + uid, "==", true]
+    ["readBy." + uid, "==", false],
+    ["deletedBy." + uid, "==", true],
+    ["deletedBy." + uid, "==", false]
   ]) {
     const snapshot = await db.collection("notifications").where(field, operator, value).get();
     for (const doc of snapshot.docs) refs.set(doc.ref.path, doc);

@@ -76,3 +76,15 @@ Quando parte un workflow di distribuzione iOS **manualmente autorizzato**, quest
 - Inserire il video in Note della revisione e rispondere in App Store Connect alle tre linee guida. Non inviare nuovo build finché le verifiche non sono complete.
 
 Documentazione: https://developer.apple.com/app-store/review/guidelines/it/ e https://firebase.google.com/docs/auth/ios/apple
+
+
+## Avviso tecnico Apple per build 10003 (19 novembre 2026)
+
+L'email **"The uploaded build for VARGA CANTIERI has one or more issues"** conferma consegna riuscita della versione **1.0 (10003)** e segnala due requisiti **futuri** (non la causa dell'attuale rifiuto App Review):
+
+- **ITMS-90068**: da **aprile 2027** il target minimo dovrà essere **iOS 15.0**. La PR imposta `IPHONEOS_DEPLOYMENT_TARGET=15.0` soltanto nel target App generato (Debug + Release), senza modificare Pods.
+- **ITMS-90725**: da **aprile 2027** Apple richiederà **Xcode 27 / SDK iOS 27 o successivo**. I runner esistenti usano ancora Xcode 26: aggiornare i workflow quando l'SDK 27 sarà disponibile e confermarlo **prima** di qualsiasi invio soggetto alla nuova scadenza. Non sostenere che questo requisito sia già soddisfatto.
+
+**Numerazione build:** `10003` è già stata caricata. Il workflow candidato ora propone **10004** come minimo noto, invece dell'obsoleto 22; il workflow TestFlight privato riserva la serie `20000 + GITHUB_RUN_NUMBER`. Prima di ogni invio verificare comunque la **build più alta effettivamente presente su App Store Connect**, anche se caricata da altri workflow o utenti; non è implementato un confronto automatico con ASC. I caricamenti restano manuali e richiedono approvazione protetta.
+
+**Decisione:** non modificare la build 10003 già disponibile, non inviare ancora ad App Review. Risolvere prima privacy, account demo, cancellazione effettiva e video su iPhone.

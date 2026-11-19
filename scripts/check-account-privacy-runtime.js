@@ -50,6 +50,25 @@ function setup(options = {}) {
       title: "Synthetic job notice", body: "Keep work information" },
     { collection: "appNotifications", id: "app-created-by-other", createdByUid: "worker-2",
       createdByEmail: "other@example.test", title: "Another person's alert" },
+    // The deleted account must be removed from an email queue only when it is
+    // the exact addressee or creator; never blank a different user's message.
+    { collection: "notificationEmailQueue", id: "mail-to-deleted",
+      to: "worker1@example.test", createdBy: "worker-2", status: "pending",
+      html: "<p>Private reminder</p>", text: "Private reminder" },
+    { collection: "notificationEmailQueue", id: "mail-created-by-deleted",
+      to: "worker2@example.test", createdBy: "worker-1", status: "sent",
+      html: "<p>Other person's message</p>", text: "Retained content" },
+    { collection: "notificationEmailQueue", id: "mail-unrelated",
+      to: "worker2@example.test", createdBy: "worker-2", status: "pending",
+      html: "<p>Other recipient</p>", text: "Do not change" },
+    // Security log metadata can be minimised, but business/incident details
+    // must not be destroyed by a single user-initiated account deletion.
+    { collection: "activityLogs", id: "own-log", userId: "worker-1",
+      userEmail: "worker1@example.test", userName: "Deleted worker",
+      deviceInfo: "Synthetic User Agent", detail: "Retain for security review" },
+    { collection: "activityLogs", id: "other-log", userId: "worker-2",
+      userEmail: "worker2@example.test", userName: "Other worker",
+      deviceInfo: "Other device", detail: "Keep untouched" },
     { collection: "personale", id: "employee-1", linkedUserId: "worker-1", linkedAuthProvider: "google.com", googleLastLoginAt: 123, googleDisplayName: "Test", emailVerified: true, profilePhotoSource: "google", photoURL: "https://example.test/google.jpg", contractCode: "business-retained" },
     { collection: "personale", id: "employee-2", linkedUserId: "worker-2", linkedAuthProvider: "google.com", contractCode: "other-employee" },
     { collection: "personale", id: "employee-3", linkedUserId: "worker-1", linkedAuthProvider: "apple.com", profilePhotoSource: "operator", photoURL: "https://example.test/business.jpg", contractCode: "another-retained" }
@@ -121,7 +140,7 @@ function setup(options = {}) {
     auth: () => ({
       getUser: async (uid) => {
         if (!users.has(uid)) throw new Error("not found");
-        return { uid };
+        return { uid, email: uid === "worker-1" ? "worker1@example.test" : "worker2@example.test" };
       },
       deleteUser: async (uid) => {
         if (options.failAuthOnce && !injected.auth) {
@@ -216,7 +235,36 @@ async function rejectedCode(promise, expected) {
   assert.equal(businessPortrait.contractCode, "another-retained");
   const otherEmployee = state.docs.find((d) => d.id === "employee-2");
   assert.equal(otherEmployee.linkedUserId, "worker-2");
-  assert.equal(state.updated.length, 7);
+  assert.equal(state.updated.length, 10, "Only owned metadata, shared notices and authors are changed");
+  const ownEmail = state.docs.find((d) => d.id === "mail-to-deleted");
+  assert.equal(ownEmail.to, undefined);
+  assert.equal(ownEmail.html, undefined);
+  assert.equal(ownEmail.text, undefined);
+  assert.equal(ownEmail.status, "cancelled_account_deleted");
+  assert.equal(ownEmail.createdBy, "worker-2", "Other email author must be preserved");
+  const sentEmail = state.docs.find((d) => d.id === "mail-created-by-deleted");
+  assert.equal(sentEmail.createdBy, "Account eliminato");
+  assert.equal(sentEmail.to, "worker2@example.test");
+  assert.equal(sentEmail.html, "<p>Other person's message</p>");
+  assert.equal(sentEmail.text, "Retained content");
+  assert.equal(sentEmail.status, "sent");
+  const unrelatedEmail = state.docs.find((d) => d.id === "mail-unrelated");
+  assert.equal(unrelatedEmail.to, "worker2@example.test");
+  assert.equal(unrelatedEmail.createdBy, "worker-2");
+  assert.equal(unrelatedEmail.status, "pending");
+  assert.equal(unrelatedEmail.html, "<p>Other recipient</p>");
+  const ownLog = state.docs.find((d) => d.id === "own-log");
+  assert.equal(ownLog.userId, undefined);
+  assert.equal(ownLog.userEmail, undefined);
+  assert.equal(ownLog.userName, "Account eliminato");
+  assert.equal(ownLog.deviceInfo, undefined);
+  assert.equal(ownLog.detail, "Retain for security review");
+  const otherLog = state.docs.find((d) => d.id === "other-log");
+  assert.equal(otherLog.userId, "worker-2");
+  assert.equal(otherLog.userEmail, "worker2@example.test");
+  assert.equal(otherLog.userName, "Other worker");
+  assert.equal(otherLog.deviceInfo, "Other device");
+  assert.equal(otherLog.detail, "Keep untouched");
   const priorChat = state.docs.find((d) => d.id === "chat-from-deleted");
   assert.equal(priorChat.senderId, undefined);
   assert.equal(priorChat.senderEmail, undefined);

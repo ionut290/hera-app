@@ -86,6 +86,32 @@
       if (confirmation !== null) alert("Conferma non valida. Account non eliminato.");
       return;
     }
+    // When deleting an Apple-linked account on iOS, request a fresh code,
+    // reauthenticate the SAME Firebase user and revoke the Apple credential.
+    // If Apple does not provide a code, account deletion must still proceed.
+    if (nativePlatform() === "ios" &&
+        user.providerData?.some((provider) => provider.providerId === "apple.com")) {
+      const plugin = window.Capacitor?.Plugins?.FirebaseAuthentication;
+      if (plugin?.signInWithApple) {
+        try {
+          const fresh = await plugin.signInWithApple({ skipNativeAuth: true });
+          const appleProvider = new firebase.auth.OAuthProvider("apple.com");
+          const credential = appleProvider.credential({
+            idToken: fresh?.credential?.idToken,
+            rawNonce: fresh?.credential?.nonce
+          });
+          await user.reauthenticateWithCredential(credential);
+          const code = fresh?.credential?.authorizationCode;
+          if (code && plugin.revokeAccessToken) {
+            await plugin.revokeAccessToken({ token: code });
+          }
+        } catch (error) {
+          alert("Verifica Apple non riuscita: " + errorText(error) +
+            "\nL'account non è stato eliminato.");
+          return;
+        }
+      }
+    }
     deleting = true;
     const buttons = document.querySelectorAll("[data-delete-varga-account]");
     buttons.forEach((button) => { button.disabled = true; button.textContent = "Eliminazione in corso..."; });

@@ -32,6 +32,11 @@ contains("functions/account-deletion.js", "await admin.auth().deleteUser(uid)");
 contains("functions/account-deletion.js", 'visibility === "personal"');
 contains("functions/account-deletion.js", 'path.startsWith(prefix)');
 contains("functions/account-deletion.js", "Business records shared with a company are not deleted");
+contains("scripts/install-ios-apple-signin.rb", 'configuration.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "15.0"');
+contains(".github/workflows/ios-appstore-candidate.yml", 'default: "10004"');
+contains(".github/workflows/ios-appstore-candidate.yml", '10#$IOS_BUILD_NUMBER < 10004');
+contains(".github/workflows/ios-private-testflight.yml", '20000 + GITHUB_RUN_NUMBER');
+
 contains("functions/account-deletion.js", 'unlinkSharedAuthor(db, "chatMessages", "senderId", uid');
 contains("functions/account-deletion.js", "await unlinkDeletedChatRecipient(db, uid);");
 contains("functions/account-deletion.js", 'unlinkSharedAuthor(db, "appNotifications", "createdByUid", uid');

@@ -450,9 +450,20 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Individual messages are readable only by their sender, recipient or a
+    // privileged administrator. Global announcements have an empty recipientId.
+    // Client-side filtering is NOT a substitute for this Firestore permission.
     match /chatMessages/{messageId} {
-      allow read, create, update: if signedIn();
-      allow delete: if isAdmin();
+      allow read: if signedIn() && (
+        isAdmin() ||
+        resource.data.get("recipientId", "") == "" ||
+        resource.data.get("recipientId", "") == request.auth.uid ||
+        resource.data.get("senderId", "") == request.auth.uid
+      );
+      allow create: if signedIn()
+        && (isAdmin() || request.resource.data.get("senderId", "") == request.auth.uid)
+        && request.resource.data.get("recipientId", "") is string;
+      allow update, delete: if isAdmin();
     }
 
     match /safetyContacts/{contactId} {

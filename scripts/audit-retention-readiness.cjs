@@ -24,6 +24,24 @@ const CATEGORIES = Object.freeze({
 const OUTCOMES = ["hold", "purpose-unclassified", "not-terminal", "missing-valid-anchor",
   "not-yet-due", "possible-manual-review"];
 
+/**
+ * Safe operational diagnostics: NEVER log the raw SDK exception because it
+ * can contain paths, document IDs, emails or other account information.
+ * Only compile-time category/phase names and allowlisted gRPC status codes
+ * may reach GitHub Actions logs.
+ */
+function safeAuditFailureTag(error, category, phase) {
+  const safeCategory = Object.prototype.hasOwnProperty.call(CATEGORIES, category) ? category : "unknown";
+  const safePhase = ["read-page", "classify-page", "check-limit"].includes(phase) ? phase : "unknown";
+  const safeKind = ["TypeError", "RangeError", "ReferenceError", "FirebaseError", "Error"]
+    .includes(error?.name) ? error.name : "unknown";
+  const code = Number.isInteger(error?.code) && error.code >= 0 && error.code <= 16
+    ? String(error.code) : "none";
+  const limit = error?.message === "Row limit reached; stop and review scope" ? "yes" : "no";
+  return "category=" + safeCategory + " phase=" + safePhase
+    + " kind=" + safeKind + " grpc=" + code + " rowCap=" + limit;
+}
+
 function dateFrom(value) {
   if (value && typeof value.toDate === "function") value = value.toDate();
   if (value instanceof Date) return Number.isFinite(value.getTime()) ? value : null;
@@ -79,6 +97,17 @@ function selfTest() {
   assert.equal(batch["possible-manual-review"], 1);
   assert.equal(batch.hold, 1);
   assert.equal(classify("activityLogs", { createdAt: "2024-01-01T00:00:00Z" }, now), "possible-manual-review");
+  const diagnostic = safeAuditFailureTag(
+    { name: "TypeError", code: "users/sensitive@example.com", message: "private address" },
+    "activityLogs", "read-page");
+  assert.equal(diagnostic, "category=activityLogs phase=read-page kind=TypeError grpc=none rowCap=no");
+  assert.ok(!diagnostic.includes("@"));
+  assert.equal(safeAuditFailureTag(new Error("Row limit reached; stop and review scope"),
+    "gpsUpdateRequests", "check-limit"),
+    "category=gpsUpdateRequests phase=check-limit kind=Error grpc=none rowCap=yes");
+  assert.equal(safeAuditFailureTag({ name: "sensitive@example.com", code: 7 },
+    "unknown-collection", "read-page"),
+    "category=unknown phase=read-page kind=unknown grpc=7 rowCap=no");
   console.log("PASS: retention review classifications, strict anchors, pending/holds, no Firebase access.");
 }
 
@@ -100,17 +129,27 @@ async function liveAudit() {
       const col = db.collection(category);
       const counts = emptyCounts();
       let cursor = null, total = 0;
-      while (true) {
-        let query = col.orderBy(admin.firestore.FieldPath.documentId()).select(...fields).limit(250);
-        if (cursor) query = query.startAfter(cursor);
-        const snapshot = await query.get();
-        for (const doc of snapshot.docs) {
-          counts[classify(category, doc.data())]++;
-          total++;
+      let phase = "read-page";
+      try {
+        while (true) {
+          phase = "read-page";
+          let query = col.orderBy(admin.firestore.FieldPath.documentId()).select(...fields).limit(250);
+          if (cursor) query = query.startAfter(cursor);
+          const snapshot = await query.get();
+          phase = "classify-page";
+          for (const doc of snapshot.docs) {
+            counts[classify(category, doc.data())]++;
+            total++;
+          }
+          phase = "check-limit";
+          if (total > MAX_PER_COLLECTION) throw new Error("Row limit reached; stop and review scope");
+          if (snapshot.size < 250) break;
+          cursor = snapshot.docs[snapshot.docs.length - 1];
         }
-        if (total > MAX_PER_COLLECTION) throw new Error("Row limit reached; stop and review scope");
-        if (snapshot.size < 250) break;
-        cursor = snapshot.docs[snapshot.docs.length - 1];
+      } catch (error) {
+        console.error("Retention read-only audit diagnostic:", safeAuditFailureTag(error, category, phase));
+        // Do not expose original error message or fields to log forwarding.
+        throw new Error("Read-only metadata audit failed; see sanitized diagnostic.");
       }
       report.push({ category, total, ...counts });
     }

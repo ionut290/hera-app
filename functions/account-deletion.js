@@ -81,6 +81,12 @@ exports.deleteOwnVargaAccount = onCall({
       if (thumbnail) paths.push(thumbnail);
     }
 
+    // Validate the deletion plan without changing user data or Apple credentials.
+    // Clients request this first, before revoking an Apple authorization code.
+    if (request.data?.mode === "preflight") {
+      return { ready: true, personalDocuments: personal.length };
+    }
+
     // Do not destroy business files, shared geodata, timesheets, commesse or
     // records belonging to other people. Remove personal files before metadata.
     if (paths.length) {

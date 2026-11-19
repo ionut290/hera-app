@@ -108,7 +108,9 @@ exports.deleteOwnVargaAccount = onCall({
       ["documentReminderAcknowledgements", "userId"],
       ["alertReadConfirmations", "utente"],
       ["userAlertAcknowledgements", "userId"],
-      ["userAlerts", "userId"]
+      ["userAlerts", "userId"],
+      // Temporary password-reset challenges must not outlive a deleted login.
+      ["passwordRecoveryChallenges", "uid"]
     ];
     for (const [collection, field] of personalQueries) {
       await deleteMatchedDocuments(db, collection, field, uid);

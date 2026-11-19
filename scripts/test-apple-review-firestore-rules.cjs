@@ -122,6 +122,37 @@ async function run() {
     await assertFails(deleteDoc(doc(review, "appleReviewDemo/onlySynthetic")));
     await assertFails(getDoc(doc(normal, "appleReviewDemo/onlySynthetic")));
 
+    // Profile identity is authoritative only from verified Firebase Auth.
+    // Legacy self-editable uid/email fields must not redirect private pushes.
+    await assertSucceeds(getDoc(doc(normal, "platformUsers/normalUser")));
+    await assertFails(getDoc(doc(normal, "platformUsers/otherUser")));
+    await assertSucceeds(updateDoc(doc(normal, "platformUsers/normalUser"), {
+      displayName: "Synthetic profile rename"
+    }));
+    await assertFails(updateDoc(doc(normal, "platformUsers/normalUser"), {
+      uid: "otherUser"
+    }));
+    await assertFails(updateDoc(doc(normal, "platformUsers/normalUser"), {
+      email: "other@example.test"
+    }));
+    await assertFails(updateDoc(doc(normal, "platformUsers/normalUser"), {
+      uid: "otherUser", displayName: "Spoofed identity"
+    }));
+    await assertFails(updateDoc(doc(normal, "platformUsers/normalUser"), {
+      role: "admin"
+    }));
+    // If Firebase Auth email has genuinely changed, an identity-matching
+    // profile update is allowed instead of blocking account maintenance.
+    const ownChangedEmail = testEnv.authenticatedContext("normalUser", {
+      email: "newverified@example.test", email_verified: true
+    }).firestore();
+    await assertSucceeds(updateDoc(doc(ownChangedEmail, "platformUsers/normalUser"), {
+      email: "newverified@example.test"
+    }));
+    await assertFails(updateDoc(doc(normal, "platformUsers/normalUser"), {
+      email: "newverified@example.test"
+    }));
+
     // Direct reads and queries must enforce privacy at the Firestore server,
     // not merely by filtering a global listener in the browser.
     await assertFails(getDoc(doc(anonymous, "chatMessages/public")));

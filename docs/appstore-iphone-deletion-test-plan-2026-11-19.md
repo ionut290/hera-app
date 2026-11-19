@@ -1,6 +1,6 @@
 # VARGA CANTIERI — Piano collaudo account e video per Apple
 
-**Stato:** piano operativo. **NON eseguire ancora la cancellazione su iPhone**: la funzione `deleteOwnVargaAccount` non è attiva in Firebase produzione. La beta 1.0 (10003) su TestFlight permette per ora di verificare il login Apple e la presenza del pulsante.
+**Stato:** piano operativo. **NON eseguire ancora la cancellazione su iPhone**: la funzione `deleteOwnVargaAccount` non è attiva in Firebase produzione. La beta interna 1.0 (10009) è stata caricata su TestFlight e dichiarata pronta da Apple. Il proprietario ha confermato su iPhone fisico il login Apple e la presenza del pulsante; NON ha eseguito né confermato una cancellazione reale.
 
 ## Sicurezza del collaudo
 
@@ -30,10 +30,13 @@
 
 ## Stato reale verificato al 19 novembre 2026
 
-- Login con Apple confermato dall'utente su iPhone.
-- Pulsante di eliminazione visibile nella schermata profilo dell'iPhone, come da screenshot dell'utente.
-- Beta iOS 1.0 (10003) installabile tramite TestFlight interno.
-- Cloud Function `deleteOwnVargaAccount` **non distribuita in produzione**, pertanto il video completo della cancellazione non è ancora registrabile correttamente.
-- PR #1606 **draft** e non unita a `main`; evitare di attivare il workflow deploy Firebase che potrebbe distribuire funzioni non ancora approvate.
+- **Beta 1.0 (10009):** login con Apple confermato esplicitamente dal proprietario su iPhone fisico (nessun video ancora allegato).
+- Pulsante «Elimina il mio account» confermato visibile dal proprietario nella schermata profilo. Il pulsante **non** prova da solo che la cancellazione sia disponibile.
+- Beta iOS 1.0 (10009) in stato **Testing** su App Store Connect e confermata via email Apple «now available to test», installabile su TestFlight interno; [upload GitHub riuscito](https://github.com/ionut290/hera-app/actions/runs/44552567645).
+- Audit **aggregato e non distruttivo** di cinque categorie Firestore completato con SUCCESS [GitHub #44567705049](https://github.com/ionut290/hera-app/actions/runs/44567705049). Non è un inventario GDPR esaustivo: log parzialmente campionati, scopi di conservazione ancora da classificare, code non finali e coordinate/record GPS che richiedono valutazione.
+- Cloud Function `deleteOwnVargaAccount` **non distribuita in produzione**: il video di cancellazione completo non è ancora registrabile correttamente e l'utente non deve premere il pulsante sul proprio account.
+- PR #1606 **draft** e non unita a `main`; verificato `mergeable=true` dopo l'allineamento dello script audit sul ramo PR. Non equivale a un'approvazione della pubblicazione. Evitare deploy Firebase automatici o manuali finché signoff privacy, account demo isolato e revisione dei dati aziendali non sono completi.
+- I criteri di conservazione di massima sono stati approvati dal gestore dell'app, **non** è ancora stato provato il ruolo GDPR delle aziende titolari dei dati e non si è verificata la cancellazione su dati reali.
+- Nessun video del flusso completo è stato inviato ad Apple e non è stata inviata una nuova richiesta di App Review dopo il rifiuto della build 21.
 
 **Condizione di uscita:** nessun invio Apple che dichiari la cancellazione funzionante finché non sono completati test end-to-end sul demo, audit privacy e video su dispositivo fisico.

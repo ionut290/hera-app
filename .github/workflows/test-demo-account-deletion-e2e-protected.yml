@@ -1,0 +1,116 @@
+name: Firebase account deletion - isolated demo end-to-end (IRREVERSIBLE DEMO ONLY)
+
+# Manual and human-reviewed. Never delete an actual employee/user identity.
+# One exact disposable review Auth identity is hard-coded in the script AND
+# independently protected by the already deployed demo-only Firebase callable.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        required: true
+        type: choice
+        default: DO_NOT_DELETE
+        options:
+          - DO_NOT_DELETE
+          - DELETE_ONLY_EXACT_ISOLATED_DEMO
+        description: "Permanently delete ONE approved disposable review demo, no workers"
+      reviewed_sha:
+        required: true
+        type: string
+        description: "Exact current SHA of main; human-reviewed code required"
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: varga-account-deletion-production
+  cancel-in-progress: false
+jobs:
+  guard:
+    name: Verify exact SHA and existing protected human-reviewed environment
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'DELETE_ONLY_EXACT_ISOLATED_DEMO' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Validate SHA and required human review (no environment bypass)
+        shell: bash
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "ionut290/hera-app" ]] || exit 1
+          [[ "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ && "$REVIEWED_SHA" == "$GITHUB_SHA" ]] || {
+            echo "::error::Must use exact reviewed main SHA"; exit 1
+          }
+          RESPONSE="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/environments/firebase-account-deletion-production")" || exit 1
+          printf '%s' "$RESPONSE" | jq -e \
+            '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' >/dev/null || {
+            echo "::error::Existing required human reviewers missing"; exit 1
+          }
+
+  disposable_demo_only:
+    name: Delete ONLY one disposable app-review demo and verify absence
+    needs: guard
+    if: ${{ needs.guard.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: firebase-account-deletion-production
+    steps:
+      - name: Checkout exact human-reviewed commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.reviewed_sha }}
+      - name: Check hard-coded scope and run synthetic safety tests BEFORE credentials
+        shell: bash
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
+          grep -Fxq 'const DEMO_ONLY_RELEASE = true;' functions/account-deletion.js
+          grep -Fq 'APPROVED_DEMO_EMAIL_SHA256' functions/account-deletion.js
+          grep -Fq 'ownAuthRecord.customClaims?.appReviewDemo !== true' functions/account-deletion.js
+          grep -Fq 'auth.token?.appReviewDemo !== true || auth.token?.apple_review !== true' functions/account-deletion.js
+          grep -Fq 'DELETE_ONLY_EXACT_ISOLATED_DEMO' .github/workflows/test-demo-account-deletion-e2e-protected.yml
+          grep -Fq 'firebase-account-deletion-production' .github/workflows/test-demo-account-deletion-e2e-protected.yml
+          grep -Fq '"!functions/account-deletion.js"' .github/workflows/deploy-firebase-functions.yml
+          node --check scripts/test-deletion-disposable-demo-e2e.cjs
+          node scripts/test-deletion-disposable-demo-e2e.cjs --self-test
+          node scripts/prepare-app-review-demo-claims.cjs --self-test
+          node scripts/run-approved-demo-preflight.cjs --self-test
+          node scripts/check-account-privacy-runtime.js
+
+      - name: Install scoped Firebase Admin dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+
+      - name: Prepare scoped Firebase credential without printing or uploading it
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/varga-single-disposable-demo.json"
+          python3 - "$RUNNER_TEMP/varga-single-disposable-demo.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding="utf8") as f: data=json.load(f)
+          assert data.get("project_id")=="hera-app-6cd2b"
+          PY
+
+      - name: Delete ONLY isolated disposable demo through deployed Callable and verify Auth absence
+        shell: bash
+        env:
+          APPROVE_DISPOSABLE_DEMO_DELETION: "1"
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/varga-single-disposable-demo.json
+        run: |
+          set -euo pipefail
+          node scripts/test-deletion-disposable-demo-e2e.cjs --live
+
+      - name: Erase temporary credential even if test fails
+        if: ${{ always() }}
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/varga-single-disposable-demo.json"

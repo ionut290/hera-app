@@ -96,6 +96,13 @@ function resolvePrivateChatRecipient(users, recipientId) {
   return exact.length === 1 ? exact[0] : null;
 }
 
+// Shared/stale FCM tokens across multiple Firebase profiles are unsafe for
+// personal pushes. Do not send until a token is uniquely tied to one profile.
+function hasUniquePushTokenOwner(users, user) {
+  if (!user || !user.pushToken) return false;
+  return users.filter((candidate) => candidate.pushToken === user.pushToken).length === 1;
+}
+
 async function clearInvalidTokens(users, invalidTokens) {
   if (!invalidTokens.size) return;
   const batch = getDb().batch();
@@ -174,7 +181,9 @@ exports.notifyAndroidChatMessage = onDocumentCreated(
     const recipientId = String(message.recipientId || "").trim();
 
     const directRecipient = recipientId ? resolvePrivateChatRecipient(users, recipientId) : null;
-    const recipients = (recipientId ? (directRecipient ? [directRecipient] : []) : users)
+    const recipients = (recipientId
+      ? (hasUniquePushTokenOwner(users, directRecipient) ? [directRecipient] : [])
+      : users)
       .filter((user) => {
         const isSender = normalize(user.uid) === senderId ||
           (senderEmail && normalize(user.email) === senderEmail);
@@ -224,7 +233,7 @@ exports.notifyAndroidHoursInserted = onDocumentCreated(
     const matchedRowsByUser = new Map();
     for (const row of rows) {
       const user = resolveUniquePushUser(users, row.operatorName);
-      if (!user || !user.pushToken) continue; // Never guess a personal recipient.
+      if (!hasUniquePushTokenOwner(users, user)) continue; // Never guess a person or device.
       if (!matchedRowsByUser.has(user.uid)) matchedRowsByUser.set(user.uid, { user, rows: [] });
       matchedRowsByUser.get(user.uid).rows.push(row);
     }
@@ -292,7 +301,7 @@ exports.notifyAndroidSquadraAssignment = onDocumentWritten(
     const uniquelyResolved = new Map();
     for (const operator of added) {
       const user = resolveUniquePushUser(users, operator);
-      if (user && user.pushToken) uniquelyResolved.set(user.uid, user);
+      if (hasUniquePushTokenOwner(users, user)) uniquelyResolved.set(user.uid, user);
     }
     for (const user of uniquelyResolved.values()) {
         await sendToUsers([user], {

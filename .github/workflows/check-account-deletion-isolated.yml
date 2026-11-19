@@ -7,6 +7,7 @@ on:
       - "functions/main.js"
       - "scripts/check-account-privacy-runtime.js"
       - ".github/workflows/deploy-account-deletion-protected.yml"
+      - ".github/workflows/deploy-account-deletion-demo-canary.yml"
       - ".github/workflows/check-account-deletion-isolated.yml"
   workflow_dispatch:
 
@@ -44,4 +45,14 @@ jobs:
             grep -Fq "$gate" .github/workflows/deploy-account-deletion-protected.yml || { echo "Missing release gate: $gate"; exit 1; }
           done
           echo "Protected deployment checks are present"
+          # A new production callable is DEMO-ONLY until a separate privacy-reviewed release.
+          grep -Fxq 'const DEMO_ONLY_RELEASE = true;' functions/account-deletion.js
+          grep -Fq 'auth.token?.appReviewDemo !== true || auth.token?.apple_review !== true' functions/account-deletion.js
+          grep -Fq 'ownAuthRecord.customClaims?.appReviewDemo !== true' functions/account-deletion.js
+          grep -Fq 'APPROVED_DEMO_EMAIL_SHA256' functions/account-deletion.js
+          for gate in 'APPROVE_DEMO_CANARY_ONLY' 'required_reviewers' 'firebase-account-deletion-production' 'functions:deleteOwnVargaAccount'; do
+            grep -Fq "$gate" .github/workflows/deploy-account-deletion-demo-canary.yml || {
+              echo "Missing demo-only canary gate: $gate"; exit 1;
+            }
+          done
           echo "Deletion remains excluded from routine deploy"

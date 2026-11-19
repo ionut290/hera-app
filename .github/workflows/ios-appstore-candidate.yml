@@ -15,10 +15,10 @@ on:
           - DO_NOT_UPLOAD
           - UPLOAD_APP_STORE_CANDIDATE_ONLY
       build_number:
-        description: "New CFBundleVersion number, greater than previously uploaded builds (e.g. 5)"
+        description: "New CFBundleVersion number, greater than the reviewed 1.0 (21) build (at least 22)"
         type: string
         required: true
-        default: "5"
+        default: "22"
       reviewed_commit_sha:
         description: "Exact 40-character reviewed commit SHA shown in GitHub"
         required: true
@@ -50,8 +50,8 @@ jobs:
             echo "::error::Reviewed SHA must match the exact commit running this workflow."
             exit 1
           fi
-          if [[ ! "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,5}$ ]] || (( 10#$IOS_BUILD_NUMBER < 5 )); then
-            echo "::error::Enter an unused numeric build number (at least 5)."
+          if [[ ! "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,5}$ ]] || (( 10#$IOS_BUILD_NUMBER < 22 )); then
+            echo "::error::Enter an unused numeric build number (at least 22)."
             exit 1
           fi
           echo "Preflight OK: workflow parsed, Linux job started and manual inputs validated."
@@ -107,8 +107,8 @@ jobs:
           SDK_MAJOR="$(xcrun --sdk iphoneos --show-sdk-version | cut -d. -f1)"
           [[ -n "$XCODE_MAJOR" && "$XCODE_MAJOR" -ge 26 && -n "$SDK_MAJOR" && "$SDK_MAJOR" -ge 26 ]] ||
             { echo "::error::Xcode 26 / iOS 26 SDK or later required"; exit 1; }
-          if [[ ! "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,5}$ ]] || (( 10#$IOS_BUILD_NUMBER < 5 )); then
-            echo "::error::Enter a positive, new numeric iOS build number (at least 5)."
+          if [[ ! "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,5}$ ]] || (( 10#$IOS_BUILD_NUMBER < 22 )); then
+            echo "::error::Enter a positive, new numeric iOS build number (at least 22)."
             exit 1
           fi
           echo "Reviewed commit, requested build number and supported Xcode verified; no upload yet."

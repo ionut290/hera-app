@@ -456,9 +456,9 @@ service cloud.firestore {
     match /chatMessages/{messageId} {
       allow read: if signedIn() && (
         isAdmin() ||
-        resource.data.get("recipientId", "") == "" ||
-        resource.data.get("recipientId", "") == request.auth.uid ||
-        resource.data.get("senderId", "") == request.auth.uid
+        (resource.data.keys().hasAll(["recipientId"]) && resource.data.recipientId == "") ||
+        (resource.data.keys().hasAll(["recipientId"]) && resource.data.recipientId == request.auth.uid) ||
+        (resource.data.keys().hasAll(["senderId"]) && resource.data.senderId == request.auth.uid)
       );
       allow create: if signedIn()
         && (isAdmin() || request.resource.data.get("senderId", "") == request.auth.uid)

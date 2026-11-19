@@ -62,8 +62,8 @@ const request = (who, data, age = 0) => ({
 
 (async () => {
   // Real Auth emulator users; intentionally no email, so no real-person linkage.
-  await auth.createUser({ uid });
-  await auth.createUser({ uid: otherUid });
+  await auth.createUser({ uid, email: "remove@example.test" });
+  await auth.createUser({ uid: otherUid, email: "keep@example.test" });
   const batch = db.batch();
   const record = (collection, id, data) =>
     batch.set(db.collection(collection).doc(id), data);
@@ -112,6 +112,33 @@ const request = (who, data, age = 0) => ({
     readBy: { [uid]: false, [otherUid]: true },
     deletedBy: { [uid]: false },
     message: "Retained false-state notice"
+  });
+  record("notificationEmailQueue", "synthetic-email-to-deleted", {
+    to: "remove@example.test", createdBy: "admin@test.invalid", status: "pending",
+    html: "<p>private synthetic</p>", text: "private synthetic", notificationId: "demo-1"
+  });
+  record("notificationEmailQueue", "synthetic-email-from-deleted", {
+    to: "keep@example.test", createdBy: "remove@example.test", status: "sent",
+    text: "Other user's business notice"
+  });
+  record("notificationEmailQueue", "synthetic-email-other", {
+    to: "keep@example.test", createdBy: "other", status: "pending",
+    text: "Keep pending for other account"
+  });
+  record("activityLogs", "synthetic-log-deleted", {
+    userId: uid, userEmail: "remove@example.test", userName: "Demo user",
+    deviceInfo: "Synthetic test device", actionType: "apertura_app",
+    detail: "Keep business action", createdAt: 1
+  });
+  record("activityLogs", "synthetic-log-other", {
+    userId: otherUid, userEmail: "keep@example.test", userName: "Demo other",
+    deviceInfo: "Synthetic other device", actionType: "apertura_app",
+    createdAt: 2
+  });
+  record("activityLogs", "synthetic-legacy-email", {
+    userEmail: "remove@example.test", userName: "Demo legacy",
+    deviceInfo: "Synthetic legacy device", actionType: "login_app",
+    createdAt: 3
   });
   record("passwordRecoveryChallenges", "synthetic-uid-challenge", { uid });
   record("passwordRecoveryChallenges", "synthetic-other-challenge", { uid: otherUid });
@@ -177,6 +204,34 @@ const request = (who, data, age = 0) => ({
   const untouchedNotice = (await db.doc("appNotifications/synthetic-app-notice-other").get()).data();
   assert.equal(untouchedNotice.createdByUid, otherUid);
   assert.equal(untouchedNotice.createdByEmail, "other@example.test");
+  const emailRemoved = (await db.doc("notificationEmailQueue/synthetic-email-to-deleted").get()).data();
+  assert.equal(emailRemoved.to, undefined);
+  assert.equal(emailRemoved.html, undefined);
+  assert.equal(emailRemoved.text, undefined);
+  assert.equal(emailRemoved.status, "cancelled_account_deleted");
+  const emailFromRemoved = (await db.doc("notificationEmailQueue/synthetic-email-from-deleted").get()).data();
+  assert.equal(emailFromRemoved.to, "keep@example.test");
+  assert.equal(emailFromRemoved.createdBy, "Account eliminato");
+  assert.equal(emailFromRemoved.text, "Other user's business notice");
+  const otherEmail = (await db.doc("notificationEmailQueue/synthetic-email-other").get()).data();
+  assert.equal(otherEmail.to, "keep@example.test");
+  assert.equal(otherEmail.status, "pending");
+  assert.equal(otherEmail.createdBy, "other");
+
+  const logRemoved = (await db.doc("activityLogs/synthetic-log-deleted").get()).data();
+  assert.equal(logRemoved.userId, undefined);
+  assert.equal(logRemoved.userEmail, undefined);
+  assert.equal(logRemoved.userName, "Account eliminato");
+  assert.equal(logRemoved.deviceInfo, undefined);
+  assert.equal(logRemoved.detail, "Keep business action");
+  const otherLog = (await db.doc("activityLogs/synthetic-log-other").get()).data();
+  assert.equal(otherLog.userId, otherUid);
+  assert.equal(otherLog.userEmail, "keep@example.test");
+  assert.equal(otherLog.deviceInfo, "Synthetic other device");
+  const legacyLog = (await db.doc("activityLogs/synthetic-legacy-email").get()).data();
+  assert.equal(legacyLog.userEmail, undefined);
+  assert.equal(legacyLog.userName, "Account eliminato");
+  assert.equal(legacyLog.deviceInfo, undefined);
   assert.deepEqual(removedFiles, ["documents/" + uid + "/private/file.txt"]);
 
   console.log("PASS: REAL Auth+Firestore EMULATORS: one test account deleted; other login, files, personnel, notifications and business history protected.");

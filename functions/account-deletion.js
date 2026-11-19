@@ -114,6 +114,70 @@ async function unlinkDeletedChatRecipient(db, uid) {
   }
 }
 
+
+/**
+ * Minimise legacy notification email queue records linked EXACTLY to this
+ * authenticated account. The queue uses scalar "to" and "createdBy" fields.
+ * Never remove another recipient or guess addresses from message text.
+ * Already-delivered external emails cannot be recalled by Firebase.
+ */
+async function minimizeOwnedEmailQueue(db, uid, accountEmail) {
+  const aliases = [uid];
+  if (typeof accountEmail === "string" && accountEmail.trim()) {
+    aliases.push(accountEmail.trim());
+  }
+  const refs = new Map();
+  for (const value of aliases) {
+    for (const field of ["to", "createdBy"]) {
+      const matches = await db.collection("notificationEmailQueue").where(field, "==", value).get();
+      for (const doc of matches.docs) refs.set(doc.ref.path, doc);
+    }
+  }
+  const erased = admin.firestore.FieldValue.delete();
+  for (const doc of refs.values()) {
+    const data = doc.data() || {};
+    const patch = {};
+    if (aliases.includes(data.to)) {
+      // Cancel ONLY an exact-recipient message. Do not delete shared queues.
+      patch.to = erased;
+      if (Object.prototype.hasOwnProperty.call(data, "html")) patch.html = erased;
+      if (Object.prototype.hasOwnProperty.call(data, "text")) patch.text = erased;
+      if (data.status === "pending") patch.status = "cancelled_account_deleted";
+    }
+    if (aliases.includes(data.createdBy)) patch.createdBy = "Account eliminato";
+    if (Object.keys(patch).length) await doc.ref.update(patch);
+  }
+}
+
+/**
+ * Operational security logs can remain for their documented retention period,
+ * but no longer need the account's Firebase UID, email, name or user agent.
+ * Only exact UID/email matches are scrubbed, not arbitrary detail strings.
+ */
+async function minimizeOwnActivityLogs(db, uid, accountEmail) {
+  const refs = new Map();
+  const matches = [["userId", uid]];
+  if (typeof accountEmail === "string" && accountEmail.trim()) {
+    matches.push(["userEmail", accountEmail.trim()]);
+  }
+  for (const [field, value] of matches) {
+    const docs = await db.collection("activityLogs").where(field, "==", value).get();
+    for (const doc of docs.docs) refs.set(doc.ref.path, doc);
+  }
+  const erased = admin.firestore.FieldValue.delete();
+  for (const doc of refs.values()) {
+    const data = doc.data() || {};
+    const patch = {};
+    if (data.userId === uid) patch.userId = erased;
+    if (data.userEmail === accountEmail && accountEmail) patch.userEmail = erased;
+    if (data.userId === uid || (data.userEmail === accountEmail && accountEmail)) {
+      if (Object.prototype.hasOwnProperty.call(data, "userName")) patch.userName = "Account eliminato";
+      if (Object.prototype.hasOwnProperty.call(data, "deviceInfo")) patch.deviceInfo = erased;
+    }
+    if (Object.keys(patch).length) await doc.ref.update(patch);
+  }
+}
+
 exports.deleteOwnVargaAccount = onCall({
   region: REGION,
   invoker: "public", // Firebase bearer auth is enforced below
@@ -138,7 +202,7 @@ exports.deleteOwnVargaAccount = onCall({
   // email, document IDs, and storage paths cannot expand its authority.
   const db = admin.firestore();
   try {
-    await admin.auth().getUser(uid);
+    const ownAuthRecord = await admin.auth().getUser(uid);
 
     // Personal documents only. Shared/global operational documents must remain
     // available to the business and are not removed by account deletion.
@@ -223,6 +287,11 @@ exports.deleteOwnVargaAccount = onCall({
     await unlinkSharedAuthor(db, "chatMessages", "senderId", uid, "senderName", "senderEmail");
     await unlinkDeletedChatRecipient(db, uid);
     await unlinkSharedAuthor(db, "appNotifications", "createdByUid", uid, "createdByName", "createdByEmail");
+
+    // Queue and logs use a different, legacy identity schema. Only the
+    // verified Auth email of the deleting user may be used for exact matches.
+    await minimizeOwnedEmailQueue(db, uid, ownAuthRecord.email || "");
+    await minimizeOwnActivityLogs(db, uid, ownAuthRecord.email || "");
 
     // Personal private records and authorization links are always owned by UID.
     for (const collection of [

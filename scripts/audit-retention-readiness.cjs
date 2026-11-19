@@ -32,7 +32,7 @@ const OUTCOMES = ["hold", "purpose-unclassified", "not-terminal", "missing-valid
  */
 function safeAuditFailureTag(error, category, phase) {
   const safeCategory = Object.prototype.hasOwnProperty.call(CATEGORIES, category) ? category : "unknown";
-  const safePhase = ["read-page", "classify-page", "check-limit"].includes(phase) ? phase : "unknown";
+  const safePhase = ["count", "read-page", "classify-page", "check-limit"].includes(phase) ? phase : "unknown";
   const safeKind = ["TypeError", "RangeError", "ReferenceError", "FirebaseError", "Error"]
     .includes(error?.name) ? error.name : "unknown";
   const code = Number.isInteger(error?.code) && error.code >= 0 && error.code <= 16
@@ -68,6 +68,9 @@ function classify(category, raw, now = new Date()) {
     ? "not-yet-due" : "possible-manual-review";
 }
 
+function boundedPageSize(scanned) {
+  return Math.max(0, Math.min(250, MAX_PER_COLLECTION - scanned));
+}
 function emptyCounts() { return Object.fromEntries(OUTCOMES.map(key => [key, 0])); }
 function summarise(category, rows, now) {
   const counts = emptyCounts();
@@ -97,6 +100,10 @@ function selfTest() {
   assert.equal(batch["possible-manual-review"], 1);
   assert.equal(batch.hold, 1);
   assert.equal(classify("activityLogs", { createdAt: "2024-01-01T00:00:00Z" }, now), "possible-manual-review");
+  assert.equal(boundedPageSize(0), 250);
+  assert.equal(boundedPageSize(9999), 1);
+  assert.equal(boundedPageSize(MAX_PER_COLLECTION), 0);
+  assert.equal(boundedPageSize(MAX_PER_COLLECTION + 250), 0);
   const diagnostic = safeAuditFailureTag(
     { name: "TypeError", code: "users/sensitive@example.com", message: "private address" },
     "activityLogs", "read-page");
@@ -128,22 +135,28 @@ async function liveAudit() {
       const fields = [...new Set([policy.anchor, "status", "retentionPurpose", "legalHold", "retentionException"])];
       const col = db.collection(category);
       const counts = emptyCounts();
-      let cursor = null, total = 0;
-      let phase = "read-page";
+      let cursor = null, scannedRecords = 0, totalInCollection = null;
+      let phase = "count";
       try {
-        while (true) {
+        // Native aggregation returns only the document count, never document
+        // contents. This preserves an exact size indicator even when the
+        // field-level audit is deliberately capped at 10,000 documents.
+        totalInCollection = (await col.count().get()).data()?.count;
+        if (!Number.isSafeInteger(totalInCollection) || totalInCollection < 0) {
+          throw new TypeError("Invalid aggregate count");
+        }
+        while (scannedRecords < MAX_PER_COLLECTION && scannedRecords < totalInCollection) {
           phase = "read-page";
-          let query = col.orderBy(admin.firestore.FieldPath.documentId()).select(...fields).limit(250);
+          const pageSize = boundedPageSize(scannedRecords);
+          let query = col.orderBy(admin.firestore.FieldPath.documentId()).select(...fields).limit(pageSize);
           if (cursor) query = query.startAfter(cursor);
           const snapshot = await query.get();
           phase = "classify-page";
           for (const doc of snapshot.docs) {
             counts[classify(category, doc.data())]++;
-            total++;
+            scannedRecords++;
           }
-          phase = "check-limit";
-          if (total > MAX_PER_COLLECTION) throw new Error("Row limit reached; stop and review scope");
-          if (snapshot.size < 250) break;
+          if (snapshot.size < pageSize) break;
           cursor = snapshot.docs[snapshot.docs.length - 1];
         }
       } catch (error) {
@@ -151,7 +164,15 @@ async function liveAudit() {
         // Do not expose original error message or fields to log forwarding.
         throw new Error("Read-only metadata audit failed; see sanitized diagnostic.");
       }
-      report.push({ category, total, ...counts });
+      // Not a representative sample: rows are scanned in document-ID order.
+      // Never label partial counts as all documents or automatically delete.
+      report.push({
+        category,
+        totalInCollection,
+        scannedRecords,
+        classificationComplete: scannedRecords === totalInCollection,
+        ...counts
+      });
     }
     // Aggregated counts ONLY: no document ID, coordinates, email or text.
     console.log(JSON.stringify({ project: PROJECT, retentionAudit: "review-only",

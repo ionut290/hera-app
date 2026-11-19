@@ -20,17 +20,21 @@ Non dichiarare la conformità completa finché l'esame dei dati personali, i tes
 
 ### 4.8 — Accesso con Apple
 
-- Nuovo pulsante Accedi con Apple nel gate di accesso per iOS e web; non appare su Android.
+- Nuovo pulsante Accedi con Apple nel gate di accesso SOLO per l'app iOS nativa; non appare su Android né sul sito web (Service ID / flusso OAuth web non configurato).
 - Su iOS usa il plugin Capacitor FirebaseAuthentication con skipNativeAuth=true, credenziale idToken + rawNonce, quindi Firebase Web signInWithCredential.
 - In eliminazione account Apple, quando possibile, esegue reautenticazione Apple e revoca la credenziale con un nuovo authorizationCode.
 - Mantiene email/password e Google; non offre accesso ai cantieri senza autorizzazione aziendale.
 
-**Configurazione ancora necessaria fuori dal repository:**
+**Configurazione verificata sul portale il 19 novembre 2026:**
 
-1. In Apple Developer, abilita Sign in with Apple per il bundle ID it.vargacantieri.hera e verifica che il target iOS includa la capability/entitlement corrispondente. Il progetto ios/ NON è versionato qui.
-2. In Firebase Console (hera-app-6cd2b), Authentication > Sign-in method, attiva Apple e configura Service ID, Apple Team ID, Key ID e chiave privata secondo la guida Firebase. Non committare mai chiavi private.
-3. Verifica su un vero iPhone/iPad Apple ID con 2FA, inclusa l'opzione Nascondi la mia email, il flusso di primo accesso, accesso successivo, autorizzazione aziendale e cancellazione.
-4. Testa l'accesso con il profilo di revisione già creato dagli strumenti interni, senza esporre dati reali.
+1. **COMPLETATO — Apple Developer:** il bundle ID `it.vargacantieri.hera`, team `NJ64236Q54`, ha `Sign in with Apple` abilitato; verifica effettuata dopo il salvataggio.
+2. **COMPLETATO — Firebase Console:** nel progetto `hera-app-6cd2b` il provider Apple è attivo. Service ID, Team ID e chiave privata OAuth sono lasciati vuoti perché il flusso previsto nell'app è solo **iOS nativo**. L'accesso Apple web è nascosto finché non verrà configurato separatamente.
+3. **COMPLETATO — Apple Developer:** rigenerato il profilo iOS App Store `VARGA CANTIERI - TestFlight` precedentemente `Invalid`; stato attuale `Active`, scadenza 11 novembre 2027, associato al certificato Apple Distribution esistente e al bundle corretto. Il profilo RDI non è stato modificato.
+4. **ANCORA DA FARE — GitHub Actions:** scaricare il profilo App Store **rigenerato** da Apple Developer e sostituire la secret protetta `IOS_APPSTORE_PROFILE_BASE64` (base64 del nuovo `.mobileprovision`). La versione vecchia della secret non è stata modificata. Non incollare il valore in chat, repository o log pubblici.
+5. **ANCORA DA FARE — dispositivo reale:** verificare l'accesso Apple ID con 2FA, anche con Nascondi la mia email, la creazione/approvazione account, la cancellazione end-to-end, la revoca Apple e la registrazione del video richiesto da App Review. Usare un account demo eliminabile, non dati reali.
+6. **ANCORA DA FARE — audit dati:** inventario e retention di dati personali nel progetto Firebase, Storage, Drive e backup prima della messa in produzione della funzione di cancellazione.
+
+Il generatore iOS include già la capability nel target, ma un build simulator senza configurazione Firebase segreta non verifica il login reale. Nessuna nuova build App Store è stata inviata.
 
 ### 2.1(b) — Modello commerciale CONFERMATO dal proprietario, 19 novembre 2026
 

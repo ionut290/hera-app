@@ -28,8 +28,8 @@ assert.equal((storage.match(/allow write: if request\.auth != null && !isAppleRe
 // A private-message recipient token must never be treated like public access.
 const chatRules = rules.match(/match \/chatMessages\/\{messageId\}\s*\{([\s\S]*?)\n    \}/);
 assert.ok(chatRules, "Missing explicit chatMessages security rules");
-assert.match(chatRules[1], /resource\.data\.get\("recipientId", ""\) == request\.auth\.uid/);
-assert.match(chatRules[1], /resource\.data\.get\("senderId", ""\) == request\.auth\.uid/);
+assert.match(chatRules[1], /resource\.data\.recipientId == request\.auth\.uid/);
+assert.match(chatRules[1], /resource\.data\.senderId == request\.auth\.uid/);
 assert.doesNotMatch(chatRules[1], /allow read, create, update:\s*if signedIn\(\)/);
 const app = fs.readFileSync("app.js", "utf8");
 const listener = app.slice(app.indexOf("function subscribeChat()"), app.indexOf("async function notifyForNewChatMessages("));

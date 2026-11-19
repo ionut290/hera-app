@@ -13,7 +13,7 @@ on:
       - "firestore.indexes.json"
       - "firebase.json"
       - ".firebaserc"
-      - ".github/workflows/deploy-firebase-functions.yml"
+      # Workflow configuration changes do not by themselves redeploy production.
 
 permissions:
   contents: read

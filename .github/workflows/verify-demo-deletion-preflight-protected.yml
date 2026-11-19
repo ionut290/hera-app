@@ -1,0 +1,121 @@
+name: Firebase demo deletion - safe live preflight (never delete)
+
+# Manual protected operation. ONLY a disabled, isolated disposable demo Auth
+# record is temporarily enabled. Sends mode=preflight, NEVER deletes accounts.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        required: true
+        type: choice
+        default: DO_NOT_RUN
+        options:
+          - DO_NOT_RUN
+          - RUN_SAFE_PREFLIGHT_ONLY
+        description: "Allow preflight ONLY, never actual deletion"
+      reviewed_sha:
+        description: "Exact 40-character SHA of reviewed main"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: varga-account-deletion-production
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Check exact commit, manual approval and protected human reviewer
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.approval == 'RUN_SAFE_PREFLIGHT_ONLY' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Validate exact repository and protected environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "ionut290/hera-app" ]] || exit 1
+          [[ "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ && "$REVIEWED_SHA" == "$GITHUB_SHA" ]] || {
+            echo "::error::Use the exact current main SHA"; exit 1;
+          }
+          RESPONSE="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/environments/firebase-account-deletion-production")" || exit 1
+          printf '%s' "$RESPONSE" | jq -e \
+            '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' >/dev/null || {
+            echo "::error::Human reviewer protection required"; exit 1;
+          }
+
+  preflight:
+    name: Verify approved demo callable without deleting any account
+    needs: guard
+    if: ${{ needs.guard.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: firebase-account-deletion-production
+    steps:
+      - name: Checkout exact reviewed source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.reviewed_sha }}
+      - name: Verify locked-down non-destructive script before credentials
+        shell: bash
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
+          grep -Fxq 'const DEMO_ONLY_RELEASE = true;' functions/account-deletion.js
+          grep -Fq 'APPROVED_DEMO_EMAIL_SHA256' functions/account-deletion.js
+          grep -Fq 'functions:deleteOwnVargaAccount' .github/workflows/deploy-account-deletion-demo-canary.yml
+          test -s scripts/run-approved-demo-preflight.cjs
+          node --check scripts/run-approved-demo-preflight.cjs
+          node scripts/run-approved-demo-preflight.cjs --self-test
+          node scripts/prepare-app-review-demo-claims.cjs --self-test
+      - name: Install scoped Firebase Admin dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Prepare temporary scoped credential (never print)
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/varga-preflight-demo.json"
+          python3 - "$RUNNER_TEMP/varga-preflight-demo.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding="utf8") as f:
+              data=json.load(f)
+          assert data.get("project_id")=="hera-app-6cd2b"
+          PY
+      - name: Non-destructive live demo callable preflight
+        env:
+          APPROVE_PROTECTED_DEMO_PREFLIGHT: "1"
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/varga-preflight-demo.json
+        run: |
+          set -euo pipefail
+          node scripts/run-approved-demo-preflight.cjs --preflight
+      - name: ALWAYS disable exact demo, remove claims, revoke sessions
+        if: ${{ always() }}
+        shell: bash
+        env:
+          APPROVE_PROTECTED_DEMO_PREFLIGHT: "1"
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/varga-preflight-demo.json
+        run: |
+          set -euo pipefail
+          if [ -s "$GOOGLE_APPLICATION_CREDENTIALS" ] && [ -d functions/node_modules ]; then
+            node scripts/run-approved-demo-preflight.cjs --lockdown
+          else
+            echo "No Firebase credential or SDK initialized; demo was never enabled by this job."
+          fi
+      - name: Erase temporary credential
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/varga-preflight-demo.json"

@@ -37,6 +37,7 @@ function setup() {
               return {
                 docs: docs.filter((d) => d.collection === collection && d[field] === value)
                   .map((d) => ({
+                    id: d.id,
                     ref: { path: d.collection + "/" + d.id },
                     data: () => d
                   }))
@@ -128,6 +129,15 @@ async function rejectedCode(promise, expected) {
     "documentReminderAcknowledgements/ack-2"]) {
     assert.ok(!state.removed.includes(protectedPath), "must preserve " + protectedPath);
   }
+
+  // A company document must never lose a file still referenced by it.
+  state = setup();
+  state.docs.find((x) => x.id === "shared-1").thumbnailPath =
+    "documents/worker-1/doc1/thumbnail.jpg";
+  await state.handler({ auth: goodAuth, data: { confirmation: "ELIMINA" } });
+  assert.deepEqual(state.removedFiles, ["documents/worker-1/doc1/private.pdf"]);
+  assert.ok(state.removed.includes("documents/private-1"));
+  assert.ok(!state.removed.includes("documents/shared-1"));
 
   state = setup();
   state.docs.find((x) => x.id === "private-1").storagePath =

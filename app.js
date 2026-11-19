@@ -25553,21 +25553,57 @@ function escapeHTML(value) {
 }
 
 function subscribeChat() {
+  // Do not download other users' private messages and then hide them in the UI.
+  // Firestore Security Rules enforce the same broadcast/sender/recipient scope.
   chatNotificationsInitialized = false;
-  unsubscribeChat = db
-    .collection("chatMessages")
-    .orderBy("createdAt", "desc")
-    .limit(500)
-    .onSnapshot((snapshot) => {
-      chatMessages = snapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .reverse();
-      notifyForNewChatMessages(snapshot.docChanges());
-      renderChat(chatMessages);
-    }, (error) => {
-      console.error(error);
-      ui.chatFeedback.textContent = "Errore caricamento chat.";
-    });
+  const uid = currentUser?.uid;
+  if (!uid) return;
+
+  const collection = db.collection("chatMessages");
+  const sources = [
+    { key: "broadcast", query: collection.where("recipientId", "==", "") },
+    { key: "incoming", query: collection.where("recipientId", "==", uid) },
+    { key: "outgoing", query: collection.where("senderId", "==", uid) }
+  ];
+  const snapshots = new Map();
+  const initialized = new Set();
+  const unsubscribers = [];
+  let disposed = false;
+  for (const source of sources) {
+    const unsubscribe = source.query
+      .orderBy("createdAt", "desc")
+      .limit(500)
+      .onSnapshot((snapshot) => {
+        if (disposed || currentUser?.uid !== uid) return;
+        const firstSnapshot = !initialized.has(source.key);
+        initialized.add(source.key);
+        snapshots.set(source.key, snapshot.docs);
+        const combined = new Map();
+        for (const docs of snapshots.values()) {
+          for (const doc of docs) {
+            combined.set(doc.id, { id: doc.id, ...doc.data() });
+          }
+        }
+        chatMessages = Array.from(combined.values())
+          .sort((a, b) => getChatMessageCreatedAtMs(a) - getChatMessageCreatedAtMs(b))
+          .slice(-500);
+        // Do not alert on the first subscription snapshot for any source.
+        if (initialized.size === sources.length) {
+          if (!chatNotificationsInitialized) chatNotificationsInitialized = true;
+          else if (!firstSnapshot) notifyForNewChatMessages(snapshot.docChanges());
+        }
+        renderChat(chatMessages);
+      }, (error) => {
+        if (disposed) return;
+        console.error("Errore query chat privata:", error);
+        ui.chatFeedback.textContent = "Errore caricamento chat. Verifica gli indici e i permessi Firestore.";
+      });
+    unsubscribers.push(unsubscribe);
+  }
+  unsubscribeChat = () => {
+    disposed = true;
+    unsubscribers.forEach((unsubscribe) => unsubscribe());
+  };
 }
 
 async function notifyForNewChatMessages(changes = []) {

@@ -59,6 +59,9 @@ def main() -> None:
         raise SystemExit("Info.plist non valido: formato inatteso.")
 
     data["CFBundleDisplayName"] = "VARGA CANTIERI"
+    # Apple export compliance: this iOS wrapper relies on exempt OS-provided
+    # encryption (for example native TLS); it implements no separate cipher.
+    data["ITSAppUsesNonExemptEncryption"] = False
     data.update(PURPOSE_STRINGS)
 
     with INFO_PLIST.open("wb") as file:
@@ -69,6 +72,8 @@ def main() -> None:
     for key, value in PURPOSE_STRINGS.items():
         if verified.get(key) != value:
             raise SystemExit(f"Permesso iOS non configurato: {key}")
+    if verified.get("ITSAppUsesNonExemptEncryption") is not False:
+        raise SystemExit("Export compliance iOS non configurata come esente.")
 
     print("Info.plist iOS configurato: posizione Quando in uso e Sempre (opt-in GPS geofence).")
 

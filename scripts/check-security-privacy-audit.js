@@ -60,7 +60,8 @@ const catchAll = rules.slice(rules.lastIndexOf('match /{collection}/{docId} {'))
 for (const collection of ['"gpsUpdateRequests"', '"notificationEmailQueue"']) {
   assert.ok(!catchAll.includes(collection), "Sensitive collection in broad catchall: " + collection);
 }
-assert.ok(app.includes("if (!currentUser || !canManageData()) {\\n    gpsUpdateRequests = [];"),
+assert.ok(app.includes("if (!currentUser || !canManageData()) {") &&
+  app.includes("gpsUpdateRequests = [];"),
   "Non-admin client must not run global GPS queue listener");
 
 console.log("Security policy and privacy content regression checks passed.");

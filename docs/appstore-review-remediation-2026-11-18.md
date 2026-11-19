@@ -4,7 +4,7 @@ Versione revisionata da Apple: 1.0 (21). Riferimento invio: f9a92b52-6580-4718-9
 
 ## Stato: modifiche proposte, NON pubblicate e NON validate su iPhone/iPad
 
-Questo ramo risponde ai rilievi 5.1.1(v) e 4.8 nel codice e prepara il lavoro per 2.1(b).
+Questo ramo risponde ai rilievi 5.1.1(v) e 4.8 nel codice; la risposta sul modello commerciale gratuito 2.1(b) è stata inviata ad App Review il 19 novembre 2026.
 Non dichiarare la conformità completa finché l'esame dei dati personali, i test su dispositivo e la configurazione dei provider non sono terminati.
 
 ### 5.1.1(v) — eliminazione account
@@ -30,7 +30,7 @@ Non dichiarare la conformità completa finché l'esame dei dati personali, i tes
 1. **COMPLETATO — Apple Developer:** il bundle ID `it.vargacantieri.hera`, team `NJ64236Q54`, ha `Sign in with Apple` abilitato; verifica effettuata dopo il salvataggio.
 2. **COMPLETATO — Firebase Console:** nel progetto `hera-app-6cd2b` il provider Apple è attivo. Service ID, Team ID e chiave privata OAuth sono lasciati vuoti perché il flusso previsto nell'app è solo **iOS nativo**. L'accesso Apple web è nascosto finché non verrà configurato separatamente.
 3. **COMPLETATO — Apple Developer:** rigenerato il profilo iOS App Store `VARGA CANTIERI - TestFlight` precedentemente `Invalid`; stato attuale `Active`, scadenza 11 novembre 2027, associato al certificato Apple Distribution esistente e al bundle corretto. Il profilo RDI non è stato modificato.
-4. **ANCORA DA FARE — GitHub Actions:** scaricare il profilo App Store **rigenerato** da Apple Developer e sostituire la secret protetta `IOS_APPSTORE_PROFILE_BASE64` (base64 del nuovo `.mobileprovision`). La versione vecchia della secret non è stata modificata. Non incollare il valore in chat, repository o log pubblici.
+4. **AUTOMATIZZATO NELLA PR — GitHub Actions:** i due workflow di distribuzione utilizzano `scripts/fetch-ios-appstore-profile.js` per chiedere all'API ufficiale Apple il profilo App Store **ACTIVE**, di nome `VARGA CANTIERI - TestFlight`, vincolato al bundle ID `it.vargacantieri.hera`. Lo salvano solamente nel `$RUNNER_TEMP` privato durante la build. La secret `IOS_APPSTORE_PROFILE_BASE64` non è più necessaria e non viene letta da questi workflow. La chiave API Apple esistente rimane protetta nei GitHub Environment secrets. La riuscita dell'API REST con la chiave effettiva deve ancora essere verificata durante un workflow manuale protetto, che può fallire se la chiave non ha permessi su Profiles. Il controllo profilo/certificato/entitlement resta obbligatorio e blocca la firma in caso di incongruenze.
 5. **ANCORA DA FARE — dispositivo reale:** verificare l'accesso Apple ID con 2FA, anche con Nascondi la mia email, la creazione/approvazione account, la cancellazione end-to-end, la revoca Apple e la registrazione del video richiesto da App Review. Usare un account demo eliminabile, non dati reali.
 6. **ANCORA DA FARE — audit dati:** inventario e retention di dati personali nel progetto Firebase, Storage, Drive e backup prima della messa in produzione della funzione di cancellazione.
 
@@ -58,6 +58,12 @@ Testo da inviare nella risposta App Review alla richiesta relativa alla linea gu
 > Il team VARGA CANTIERI
 
 Questa sezione può essere inviata come chiarimento commerciale **anche prima della nuova build**, senza dichiarare che la correzione tecnica ai punti 4.8 e 5.1.1(v) sia già pubblicata. Non dichiarare completati gli altri due punti finché non sono testati e distribuiti.
+
+### Firma iOS automatica (senza copiare segreti)
+
+Quando parte un workflow di distribuzione iOS **manualmente autorizzato**, questo usa le chiavi API Apple già conservate nell'environment GitHub `ios-internal-testflight` per recuperare il profilo Apple Developer più recente. Non occorre aggiornare manualmente `IOS_APPSTORE_PROFILE_BASE64`. Il profilo viene scaricato solo dal dominio `api.appstoreconnect.apple.com`, controllato rispetto a nome, bundle ID, stato `ACTIVE`, certificato Apple Distribution, entitlement `com.apple.developer.applesignin`, team e scadenza, e conservato solo nel runner temporaneo. Nessuna chiave o certificato entra nel repository.
+
+**Limite:** i controlli PR verificano sintassi e simulazioni, NON autorizzano la firma con segreti di produzione. Prima del primo caricamento reale, il workflow manuale protetto deve confermare che la chiave Apple può leggere l'endpoint Profiles. Se Apple risponde `403`, non caricare alcuna build; occorre una chiave con i permessi giusti oppure usare un profilo approvato aggiornato manualmente.
 
 ### Prove e pubblicazione
 

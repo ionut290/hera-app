@@ -90,6 +90,21 @@ const request = (who, data, age = 0) => ({
     readBy: { [uid]: true, [otherUid]: true },
     message: "Retain business info"
   });
+  record("chatMessages", "synthetic-chat-owned", {
+    senderId: uid, senderEmail: "synthetic@example.test", senderName: "Synthetic Worker",
+    recipientId: otherUid, text: "Retain business chat", metadata: { commessaId: "synthetic-job" }
+  });
+  record("chatMessages", "synthetic-chat-other", {
+    senderId: otherUid, senderEmail: "other@example.test", senderName: "Other Worker",
+    recipientId: uid, text: "Preserve another worker's message"
+  });
+  record("appNotifications", "synthetic-app-notice-owned", {
+    createdByUid: uid, createdByEmail: "synthetic@example.test", createdByName: "Synthetic Worker",
+    title: "Job notice", body: "Retain business notification"
+  });
+  record("appNotifications", "synthetic-app-notice-other", {
+    createdByUid: otherUid, createdByEmail: "other@example.test", title: "Other notice"
+  });
   record("passwordRecoveryChallenges", "synthetic-uid-challenge", { uid });
   record("passwordRecoveryChallenges", "synthetic-other-challenge", { uid: otherUid });
   await batch.commit();
@@ -127,6 +142,25 @@ const request = (who, data, age = 0) => ({
   assert.deepEqual(notification.recipientUserIds, [otherUid]);
   assert.deepEqual(notification.readBy, { [otherUid]: true });
   assert.equal(notification.message, "Retain business info");
+  const companyChat = (await db.doc("chatMessages/synthetic-chat-owned").get()).data();
+  assert.equal(companyChat.senderId, undefined);
+  assert.equal(companyChat.senderEmail, undefined);
+  assert.equal(companyChat.senderName, "Account eliminato");
+  assert.equal(companyChat.recipientId, otherUid);
+  assert.equal(companyChat.text, "Retain business chat");
+  assert.deepEqual(companyChat.metadata, { commessaId: "synthetic-job" });
+  const otherChat = (await db.doc("chatMessages/synthetic-chat-other").get()).data();
+  assert.equal(otherChat.senderId, otherUid);
+  assert.equal(otherChat.senderEmail, "other@example.test");
+  assert.equal(otherChat.recipientId, uid);
+  const ownedNotice = (await db.doc("appNotifications/synthetic-app-notice-owned").get()).data();
+  assert.equal(ownedNotice.createdByUid, undefined);
+  assert.equal(ownedNotice.createdByEmail, undefined);
+  assert.equal(ownedNotice.createdByName, "Account eliminato");
+  assert.equal(ownedNotice.body, "Retain business notification");
+  const untouchedNotice = (await db.doc("appNotifications/synthetic-app-notice-other").get()).data();
+  assert.equal(untouchedNotice.createdByUid, otherUid);
+  assert.equal(untouchedNotice.createdByEmail, "other@example.test");
   assert.deepEqual(removedFiles, ["documents/" + uid + "/private/file.txt"]);
 
   console.log("PASS: REAL Auth+Firestore EMULATORS: one test account deleted; other login, files, personnel, notifications and business history protected.");

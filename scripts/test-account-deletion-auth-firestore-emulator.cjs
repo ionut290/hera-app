@@ -106,6 +106,13 @@ const request = (who, data, age = 0) => ({
   record("appNotifications", "synthetic-app-notice-other", {
     createdByUid: otherUid, createdByEmail: "other@example.test", title: "Other notice"
   });
+  record("notifications", "synthetic-false-state-notice", {
+    actorId: otherUid, actorName: "Other Worker",
+    recipientUserIds: [otherUid],
+    readBy: { [uid]: false, [otherUid]: true },
+    deletedBy: { [uid]: false },
+    message: "Retained false-state notice"
+  });
   record("passwordRecoveryChallenges", "synthetic-uid-challenge", { uid });
   record("passwordRecoveryChallenges", "synthetic-other-challenge", { uid: otherUid });
   await batch.commit();
@@ -143,6 +150,12 @@ const request = (who, data, age = 0) => ({
   assert.deepEqual(notification.recipientUserIds, [otherUid]);
   assert.deepEqual(notification.readBy, { [otherUid]: true });
   assert.equal(notification.message, "Retain business info");
+  const falseStateNotice = (await db.doc("notifications/synthetic-false-state-notice").get()).data();
+  assert.equal(falseStateNotice.actorId, otherUid);
+  assert.deepEqual(falseStateNotice.recipientUserIds, [otherUid]);
+  assert.deepEqual(falseStateNotice.readBy, { [otherUid]: true });
+  assert.deepEqual(falseStateNotice.deletedBy, {});
+  assert.equal(falseStateNotice.message, "Retained false-state notice");
   const companyChat = (await db.doc("chatMessages/synthetic-chat-owned").get()).data();
   assert.equal(companyChat.senderId, undefined);
   assert.equal(companyChat.senderEmail, undefined);

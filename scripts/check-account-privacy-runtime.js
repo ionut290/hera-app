@@ -33,6 +33,17 @@ function setup(options = {}) {
     { collection: "notifications", id: "other-message", actorId: "worker-2",
       actorName: "Other Worker", recipientUserIds: ["worker-2"],
       readBy: { "worker-2": true }, message: "Another user's business notification" },
+    { collection: "chatMessages", id: "chat-from-deleted", senderId: "worker-1",
+      senderEmail: "synthetic@example.test", senderName: "Synthetic Worker",
+      recipientId: "worker-2", text: "Company chat should remain", metadata: { commessaId: "job-test" } },
+    { collection: "chatMessages", id: "chat-from-other", senderId: "worker-2",
+      senderEmail: "other@example.test", senderName: "Other Worker",
+      recipientId: "worker-1", text: "Another person's message" },
+    { collection: "appNotifications", id: "app-created-by-deleted", createdByUid: "worker-1",
+      createdByEmail: "synthetic@example.test", createdByName: "Synthetic Worker",
+      title: "Synthetic job notice", body: "Keep work information" },
+    { collection: "appNotifications", id: "app-created-by-other", createdByUid: "worker-2",
+      createdByEmail: "other@example.test", title: "Another person's alert" },
     { collection: "personale", id: "employee-1", linkedUserId: "worker-1", linkedAuthProvider: "google.com", googleLastLoginAt: 123, googleDisplayName: "Test", emailVerified: true, profilePhotoSource: "google", photoURL: "https://example.test/google.jpg", contractCode: "business-retained" },
     { collection: "personale", id: "employee-2", linkedUserId: "worker-2", linkedAuthProvider: "google.com", contractCode: "other-employee" },
     { collection: "personale", id: "employee-3", linkedUserId: "worker-1", linkedAuthProvider: "apple.com", profilePhotoSource: "operator", photoURL: "https://example.test/business.jpg", contractCode: "another-retained" }
@@ -198,7 +209,26 @@ async function rejectedCode(promise, expected) {
   assert.equal(businessPortrait.contractCode, "another-retained");
   const otherEmployee = state.docs.find((d) => d.id === "employee-2");
   assert.equal(otherEmployee.linkedUserId, "worker-2");
-  assert.equal(state.updated.length, 3);
+  assert.equal(state.updated.length, 5);
+  const priorChat = state.docs.find((d) => d.id === "chat-from-deleted");
+  assert.equal(priorChat.senderId, undefined);
+  assert.equal(priorChat.senderEmail, undefined);
+  assert.equal(priorChat.senderName, "Account eliminato");
+  assert.equal(priorChat.recipientId, "worker-2");
+  assert.equal(priorChat.text, "Company chat should remain");
+  assert.equal(priorChat.metadata.commessaId, "job-test");
+  const otherChat = state.docs.find((d) => d.id === "chat-from-other");
+  assert.equal(otherChat.senderId, "worker-2");
+  assert.equal(otherChat.recipientId, "worker-1"); // recipient retention requires separate review
+  assert.equal(otherChat.senderEmail, "other@example.test");
+  const priorAppNotice = state.docs.find((d) => d.id === "app-created-by-deleted");
+  assert.equal(priorAppNotice.createdByUid, undefined);
+  assert.equal(priorAppNotice.createdByEmail, undefined);
+  assert.equal(priorAppNotice.createdByName, "Account eliminato");
+  assert.equal(priorAppNotice.body, "Keep work information");
+  const otherAppNotice = state.docs.find((d) => d.id === "app-created-by-other");
+  assert.equal(otherAppNotice.createdByUid, "worker-2");
+  assert.equal(otherAppNotice.createdByEmail, "other@example.test");
   // Shared notifications survive, but this UID, read-state and sender identity do not.
   const sharedNotice = state.docs.find((d) => d.id === "shared-message");
   assert.equal(sharedNotice.actorId, undefined);

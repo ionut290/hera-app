@@ -68,5 +68,8 @@ const hours = src.slice(src.indexOf("exports.notifyAndroidHoursInserted ="), src
 assert.match(hours, /resolveUniquePushUser\(users, row.operatorName\)/);
 const squad = src.slice(src.indexOf("exports.notifyAndroidSquadraAssignment ="), src.indexOf("function getCalendarEventParticipants("));
 assert.match(squad, /resolveUniquePushUser\(users, operator\)/);
+assert.match(src, /uid: doc\\.id,/, "Use immutable profile document ID, not editable data.uid, for push recipient");
+assert.doesNotMatch(src, /uid: String\\(data\\.uid \\|\\| doc\\.id\\)/,
+  "Editable profile UID must never be a routing authority");
 assert.ok(src.includes("}); // Keep profiles without push tokens for ambiguity checks."));
 console.log("PASS: private chat UID/email exact matching; hours/squad notifications fail closed on ambiguous names.");

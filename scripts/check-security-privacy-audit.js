@@ -47,4 +47,20 @@ for (const field of ["recipientId", "senderId"]) {
   "Missing chat composite index for " + field);
 }
 
+// Personal GPS coordinates and notification emails must not be readable or
+// writable through the legacy global signed-in catchall.
+const gpsMatch = rules.match(/match \/gpsUpdateRequests\/\{requestId\} \{([\s\S]*?)\n    \}/);
+assert.ok(gpsMatch, "GPS security match missing");
+assert.match(gpsMatch[1], /operatorId/);
+assert.match(gpsMatch[1], /allow update, delete: if isAdmin\(\)/);
+const mailMatch = rules.match(/match \/notificationEmailQueue\/\{emailId\} \{([\s\S]*?)\n    \}/);
+assert.ok(mailMatch, "Notification email queue security match missing");
+assert.match(mailMatch[1], /allow read, create, update, delete: if isAdmin\(\)/);
+const catchAll = rules.slice(rules.lastIndexOf('match /{collection}/{docId} {'));
+for (const collection of ['"gpsUpdateRequests"', '"notificationEmailQueue"']) {
+  assert.ok(!catchAll.includes(collection), "Sensitive collection in broad catchall: " + collection);
+}
+assert.ok(app.includes("if (!currentUser || !canManageData()) {\\n    gpsUpdateRequests = [];"),
+  "Non-admin client must not run global GPS queue listener");
+
 console.log("Security policy and privacy content regression checks passed.");

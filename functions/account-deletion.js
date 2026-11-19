@@ -114,6 +114,29 @@ exports.deleteOwnVargaAccount = onCall({
       await deleteMatchedDocuments(db, collection, field, uid);
     }
 
+    // Employee registry records may have a legitimate business retention purpose,
+    // but must not remain linked to a deleted Firebase Authentication identity.
+    // Remove ONLY auth-derived fields, not personnel/contract/working-time data.
+    const linkedPersonnel = await db.collection("personale").where("linkedUserId", "==", uid).get();
+    const deleteField = admin.firestore.FieldValue.delete();
+    for (const doc of linkedPersonnel.docs) {
+      const person = doc.data() || {};
+      const unlink = {
+        linkedUserId: deleteField,
+        linkedAuthProvider: deleteField,
+        googleLastLoginAt: deleteField,
+        googleDisplayName: deleteField,
+        emailVerified: deleteField
+      };
+      // A Google-sourced portrait is associated with the deleted login.
+      // Preserve an operator's separately managed business photo.
+      if (person.profilePhotoSource === "google") {
+        unlink.photoURL = deleteField;
+        unlink.profilePhotoSource = deleteField;
+      }
+      await doc.ref.update(unlink);
+    }
+
     // Personal private records and authorization links are always owned by UID.
     for (const collection of [
       "privateDocuments", "operatorPositions", "userOperatorLinks", "platformUsers"

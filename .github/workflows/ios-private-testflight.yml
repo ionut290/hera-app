@@ -242,6 +242,8 @@ jobs:
             archive > "$RUNNER_TEMP/ios-private-archive.log" 2>&1 ||
             { tail -n 80 "$RUNNER_TEMP/ios-private-archive.log"; exit 1; }
           test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | grep -Fx '15.0' ||
+            { echo "::error::Signed iOS archive must require iOS 15.0 or later."; exit 1; }
           ARCHIVED_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist")"
           if [[ "$ARCHIVED_BUILD" != "$IOS_BUILD_NUMBER" ]]; then
             echo "::error::Archive build number '$ARCHIVED_BUILD' differs from expected '$IOS_BUILD_NUMBER'. Stop before Apple upload."

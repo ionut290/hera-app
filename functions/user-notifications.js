@@ -88,10 +88,11 @@ function resolveUniquePushUser(users, rawValue) {
 function resolvePrivateChatRecipient(users, recipientId) {
   const raw = String(recipientId || "").trim();
   if (!raw) return null;
-  const value = normalize(raw);
+  const emailValue = raw.includes("@") ? raw.toLowerCase() : "";
   const exact = users.filter((user) =>
-    normalize(user.uid) === value ||
-    (raw.includes("@") && normalize(user.email) === value)
+    // Firebase Auth UIDs are case-sensitive; never lowercase a recipient UID.
+    user.uid === raw ||
+    (emailValue && user.email.toLowerCase() === emailValue)
   );
   return exact.length === 1 ? exact[0] : null;
 }
@@ -176,8 +177,8 @@ exports.notifyAndroidChatMessage = onDocumentCreated(
     if (!snapshot) return null;
     const message = snapshot.data() || {};
     const users = await loadPushUsers();
-    const senderId = normalize(message.senderId);
-    const senderEmail = normalize(message.senderEmail);
+    const senderId = String(message.senderId || "").trim();
+    const senderEmail = String(message.senderEmail || "").trim().toLowerCase();
     const recipientId = String(message.recipientId || "").trim();
 
     const directRecipient = recipientId ? resolvePrivateChatRecipient(users, recipientId) : null;
@@ -185,8 +186,8 @@ exports.notifyAndroidChatMessage = onDocumentCreated(
       ? (hasUniquePushTokenOwner(users, directRecipient) ? [directRecipient] : [])
       : users)
       .filter((user) => {
-        const isSender = normalize(user.uid) === senderId ||
-          (senderEmail && normalize(user.email) === senderEmail);
+        const isSender = user.uid === senderId ||
+          (senderEmail && user.email.toLowerCase() === senderEmail);
         return !isSender;
       });
 

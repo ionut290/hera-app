@@ -70,6 +70,14 @@ async function run() {
       });
       await setDoc(doc(db, "hoursDeadlineAlerts/demoDeadline"), {
         alertId: "demoDeadline", recipient: "all", date: "2026-11-19"
+      }); 
+      await setDoc(doc(db, "userAlertAcknowledgements/alertA__normalUser"), {
+        userId: "normalUser", notificationId: "alertA", acknowledgedAt: 1,
+        acknowledgedDateKey: "2026-11-19", userName: "Synthetic worker"
+      });
+      await setDoc(doc(db, "userAlertAcknowledgements/alertB__otherUser"), {
+        userId: "otherUser", notificationId: "alertB", acknowledgedAt: 2,
+        acknowledgedDateKey: "2026-11-19", userName: "Other synthetic worker"
       });
       await setDoc(doc(db, "sharedStaticViews/currentTeam"), { demo: false });
       await setDoc(doc(db, "appleReviewDemo/onlySynthetic"), {title: "Synthetic exercise", demo: true});
@@ -226,6 +234,32 @@ async function run() {
     await assertSucceeds(setDoc(doc(administrator, "hoursDeadlineAlerts/authenticDeadline"), {
       alertId: "authenticDeadline", recipient: "all"
     }));
+
+    // Employees can read or create their own confirmation only; even an
+    // empty own acknowledgement must be readable for get-then-create logic.
+    await assertSucceeds(getDoc(doc(normal, "userAlertAcknowledgements/alertA__normalUser")));
+    await assertSucceeds(getDoc(doc(normal, "userAlertAcknowledgements/notYet__normalUser")));
+    await assertFails(getDoc(doc(normal, "userAlertAcknowledgements/alertB__otherUser")));
+    await assertFails(getDoc(doc(anonymous, "userAlertAcknowledgements/alertA__normalUser")));
+    await assertFails(getDoc(doc(review, "userAlertAcknowledgements/alertA__normalUser")));
+    await assertFails(getDocs(collection(normal, "userAlertAcknowledgements")));
+    await assertSucceeds(getDocs(collection(administrator, "userAlertAcknowledgements")));
+    await assertSucceeds(setDoc(doc(normal, "userAlertAcknowledgements/another__normalUser"), {
+      notificationId: "another", userId: "normalUser", userName: "Synthetic",
+      acknowledgedAt: serverTimestamp(), acknowledgedDateKey: "2026-11-19"
+    }, { merge: true }));
+    await assertFails(setDoc(doc(normal, "userAlertAcknowledgements/forged__otherUser"), {
+      notificationId: "forged", userId: "otherUser",
+      acknowledgedAt: serverTimestamp()
+    }));
+    await assertFails(setDoc(doc(normal, "userAlertAcknowledgements/notOwnName__normalUser"), {
+      notificationId: "differentId", userId: "normalUser",
+      acknowledgedAt: serverTimestamp()
+    }));
+    await assertFails(updateDoc(doc(normal, "userAlertAcknowledgements/alertA__normalUser"), {
+      userName: "Forged rewrite"
+    }));
+    await assertFails(deleteDoc(doc(normal, "userAlertAcknowledgements/alertA__normalUser")));
 
     await assertSucceeds(getDoc(doc(normal, "commesse/syntheticJob")));
     await assertSucceeds(getDoc(doc(normal, "sharedStaticViews/currentTeam")));

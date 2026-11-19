@@ -1,0 +1,97 @@
+name: Firebase retention readiness - protected read-only audit
+
+# Inventory only, no Firestore/Storage mutation and no automatic trigger.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Type APPROVE_AGGREGATE_READ_ONLY_AUDIT"
+        required: true
+        type: string
+      reviewed_sha:
+        description: "Exact reviewed HEAD SHA of main (40 hex characters)"
+        required: true
+        type: string
+      privacy_signoff:
+        description: "Type RETENTION_METADATA_AUDIT_APPROVED"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: varga-retention-read-only-audit
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    name: Review aggregate metadata ONLY (no delete, no export)
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'APPROVE_AGGREGATE_READ_ONLY_AUDIT' && inputs.privacy_signoff == 'RETENTION_METADATA_AUDIT_APPROVED' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Pre-existing protected environment; its reviewer must explicitly approve.
+    environment: firebase-private-chat-production
+    steps:
+      - name: Verify correct repository, exact approved SHA and environment reviewers
+        env:
+          APPROVED_SHA: ${{ inputs.reviewed_sha }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "ionut290/hera-app" ]] || exit 1
+          [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ && "$APPROVED_SHA" == "$GITHUB_SHA" ]] || {
+            echo "::error::The approved SHA must match the selected main commit"; exit 1;
+          }
+          RESPONSE="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/environments/firebase-private-chat-production")" || {
+              echo "::error::An existing protected audit environment is required"; exit 1;
+            }
+          printf '%s' "$RESPONSE" | jq -e \
+            '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' > /dev/null || {
+              echo "::error::The audit environment must require human review"; exit 1;
+            }
+      - name: Checkout exact audited commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.reviewed_sha }}
+      - name: Verify read-only source and run synthetic tests
+        env:
+          APPROVED_SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          node --check scripts/audit-retention-readiness.cjs
+          node scripts/audit-retention-readiness.cjs --self-test
+          # Fail closed if a future edit adds a mutating Firebase API call.
+          if grep -En '\.(delete|update|set|create|add|recursiveDelete|batch|bulkWriter|runTransaction)\s*\(' scripts/audit-retention-readiness.cjs; then
+            echo "::error::Mutation-like method in inventory source"; exit 1
+          fi
+      - name: Install Firebase Admin for read-only query
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Validate scoped project credentials without logging secrets
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/varga-retention-audit.json"
+          python3 - "$RUNNER_TEMP/varga-retention-audit.json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              account = json.load(f)
+          assert account.get("project_id") == "hera-app-6cd2b", "Unexpected project"
+          PY
+      - name: Inspect aggregate retention counts (NO WRITE)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/varga-retention-audit.json
+          ALLOW_READ_ONLY_RETENTION_AUDIT: "1"
+        run: node scripts/audit-retention-readiness.cjs --live
+      - name: Delete temporary runner credential
+        if: always()
+        run: rm -f "$RUNNER_TEMP/varga-retention-audit.json"

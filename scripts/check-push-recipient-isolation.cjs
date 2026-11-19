@@ -14,7 +14,7 @@ const { normalize, resolveUniquePushUser, resolvePrivateChatRecipient, hasUnique
   vm.runInNewContext(normalizeBlock + "\n" + resolverBlock +
     "\n({normalize,resolveUniquePushUser,resolvePrivateChatRecipient,hasUniquePushTokenOwner})");
 
-const user = (uid, email, names, pushToken = "synthetic-token") => ({
+const user = (uid, email, names, pushToken = `synthetic-token-${uid}`) => ({
   uid, email, pushToken,
   labels: new Set([uid, email, ...names].map(normalize))
 });

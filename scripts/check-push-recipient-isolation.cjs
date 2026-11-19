@@ -30,6 +30,16 @@ assert.equal(hasUniquePushTokenOwner(sharedTokenUsers, first), false,
   "Reused FCM token across profiles must never receive a private worker notification");
 assert.equal(hasUniquePushTokenOwner(sharedTokenUsers, sharedTokenUsers.at(-1)), false);
 
+const upper = user("AaaaUID", "upper@example.test", ["Upper A"]);
+const lower = user("aaaaUID", "lower@example.test", ["Lower B"]);
+assert.equal(resolvePrivateChatRecipient([upper, lower], "AaaaUID"), upper,
+  "Firebase UIDs differing by case must be distinct recipients");
+assert.equal(resolvePrivateChatRecipient([upper, lower], "aaaaUID"), lower);
+assert.equal(resolvePrivateChatRecipient([upper], "aaaaUID"), null,
+  "A UID with incorrect capitalization must not match another account");
+assert.equal(resolvePrivateChatRecipient([upper], "UPPER@EXAMPLE.TEST"), upper,
+  "Legacy email may be matched case-insensitively without UID normalization");
+
 assert.equal(resolvePrivateChatRecipient(users, "uid001"), first);
 assert.equal(resolvePrivateChatRecipient(users, "mario.rossi@example.test"), first);
 assert.equal(resolvePrivateChatRecipient(users, "Mario Rossi"), null,
@@ -51,6 +61,8 @@ assert.equal(resolveUniquePushUser([...users,
 const chat = src.slice(src.indexOf("exports.notifyAndroidChatMessage ="), src.indexOf("function extractHoursRows("));
 assert.match(chat, /resolvePrivateChatRecipient\(users, recipientId\)/);
 assert.match(chat, /hasUniquePushTokenOwner\(users, directRecipient\)/);
+assert.match(chat, /user\.uid === senderId/, "Sender identity also requires an exact UID");
+
 assert.doesNotMatch(chat, /userMatches\(user, recipientId\)/);
 const hours = src.slice(src.indexOf("exports.notifyAndroidHoursInserted ="), src.indexOf("function extractSquadraOperators("));
 assert.match(hours, /resolveUniquePushUser\(users, row.operatorName\)/);

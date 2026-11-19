@@ -1,0 +1,146 @@
+name: Firebase account deletion - protected manual deploy
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Explicit approval to deploy the account-deletion function"
+        type: choice
+        required: true
+        default: DO_NOT_DEPLOY
+        options:
+          - DO_NOT_DEPLOY
+          - APPROVE_ACCOUNT_DELETION_ONLY
+      reviewed_sha:
+        description: "Exact 40-character HEAD SHA of reviewed main"
+        type: string
+        required: true
+      privacy_signoff:
+        description: "Type PRIVACY_REVIEW_APPROVED after privacy/retention audit"
+        type: string
+        required: true
+      demo_ready:
+        description: "Type DEMO_ACCOUNT_READY for isolated deletion testing"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: varga-account-deletion-production
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Verify privacy signoff, exact SHA, and required environment protection
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'APPROVE_ACCOUNT_DELETION_ONLY' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Enforce all release gates before accessing secrets
+        env:
+          SHA_APPROVED: ${{ inputs.reviewed_sha }}
+          PRIVACY_SIGNOFF: ${{ inputs.privacy_signoff }}
+          DEMO_READY: ${{ inputs.demo_ready }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "ionut290/hera-app" ]] || exit 1
+          [[ "$SHA_APPROVED" =~ ^[0-9a-f]{40}$ && "$SHA_APPROVED" == "$GITHUB_SHA" ]] ||
+            { echo "::error::Must select the current exact main commit SHA"; exit 1; }
+          [[ "$PRIVACY_SIGNOFF" == "PRIVACY_REVIEW_APPROVED" &&
+             "$DEMO_READY" == "DEMO_ACCOUNT_READY" ]] ||
+            { echo "::error::Privacy review and disposable demo-account setup required"; exit 1; }
+          # Avoid GitHub silently creating a brand new UNPROTECTED environment.
+          ENV_URL="https://api.github.com/repos/$GITHUB_REPOSITORY/environments/firebase-account-deletion-production"
+          ENV_JSON="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" "$ENV_URL")" ||
+            { echo "::error::Configure the dedicated protected environment first"; exit 1; }
+          printf '%s' "$ENV_JSON" | jq -e \
+            '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' >/dev/null ||
+            { echo "::error::The environment has no required reviewers"; exit 1; }
+
+      - name: Check that routine deployment excludes deletion
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check targeted function is present and not in automatic deploy
+        run: |
+          set -euo pipefail
+          test -s functions/account-deletion.js
+          if grep -E -- '--only .*functions:deleteOwnVargaAccount' .github/workflows/deploy-firebase-functions.yml; then
+            echo "::error::Deletion is still in automatic deploy"; exit 1
+          fi
+
+  deploy:
+    name: Deploy only deletion callable after protected review
+    needs: guard
+    if: ${{ needs.guard.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: firebase-account-deletion-production
+    steps:
+      - name: Checkout exact reviewed code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.reviewed_sha }}
+      - name: Verify source and privacy tests
+        env:
+          SHA_APPROVED: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SHA_APPROVED"
+          npm ci --no-audit --no-fund
+          node --check functions/account-deletion.js
+          node scripts/check-account-privacy-runtime.js
+          npm run check:auth-stability
+          npm run check:fatto-whazzup-immutable
+      - name: Prepare validated Functions
+        run: |
+          set -euo pipefail
+          cd functions
+          npm ci --no-audit --no-fund
+          cd ..
+          node -e "require('./functions/main.js')"
+          node <<'NODE'
+          const fs=require("node:fs"),path="functions/main.js";
+          const source=fs.readFileSync(path,"utf8");
+          const safe=source
+            .replace(/^const errorReportingFunctions = require\("\.\/error-reporting"\);\r?\n/m,"")
+            .replace(/^\s*errorReportingFunctions,\r?\n/m,"");
+          if(safe===source || safe.includes("errorReportingFunctions") ||
+             !safe.includes('require("./account-deletion")')) {
+            throw Error("Unexpected Functions registration; stop deployment");
+          }
+          fs.writeFileSync(path,safe);
+          require("./functions/main.js");
+          NODE
+      - name: Load scoped Firebase credentials
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-account-deletion.json"
+          python3 - "$RUNNER_TEMP/firebase-account-deletion.json" <<'PY'
+          import sys,json
+          with open(sys.argv[1]) as f: data=json.load(f)
+          assert data.get("project_id")=="hera-app-6cd2b","Wrong Firebase project"
+          PY
+      - name: Deploy ONLY deleteOwnVargaAccount
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-account-deletion.json
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14.23.0 deploy \
+            --only functions:deleteOwnVargaAccount \
+            --project hera-app-6cd2b --non-interactive --force
+      - name: Remove temporary credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-account-deletion.json"

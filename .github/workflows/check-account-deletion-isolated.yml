@@ -1,0 +1,47 @@
+name: Check isolated account deletion (no deploy)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "functions/account-deletion.js"
+      - "functions/main.js"
+      - "scripts/check-account-privacy-runtime.js"
+      - ".github/workflows/deploy-account-deletion-protected.yml"
+      - ".github/workflows/check-account-deletion-isolated.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  simulated-deletion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Firebase Functions dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Check syntax and function registration
+        run: |
+          node --check functions/account-deletion.js
+          node --check scripts/check-account-privacy-runtime.js
+          node -e "const m=require('./functions/main.js'); if (typeof m.deleteOwnVargaAccount !== 'function') throw Error('Callable missing');"
+      - name: Mocked account deletion and privacy isolation tests (NO FIREBASE ACCESS)
+        run: node scripts/check-account-privacy-runtime.js
+      - name: Keep production deployment protected
+        run: |
+          test -s .github/workflows/deploy-account-deletion-protected.yml
+          if grep -E -- '--only .*functions:deleteOwnVargaAccount' .github/workflows/deploy-firebase-functions.yml; then
+            echo "::error::Deletion included in routine production deploy"
+            exit 1
+          fi
+          for gate in 'PRIVACY_REVIEW_APPROVED' 'DEMO_ACCOUNT_READY' 'required_reviewers' 'firebase-account-deletion-production' 'functions:deleteOwnVargaAccount'; do
+            grep -Fq "$gate" .github/workflows/deploy-account-deletion-protected.yml || { echo "Missing release gate: $gate"; exit 1; }
+          done
+          echo "Protected deployment checks are present"
+          echo "Deletion remains excluded from routine deploy"

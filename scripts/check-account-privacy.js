@@ -65,6 +65,24 @@ for (const marker of ["workflow_dispatch:", "firebase-private-chat-production",
 assert.ok(!stagedChat.includes("  push:"),
   "Staged private-chat production workflow cannot auto-trigger on push");
 
+const protectedAlertAudit = read(".github/workflows/audit-user-alert-targeting-protected.yml");
+for (const marker of [
+  "workflow_dispatch:", "firebase-private-chat-production",
+  "required_reviewers", "APPROVE_METADATA_AUDIT",
+  "RECIPIENT_METADATA_REVIEW_APPROVED",
+  "ALLOW_READ_ONLY_USER_ALERT_AUDIT",
+  "node scripts/audit-user-alert-targeting.cjs --live"
+]) {
+  assert.ok(protectedAlertAudit.includes(marker),
+    "Missing approved-only alert recipient audit guard: " + marker);
+}
+assert.ok(!protectedAlertAudit.includes("  push:") &&
+  !protectedAlertAudit.includes("firebase-tools deploy") &&
+  !protectedAlertAudit.includes("functions:deleteOwnVargaAccount"),
+  "Alert-targeting inventory must never deploy, mutate accounts or run on pushes");
+contains("scripts/audit-user-alert-targeting.cjs", ".select(\"sendToAllRegistered\"");
+contains("scripts/audit-user-alert-targeting.cjs", "ALLOW_READ_ONLY_USER_ALERT_AUDIT");
+
 const protectedRelease = read(".github/workflows/deploy-account-deletion-protected.yml");
 assert.ok(protectedRelease.includes("workflow_dispatch:"));
 assert.ok(!protectedRelease.includes("  push:"));

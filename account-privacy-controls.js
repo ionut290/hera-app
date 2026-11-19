@@ -163,6 +163,10 @@
     attach(profile, "varga-account-delete-profile", "btn");
     attach(menu, "varga-account-delete-menu", "btn menu-title-btn");
     attach(pending?.parentElement, "varga-account-delete-pending", "btn", pending);
+    // An unverified newly-created email account can remain on the login gate:
+    // make account deletion discoverable there as well.
+    const gateAnchor = document.getElementById("auth-apple-login-btn") || gateGoogle;
+    attach(gateAnchor?.parentElement, "varga-account-delete-gate", "btn", gateAnchor);
   }
 
   if (document.readyState === "loading") {

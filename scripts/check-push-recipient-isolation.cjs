@@ -10,6 +10,22 @@ const src = fs.readFileSync(file, "utf8");
 const normalizeBlock = src.slice(src.indexOf("function normalize(value) {"), src.indexOf("function chunk(items, size) {"));
 const resolverBlock = src.slice(src.indexOf("function userMatches(user, rawValue) {"), src.indexOf("async function clearInvalidTokens("));
 assert.ok(normalizeBlock.includes('function normalize(value)') && resolverBlock.includes('function resolvePrivateChatRecipient('));
+const eligibilityBlock = src.slice(src.indexOf("function isEligiblePushProfile(data) {"),
+  src.indexOf("async function loadPushUsers()"));
+assert.ok(eligibilityBlock.includes("function isEligiblePushProfile(data)"));
+const { isEligiblePushProfile } = vm.runInNewContext(
+  eligibilityBlock + "\n({isEligiblePushProfile})"
+);
+assert.equal(isEligiblePushProfile({}), true, "Legacy no-status profiles remain supported");
+assert.equal(isEligiblePushProfile({statoAccount: "attivo", banned: false}), true);
+assert.equal(isEligiblePushProfile({statoAccount: "attivo", banned: true}), false);
+assert.equal(isEligiblePushProfile({statoAccount: "in_attesa"}), false);
+assert.equal(isEligiblePushProfile({accountStatus: "richiesta_inviata"}), false);
+assert.equal(isEligiblePushProfile({accountStatus: "rifiutato"}), false);
+assert.equal(isEligiblePushProfile({accountStatus: "attivo"}), true);
+assert.equal(isEligiblePushProfile({statoAccount: "", accountStatus: "attivo"}), false,
+  "Explicit inactive primary status takes precedence");
+
 const { normalize, resolveUniquePushUser, resolvePrivateChatRecipient, hasUniquePushTokenOwner } =
   vm.runInNewContext(normalizeBlock + "\n" + resolverBlock +
     "\n({normalize,resolveUniquePushUser,resolvePrivateChatRecipient,hasUniquePushTokenOwner})");
@@ -69,6 +85,10 @@ assert.match(hours, /resolveUniquePushUser\(users, row.operatorName\)/);
 const squad = src.slice(src.indexOf("exports.notifyAndroidSquadraAssignment ="), src.indexOf("function getCalendarEventParticipants("));
 assert.match(squad, /resolveUniquePushUser\(users, operator\)/);
 assert.match(src, /uid: doc\.id,/, "Use immutable profile document ID, not editable data.uid, for push recipient");
+assert.ok(!src.includes("doc.id,\n      data.uid,"),
+  "Mutable profile uid must not be reused as a secondary push identity");
+assert.match(src, /\.filter\(\(doc\) => isEligiblePushProfile\(doc\.data\(\) \|\| \{\}\)\)/);
+
 assert.doesNotMatch(src, /uid: String\(data\.uid \|\| doc\.id\)/,
   "Editable profile UID must never be a routing authority");
 assert.ok(src.includes("}); // Keep profiles without push tokens for ambiguity checks."));

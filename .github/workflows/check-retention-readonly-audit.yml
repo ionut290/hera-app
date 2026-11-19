@@ -35,7 +35,11 @@ jobs:
           w = Path(".github/workflows/audit-retention-readonly-protected.yml").read_text()
           assert "ALLOW_READ_ONLY_RETENTION_AUDIT" in s
           assert 'serviceAccount.project_id, PROJECT' in s
-          assert "orderBy(admin.firestore.FieldPath.documentId()).select(...fields).limit(250)" in s
+          assert "orderBy(admin.firestore.FieldPath.documentId()).select(...fields).limit(pageSize)" in s
+          assert "const pageSize = boundedPageSize(scannedRecords);" in s
+          assert "Math.min(250, MAX_PER_COLLECTION - scanned)" in s
+          assert "totalInCollection = (await col.count().get()).data()?.count" in s
+          assert "classificationComplete: scannedRecords === totalInCollection" in s
           assert "MAX_PER_COLLECTION = 10000" in s
           assert 'admin.app().delete()' in s
           for word in ['db.recursiveDelete(', 'doc.ref.delete(', 'doc.ref.update(', 'doc.ref.set(', 'batch.commit(', 'bulkWriter(']:

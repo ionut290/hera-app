@@ -86,6 +86,17 @@
       if (confirmation !== null) alert("Conferma non valida. Account non eliminato.");
       return;
     }
+    // Preflight first: do not revoke Apple access if the server already knows
+    // that personal files cannot be safely removed.
+    let callable;
+    try {
+      callable = firebase.app().functions(REGION).httpsCallable("deleteOwnVargaAccount");
+      const check = await callable({ confirmation: "ELIMINA", mode: "preflight" });
+      if (check?.data?.ready !== true) throw new Error("Verifica cancellazione non confermata.");
+    } catch (error) {
+      alert("Impossibile procedere con la cancellazione. " + errorText(error));
+      return;
+    }
     // Apple requires credential revocation when deleting an Apple-linked account.
     // Request a fresh Apple code, reauthenticate the same Firebase account, then revoke.
     if (nativePlatform() === "ios" &&
@@ -115,7 +126,6 @@
     const buttons = document.querySelectorAll("[data-delete-varga-account]");
     buttons.forEach((button) => { button.disabled = true; button.textContent = "Eliminazione in corso..."; });
     try {
-      const callable = firebase.app().functions(REGION).httpsCallable("deleteOwnVargaAccount");
       const result = await callable({ confirmation: "ELIMINA" });
       if (result?.data?.deleted !== true) throw new Error("Il server non ha confermato l'eliminazione.");
       try { await auth().signOut(); } catch (_) {}

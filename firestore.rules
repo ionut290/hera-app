@@ -120,7 +120,8 @@ service cloud.firestore {
         || request.resource.data.get("uid", "") == request.auth.uid
       ) && (
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(["email"])
-        || request.resource.data.get("email", "") == request.auth.token.email
+        || (request.auth.token.email_verified == true
+          && request.resource.data.get("email", "") == request.auth.token.email)
       ) && (
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           "statoAccount", "accountStatus", "role", "ruolo", "isAdmin", "admin",

@@ -557,9 +557,26 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdmin();
     }
 
+    // Global operational events are intentionally read by active workers.
+    // A worker can only publish an event attributed to their own Firebase UID;
+    // no user can pose as the synthetic "system" author or rewrite event history.
+    match /appNotifications/{eventId} {
+      allow read: if signedIn();
+      allow create: if isAdmin() || (
+        signedIn()
+        && request.resource.data.get("createdByUid", "") == request.auth.uid
+        && request.resource.data.get("eventType", "") in [
+          "impianto-done", "impianto-navigate", "hours-inserted",
+          "next-day-squadre-published", "impianto-near",
+          "impianto-away-without-done"
+        ]
+        && request.resource.data.get("createdAt", null) == request.time
+      );
+      allow update, delete: if isAdmin();
+    }
+
     match /{collection}/{docId} {
       allow read, write: if signedIn() && collection in [
-        "appNotifications",
         "commessaResources",
         "hoursDeadlineAlerts",
         "items",

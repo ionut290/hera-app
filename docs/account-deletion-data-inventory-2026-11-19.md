@@ -33,6 +33,27 @@ L'inventario è una **mappa di aree da verificare**, non una prova che le singol
 
 Le altre collezioni osservate comprendono `appConfig`, `companies`, `companyCodes`, `contabilita`, `mezzi`, `neve_commesse`, `neve_squadre`, `neve_squadre_storico`, `pianoNeveStreetWork`, `safetyContacts`, `servizioNeveClienti`. La loro presenza non implica automaticamente dati personali e richiede classificazione a livello di campi.
 
+## Audit di schema in sola lettura — 19 novembre 2026
+
+Verificati nella console Firestore **solamente i nomi e i tipi dei campi** di **un documento campione** per ciascuna delle sei collezioni seguenti. **Nessun valore di email, UID, testo, nome, coordinate o ID di documento è stato trascritto.** Firestore è schemaless: un campione non dimostra che ogni documento abbia gli stessi campi. Questa verifica NON costituisce approvazione della retention né autorizzazione a cancellare i dati.
+
+| Collezione | Campi personali o rilevanti osservati (solo schema) | Classificazione prudenziale e prossima verifica |
+| --- | --- | --- |
+| `chatMessages` | `senderId`, `recipientId`, `senderEmail`, `senderName`, `text`, `metadata`, `createdAt` | Comunicazioni anche aziendali: possibile PII dell'autore e del destinatario. Valutare rimozione dei collegamenti di accesso, anonimizzazione mirata e conservazione di conversazioni operative; NON cancellare interi thread senza approvazione |
+| `appNotifications` | `createdByUid`, `createdByEmail`, `createdByName`, `body`, `title`, `commessaId` | Dati del creatore associati a notifiche di lavoro. Audit destinatari/permessi e necessità di retention; scollegare identità solo se non pregiudica le comunicazioni operative |
+| `notificationEmailQueue` | `to`, `createdBy`, `notificationId`, `html`, `text`, `status`, `createdAt` | Destinatario e corpo email potrebbero contenere PII; verificare code pending, gestione post-cancellazione, contenuto e durata dei messaggi senza interrompere invii aziendali legittimi |
+| `activityLogs` | `userId`, `userEmail`, `userName`, `deviceInfo`, `detail`, `technicalError`, `createdAt` | Log tecnici con identificativi e contenuti diagnostici; informativa indica **90 giorni programmati**, da verificare se realmente applicati e quali eventi abbiano bisogno di retention maggiore |
+| `gpsUpdateRequests` | `operatorId`, `operatorEmail`, `operatorName`, `operatorLat`, `operatorLng`, `approvedBy`, `createdAt` | Dati localizzativi e identificativi, potenzialmente particolarmente delicati per il lavoro. Non diffonderli, non cancellare i record operativi senza una politica approvata |
+| `passwordRecoveryAttempts` | `failCount`, `lastAttemptAt`, `lastResult`, `lockedUntil`, `windowStartedAt` | Nessuna email o UID fra i **campi del campione**; verificare però se l'**ID del documento** identifica un utente (ID non letto) e definire cancellazione/TTL |
+
+**Regola per la release:** la callable attuale non include la pulizia automatica di tutti questi archivi. Non dichiarare che l'eliminazione rimuove chat, storico GPS, log o code email senza prove; conservare i registri con motivazione e retention approvate dalle aziende titolari. Preferire anonimizzazioni selettive e verificabili. Le scelte giuridiche e contrattuali non devono essere dedotte dai nomi dei campi.
+
+**Backup:** Google Cloud Console indica backup Firestore giornalieri con retention configurata di **98 giorni**, PITR disattivato. La cancellazione attiva non elimina retroattivamente le copie; un ripristino deve riconciliare gli account cancellati e impedire il ripristino di accessi revocati.
+
+## Controllo separato del rilascio in produzione
+
+La funzione `deleteOwnVargaAccount` è stata **esclusa** dal workflow generale `.github/workflows/deploy-firebase-functions.yml`. Un workflow dedicato `.github/workflows/deploy-account-deletion-protected.yml` impone una richiesta manuale esplicita, SHA esatto su `main`, dichiarazione di audit privacy approvato, account demo predisposto e ambiente GitHub `firebase-account-deletion-production` già esistente con **required reviewers**. Se manca l'ambiente protetto, il workflow deve fermarsi prima di accedere alle credenziali. **Questa preparazione non equivale a un deploy:** la funzione resta disattivata in produzione finché le condizioni non sono soddisfatte.
+
 ## Criteri di accettazione per il rilascio
 1. Confermare struttura e schema dei record per gli archivi rilevanti con letture limitate e autorizzate, evitando di trascrivere o esporre informazioni personali nei log.
 2. Definire e documentare quali dati aziendali devono essere conservati e per quanto tempo; predisporre minimizzazione/scollegamento degli identificativi personali quando possibile.

@@ -1,0 +1,47 @@
+name: Check isolated disposable demo E2E (synthetic only)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/test-deletion-disposable-demo-e2e.cjs"
+      - ".github/workflows/test-demo-account-deletion-e2e-protected.yml"
+      - ".github/workflows/check-demo-account-deletion-e2e-isolated.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  strict-demo:
+    name: Verify irreversible test targets ONLY hard-coded disposable account
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax and synthetic negative guards (NO Firebase credentials)
+        run: |
+          set -euo pipefail
+          node --check scripts/test-deletion-disposable-demo-e2e.cjs
+          node scripts/test-deletion-disposable-demo-e2e.cjs --self-test
+          node scripts/prepare-app-review-demo-claims.cjs --self-test
+      - name: Protect production data and human-review release gate
+        run: |
+          set -euo pipefail
+          wf=.github/workflows/test-demo-account-deletion-e2e-protected.yml
+          test -s "$wf"
+          for gate in 'DELETE_ONLY_EXACT_ISOLATED_DEMO' 'required_reviewers' 'firebase-account-deletion-production' 'APPROVE_DISPOSABLE_DEMO_DELETION' 'reviewed_sha'; do
+            grep -Fq "$gate" "$wf" || exit 1
+          done
+          grep -Fq 'assertNoWorkLinks(db, uid, ALIAS)' scripts/test-deletion-disposable-demo-e2e.cjs
+          grep -Fq 'await assertDeleted(auth, uid)' scripts/test-deletion-disposable-demo-e2e.cjs
+          grep -Fq 'await lockDown(admin.auth(), uid)' scripts/test-deletion-disposable-demo-e2e.cjs
+          grep -Fxq 'const DEMO_ONLY_RELEASE = true;' functions/account-deletion.js
+          grep -Fq 'auth.token?.appReviewDemo !== true || auth.token?.apple_review !== true' functions/account-deletion.js
+          grep -Fq '"!functions/account-deletion.js"' .github/workflows/deploy-firebase-functions.yml
+          # The client must not be able to target an arbitrary UID in the delete body.
+          if grep -En 'confirmation: "ELIMINA",? (uid|email|userId)' scripts/test-deletion-disposable-demo-e2e.cjs; then
+            echo "::error::User-selected delete target forbidden";exit 1
+          fi

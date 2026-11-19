@@ -582,6 +582,24 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Read confirmations contain identities of individual workers.
+    // Each employee accesses only the deterministic document suffixed by
+    // their Firebase UID; date-wide summaries remain administrator-only.
+    match /userAlertAcknowledgements/{ackId} {
+      allow get: if isAdmin() || (
+        signedIn() && ackId.matches(".*__" + request.auth.uid)
+      );
+      allow list: if isAdmin();
+      allow create: if isAdmin() || (
+        signedIn()
+        && request.resource.data.get("userId", "") == request.auth.uid
+        && request.resource.data.get("notificationId", "") is string
+        && ackId == request.resource.data.notificationId + "__" + request.auth.uid
+        && request.resource.data.get("acknowledgedAt", null) == request.time
+      );
+      allow update, delete: if isAdmin();
+    }
+
     match /{collection}/{docId} {
       allow read, write: if signedIn() && collection in [
         "commessaResources",
@@ -593,7 +611,6 @@ service cloud.firestore {
         "neve_ore_richieste",
         "neve_ore",
         "sheetExportQueue",
-        "userAlertAcknowledgements",
         "userAlerts",
         "utenti"
       ];

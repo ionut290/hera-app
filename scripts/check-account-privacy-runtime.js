@@ -209,7 +209,7 @@ async function rejectedCode(promise, expected) {
   assert.equal(businessPortrait.contractCode, "another-retained");
   const otherEmployee = state.docs.find((d) => d.id === "employee-2");
   assert.equal(otherEmployee.linkedUserId, "worker-2");
-  assert.equal(state.updated.length, 5);
+  assert.equal(state.updated.length, 6);
   const priorChat = state.docs.find((d) => d.id === "chat-from-deleted");
   assert.equal(priorChat.senderId, undefined);
   assert.equal(priorChat.senderEmail, undefined);
@@ -219,8 +219,9 @@ async function rejectedCode(promise, expected) {
   assert.equal(priorChat.metadata.commessaId, "job-test");
   const otherChat = state.docs.find((d) => d.id === "chat-from-other");
   assert.equal(otherChat.senderId, "worker-2");
-  assert.equal(otherChat.recipientId, "worker-1"); // recipient retention requires separate review
+  assert.equal(otherChat.recipientId, undefined); // Deleted recipient no longer linked
   assert.equal(otherChat.senderEmail, "other@example.test");
+  assert.equal(otherChat.text, "Another person's message");
   const priorAppNotice = state.docs.find((d) => d.id === "app-created-by-deleted");
   assert.equal(priorAppNotice.createdByUid, undefined);
   assert.equal(priorAppNotice.createdByEmail, undefined);

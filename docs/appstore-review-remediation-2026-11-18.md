@@ -32,17 +32,28 @@ Non dichiarare la conformità completa finché l'esame dei dati personali, i tes
 3. Verifica su un vero iPhone/iPad Apple ID con 2FA, inclusa l'opzione Nascondi la mia email, il flusso di primo accesso, accesso successivo, autorizzazione aziendale e cancellazione.
 4. Testa l'accesso con il profilo di revisione già creato dagli strumenti interni, senza esporre dati reali.
 
-### 2.1(b) — Risposta alle cinque domande commerciali
+### 2.1(b) — Modello commerciale CONFERMATO dal proprietario, 19 novembre 2026
 
-Apple richiede risposte puntuali. Completare solo dopo aver verificato la situazione reale di distribuzione/pagamento:
+**VARGA CANTIERI è completamente gratuita.** La conferma è stata fornita espressamente dal proprietario dell'app il 19 novembre 2026. Non sono previsti acquisti in-app, pagamenti per sbloccare funzionalità, abbonamenti o contenuti digitali a pagamento. La gestione di account e autorizzazioni per i cantieri non è un paywall.
 
-1. Chi usa funzionalità a pagamento? **[indicare se nessuna o quali utenti aziendali]**
-2. Dove vengono acquistate? **[non esistono acquisti oppure indicare il canale reale]**
-3. Quali contenuti precedentemente acquistati sono disponibili? **[nessuno oppure elenco]**
-4. Quali abbonamenti o funzionalità vengono sbloccati senza In-App Purchase? **[nessuno oppure elenco + giustificazione]**
-5. Servizi venduti a consumatori singoli o famiglie? **[indicare se l'app è esclusivamente B2B e come funziona l'accesso]**
+Testo da inviare nella risposta App Review alla richiesta relativa alla linea guida 2.1(b):
 
-Non dichiarare "gratuita" o "nessun acquisto" senza conferma.
+> Gentile team App Review,
+>
+> grazie per la vostra richiesta di chiarimento. Il modello commerciale di VARGA CANTIERI è interamente gratuito. L'app è uno strumento di gestione operativa di cantieri e attività lavorative, destinato a utenti autorizzati.
+>
+> 1. **Chi utilizzerà i contenuti e le funzionalità a pagamento?** Nessuno: l'app non contiene funzionalità o contenuti a pagamento.
+> 2. **Dove possono gli utenti acquistare i contenuti e le funzionalità accessibili nell'app?** Non esiste un canale di acquisto: tutte le funzionalità offerte dall'app sono gratuite.
+> 3. **Quali contenuti e funzionalità acquistati in precedenza sono disponibili nell'app?** Nessuno. L'app non offre accesso a contenuti o funzionalità precedentemente acquistati.
+> 4. **Quali contenuti a pagamento, abbonamenti o funzionalità vengono sbloccati senza acquisti in-app?** Nessuno. Non esistono abbonamenti, sblocchi a pagamento né acquisti esterni per usare le funzionalità.
+> 5. **I servizi aziendali dell'app vengono venduti a singoli utenti, consumatori o famiglie?** No. L'app non vende servizi a singoli consumatori o famiglie; è gratuita ed è pensata per un utilizzo professionale da parte di utenti autorizzati.
+>
+> Le autorizzazioni degli utenti servono esclusivamente a gestire accessi e ruoli nell'ambito lavorativo e non sono legate a pagamenti.
+>
+> Cordiali saluti,
+> Il team VARGA CANTIERI
+
+Questa sezione può essere inviata come chiarimento commerciale **anche prima della nuova build**, senza dichiarare che la correzione tecnica ai punti 4.8 e 5.1.1(v) sia già pubblicata. Non dichiarare completati gli altri due punti finché non sono testati e distribuiti.
 
 ### Prove e pubblicazione
 

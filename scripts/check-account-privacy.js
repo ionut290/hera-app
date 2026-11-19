@@ -32,6 +32,8 @@ contains("functions/account-deletion.js", "await admin.auth().deleteUser(uid)");
 contains("functions/account-deletion.js", 'visibility === "personal"');
 contains("functions/account-deletion.js", 'path.startsWith(prefix)');
 contains("functions/account-deletion.js", "Business records shared with a company are not deleted");
+contains("functions/account-deletion.js", 'unlinkSharedAuthor(db, "chatMessages", "senderId", uid');
+contains("functions/account-deletion.js", 'unlinkSharedAuthor(db, "appNotifications", "createdByUid", uid');
 
 
 const standardDeploy = read(".github/workflows/deploy-firebase-functions.yml");

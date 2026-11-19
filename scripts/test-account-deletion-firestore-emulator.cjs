@@ -103,6 +103,18 @@ async function seed() {
   add("personale", "synthetic-other-employee", {
     linkedUserId: otherId, businessContract: "DO NOT TOUCH"
   });
+  add("notifications", "synthetic-retained-notification", {
+    actorId: userId, actorName: "SYNTHETIC ACCOUNT",
+    recipientUserIds: [userId, otherId],
+    readBy: { [userId]: true, [otherId]: true },
+    deletedBy: { [userId]: true },
+    message: "RETAIN SYNTHETIC BUSINESS NOTIFICATION"
+  });
+  add("notifications", "synthetic-other-notification", {
+    actorId: otherId, actorName: "OTHER SYNTHETIC ACCOUNT",
+    recipientUserIds: [otherId], readBy: { [otherId]: true },
+    message: "DO NOT TOUCH"
+  });
   add("oreReports", "synthetic-timesheet", {
     userId, workedHours: 8, marker: "RETAIN BUSINESS RECORD"
   });
@@ -142,6 +154,17 @@ async function rejectsCode(promise, code) {
   assert.equal(await exists("passwordRecoveryChallenges", "synthetic-challenge-private"), false);
   assert.equal(await exists("passwordRecoveryChallenges", "synthetic-challenge-other"), true);
   assert.equal(await exists("oreReports", "synthetic-timesheet"), true);
+  const retainedNotice = (await db.collection("notifications").doc("synthetic-retained-notification").get()).data();
+  assert.equal(retainedNotice.actorId, undefined);
+  assert.equal(retainedNotice.actorName, "Account eliminato");
+  assert.deepEqual(retainedNotice.recipientUserIds, [otherId]);
+  assert.deepEqual(retainedNotice.readBy, { [otherId]: true });
+  assert.deepEqual(retainedNotice.deletedBy, {});
+  assert.equal(retainedNotice.message, "RETAIN SYNTHETIC BUSINESS NOTIFICATION");
+  const otherNotice = (await db.collection("notifications").doc("synthetic-other-notification").get()).data();
+  assert.equal(otherNotice.actorId, otherId);
+  assert.deepEqual(otherNotice.recipientUserIds, [otherId]);
+  assert.equal(otherNotice.message, "DO NOT TOUCH");
   const person = (await db.collection("personale").doc("synthetic-employee").get()).data();
   assert.equal(person.linkedUserId, undefined);
   assert.equal(person.googleDisplayName, undefined);
@@ -164,7 +187,7 @@ async function rejectsCode(promise, code) {
     "failed-precondition");
   assert.deepEqual(deletedAuth, [userId]);
   assert.equal(await exists("platformUsers", otherId), true);
-  console.log("PASS: Real Firestore emulator: auth isolation, preflight, legacy cleanup, retained shared files, personnel unlink, business preservation.");
+  console.log("PASS: Real Firestore emulator: auth isolation, preflight, legacy cleanup, retained shared files, personnel unlink, notification privacy, business preservation.");
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

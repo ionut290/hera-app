@@ -64,3 +64,13 @@ Le regole proposte nella PR eliminano entrambe dal fallback:
 **Rischi di compatibilità da controllare prima del rilascio:** versioni mobili/web obsolete che leggono l'elenco GPS globale o scrivono la coda email fuori dall'interfaccia amministrativa; integrazioni webhook; usi privilegiati non documentati. Non aggiornare le regole in produzione prima delle verifiche e della migrazione dei client.
 
 **Limiti:** non elimina coordinate già salvate, email già inviate, copie Drive o backup. La retention e gli accordi GDPR restano aperti. Questa è una proposta di codice, non un rilascio già avvenuto.
+
+
+## Verifica aggiuntiva delle comunicazioni operative — 19/11/2026
+
+Il controllo della PR ha trovato altre due raccolte nel permesso generico `allow read, write: if signedIn()`:
+
+- `appNotifications`: per preservare le notifiche operative globali, la lettura rimane ai lavoratori con account attivo. La creazione di eventi da un utente ordinario è ora consentita **solo** con `createdByUid` uguale al proprio UID autenticato, un `eventType` appartenente agli eventi realmente usati dal client e un `createdAt` server-side. Gli eventi di sistema, così come le modifiche e le cancellazioni, richiedono amministratore. L'app pubblica eventi anche per FATTO, navigazione, ore, squadre e vicinanza/allontanamento impianto: la visibilità generale dei dettagli operativi ai lavoratori **è una scelta di prodotto che necessita valutazione privacy con il titolare**; l'autorizzazione attuale non applica destinatari per singola commessa.
+- `hoursDeadlineAlerts`: il controllo automatico delle ore mancanti viene eseguito dal client solo se `canManageData()` è vero; pertanto soltanto gli amministratori possono creare/modificare/eliminare i record di allerta. La lettura continua per gli utenti attivi.
+
+Aggiunte prove Firebase Emulator con operatori, amministratori, utenti non autenticati e account di revisione Apple, oltre a verifiche statiche contro il ripristino del fallback generico. **Le nuove regole non sono state distribuite.** Devono attraversare gli stessi passaggi manuali protetti indici/client/regole descritti sopra. Prima dell'attivazione verificare gli eventi legacy, i client ancora installati e la coerenza della visibilità globale con le basi giuridiche aziendali.

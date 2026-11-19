@@ -23,6 +23,14 @@ async function deleteMatchedDocuments(db, collectionName, field, uid) {
   }
 }
 
+async function referencedByRetainedDocument(db, storagePath, personalIds) {
+  for (const field of ["storagePath", "thumbnailPath"]) {
+    const matches = await db.collection("documents").where(field, "==", storagePath).get();
+    if (matches.docs.some((doc) => !personalIds.has(doc.id))) return true;
+  }
+  return false;
+}
+
 function safePersonalStoragePath(path, uid) {
   const prefix = "documents/" + uid + "/";
   // Never delete a company/shared attachment or another user's objects.
@@ -77,7 +85,10 @@ exports.deleteOwnVargaAccount = onCall({
     // records belonging to other people. Remove personal files before metadata.
     if (paths.length) {
       const bucket = admin.storage().bucket();
+      const personalIds = new Set(personal.map((doc) => doc.id));
       for (const path of new Set(paths)) {
+        // Retain objects also referenced by company/shared document metadata.
+        if (await referencedByRetainedDocument(db, path, personalIds)) continue;
         await bucket.file(path).delete({ ignoreNotFound: true });
       }
     }

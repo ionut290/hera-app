@@ -119,4 +119,30 @@ assert.ok(retentionAuditSource.includes('ALLOW_READ_ONLY_RETENTION_AUDIT') &&
   retentionAuditSource.includes('automatedDeletion: false'),
   "Retention audit must stay scoped, field-selective and non-destructive");
 
+// Disposable App Review account must be marked by trusted Firebase Auth
+// claims and its read-only preflight must never deploy or delete anything.
+const demoPreflight = read("scripts/check-app-review-demo-readiness.cjs");
+for (const token of [
+  'appReviewDemo === true', 'ALLOW_READ_ONLY_DEMO_AUDIT',
+  '.getUser(uid)', '.select(probe.field)', '.limit(1).get()',
+  'grantsDeletionAuthorization: false', 'comprehensiveDataInventory: false'
+]) {
+  assert.ok(demoPreflight.includes(token), "Missing demo-only preflight safety: " + token);
+}
+const demoWorkflow = read(".github/workflows/app-review-demo-readonly-preflight.yml");
+for (const token of [
+  "workflow_dispatch:", "firebase-account-deletion-production",
+  "required_reviewers", "APPROVE_DEMO_METADATA_READ_ONLY",
+  "reviewed_sha", "ALLOW_READ_ONLY_DEMO_AUDIT", "--self-test"
+]) {
+  assert.ok(demoWorkflow.includes(token), "Missing protected demo audit gate: " + token);
+}
+assert.ok(!demoWorkflow.includes("  push:") && !demoWorkflow.includes("  schedule:") &&
+  !demoWorkflow.includes("firebase-tools deploy") &&
+  !demoWorkflow.includes("functions:deleteOwnVargaAccount"),
+  "Demo preflight must never auto-run, deploy or activate account deletion");
+const privacyPackage = JSON.parse(read("package.json"));
+assert.ok(privacyPackage.scripts["check:account-privacy"].includes("npm run check:demo-readiness"),
+  "Disposable demo safety tests must be part of every security/privacy regression");
+
 console.log("PASS: App Review account deletion and Apple Sign In source checks.");

@@ -114,6 +114,14 @@ async function rejectedCode(promise, expected) {
   assert.equal(state.removedUsers.length, 0);
 
   state = setup();
+  const ready = await state.handler({ auth: goodAuth, data: { confirmation: "ELIMINA", mode: "preflight" } });
+  assert.equal(ready.ready, true);
+  assert.equal(ready.personalDocuments, 1);
+  assert.deepEqual(state.removedUsers, []);
+  assert.deepEqual(state.removedFiles, []);
+  assert.deepEqual(state.removed, []);
+
+  state = setup();
   const result = await state.handler({
     auth: goodAuth,
     data: { confirmation: "ELIMINA", uid: "worker-2" }

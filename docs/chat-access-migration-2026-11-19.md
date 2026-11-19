@@ -111,3 +111,16 @@ In aggiunta al comando manuale locale, è stato preparato il workflow **`.github
 - Un risultato con `needsReview > 0` blocca il job intenzionalmente. Nessuna migrazione automatica per associazione dei nomi, per evitare di divulgare assenze o comunicazioni ad omonimi.
 
 **Stato:** soltanto codice e test sintetici nella PR draft. Non è stato richiesto, approvato o eseguito alcun accesso ai documenti `userAlerts` di produzione.
+
+
+## Destinatari delle push Android — invio fail-closed (19/11/2026)
+
+È stata individuata un'ulteriore fonte di possibile divulgazione: `functions/user-notifications.js` usava `userMatches()` con `includes()` per associare operatori, ore e destinatari delle chat a profili Firebase, senza gestire correttamente nomi omonimi, alias o token FCM duplicati. Un match parziale può essere ambiguo, soprattutto per nomi corti.
+
+La modifica nel ramo della PR:
+- Per chat **private**, risolve `recipientId` soltanto come **UID Firebase esatto**, oppure come **email legacy esatta e univoca**. Non invia mai contenuto chat a corrispondenze approssimate per nome. I messaggi generali restano broadcast.
+- Per push individuali sulle **ore** o sull'**assegnazione a squadre**, preferisce l'identità esatta; in sua assenza consente un match legacy parziale **solo se unico tra tutti i profili**, inclusi quelli senza push token. In caso di omonimia o alias ambiguo non invia alcuna push personale: la registrazione aziendale resta disponibile nel gestionale, ma la notifica richiede una successiva correzione dell'anagrafica.
+- Un token FCM associato a più profili, o mancante, non riceve push personali, evitando il rischio di recapitare informazioni del lavoratore a un dispositivo associato a un altro account.
+- `scripts/check-push-recipient-isolation.cjs` contiene test con profili sintetici, nomi duplicati e token condivisi, agganciati a `check:account-privacy`.
+
+**Compatibilità e limiti:** i lavoratori con identificativi legacy ambigui potrebbero non ricevere alcune push finché non vengono associati a UID univoci; non viene cancellato o modificato alcun dato aziendale. I test non inviano push vere. Questa modifica **non risolve** il client `userAlerts` a query globale né autorizza la distribuzione della PR senza i controlli GDPR e l'account demo Apple.

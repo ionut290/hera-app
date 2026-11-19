@@ -38,6 +38,7 @@ const requiredFiles = [
   "style.css",
   "firebase-config.js",
   "auth-login-fix.js",
+  "account-privacy-controls.js",
   "approval-access.js",
   "approval-access.css",
   "first-login-password.css",

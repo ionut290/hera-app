@@ -3,6 +3,7 @@
 // Self-service, authenticated account deletion.
 // Business records shared with a company are not deleted by this action.
 const admin = require("firebase-admin");
+const { randomUUID } = require("node:crypto");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
 const REGION = "europe-west1";
@@ -98,13 +99,16 @@ async function unlinkSharedAuthor(db, collectionName, identityField, uid, nameFi
  * A deleted account must not remain the explicit addressee of retained chat.
  * Keep the sender and the message intact: both are needed by other participants.
  * This only matches Firebase UIDs stored as recipientId. Legacy email aliases,
- * content text and metadata require separate, contextual review.
+ * content text and metadata require separate, contextual review. Using an
+ * unlinkable non-empty tombstone preserves private-message routing.
  */
 async function unlinkDeletedChatRecipient(db, uid) {
   const messages = await db.collection("chatMessages").where("recipientId", "==", uid).get();
-  const remove = admin.firestore.FieldValue.delete();
   for (const message of messages.docs) {
-    await message.ref.update({ recipientId: remove });
+    // A missing recipientId can turn a private conversation into a broadcast
+    // in legacy clients. Replace it with a non-matching, unlinkable tombstone.
+    // Never store the deleted UID or account email in this value.
+    await message.ref.update({ recipientId: "deleted-recipient-" + randomUUID() });
   }
 }
 

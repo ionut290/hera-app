@@ -150,7 +150,7 @@ async function run() {
       email: "newverified@example.test"
     }));
     await assertFails(updateDoc(doc(normal, "platformUsers/normalUser"), {
-      email: "newverified@example.test"
+      email: "unverified@example.test"
     }));
 
     // Direct reads and queries must enforce privacy at the Firestore server,

@@ -45,7 +45,7 @@ function audit(docs) {
     total++;
   }
   return { total, ...result,
-    needsReview: result.unmapped_legacy_names + result.unresolved + result.malformed };
+    needsReview: result.explicit_with_legacy_names + result.unmapped_legacy_names + result.unresolved + result.malformed };
 }
 function selfTest() {
   const cases = [
@@ -62,7 +62,7 @@ function selfTest() {
   for (const [doc, expected] of cases) assert.equal(classification(doc), expected);
   const r = audit(cases.map(c => c[0]));
   assert.equal(r.total, cases.length);
-  assert.equal(r.needsReview, 5);
+  assert.equal(r.needsReview, 6);
   assert.equal(r.broadcast, 1);
   assert.equal(r.explicit_uids, 2);
   console.log("PASS: userAlerts recipient audit classifies legacy, malformed, broadcast and UID records with synthetic fixtures.");
@@ -100,7 +100,7 @@ async function liveReadOnly() {
     assert.ok(total <= 100000, "Too many rows; manual review required.");
   } while (true);
   const result = { total, ...summary,
-    needsReview: summary.unmapped_legacy_names + summary.unresolved + summary.malformed };
+    needsReview: summary.explicit_with_legacy_names + summary.unmapped_legacy_names + summary.unresolved + summary.malformed };
   console.log(JSON.stringify(result, null, 2));
   if (result.needsReview > 0) {
     console.error("BLOCK: unresolved targeting. Do not enforce private userAlerts rules yet.");

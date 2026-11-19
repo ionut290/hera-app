@@ -33,6 +33,19 @@ contains("functions/account-deletion.js", 'visibility === "personal"');
 contains("functions/account-deletion.js", 'path.startsWith(prefix)');
 contains("functions/account-deletion.js", "Business records shared with a company are not deleted");
 
+
+const standardDeploy = read(".github/workflows/deploy-firebase-functions.yml");
+assert.ok(!/--only[^\n]*functions:deleteOwnVargaAccount/.test(standardDeploy),
+  "Destructive account deletion must never be included in routine Firebase deployment");
+const protectedRelease = read(".github/workflows/deploy-account-deletion-protected.yml");
+assert.ok(protectedRelease.includes("workflow_dispatch:"));
+assert.ok(!protectedRelease.includes("  push:"));
+assert.ok(protectedRelease.includes("environment: firebase-account-deletion-production"));
+assert.ok(protectedRelease.includes("required_reviewers"));
+assert.ok(protectedRelease.includes("PRIVACY_REVIEW_APPROVED"));
+assert.ok(protectedRelease.includes("DEMO_ACCOUNT_READY"));
+assert.ok(protectedRelease.includes("--only functions:deleteOwnVargaAccount"));
+
 const cfg = JSON.parse(read("capacitor.config.json"));
 assert.equal(cfg.appId, "it.vargacantieri.hera");
 assert.equal(cfg.plugins.FirebaseAuthentication.skipNativeAuth, true);

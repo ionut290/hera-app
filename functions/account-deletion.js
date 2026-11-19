@@ -40,6 +40,44 @@ function safePersonalStoragePath(path, uid) {
     && path.length > prefix.length && !path.includes("..");
 }
 
+// Remove an account's identity from shared central notifications without
+// deleting operational messages or other recipients' delivery/read state.
+// Use server-side lookups so the client cannot choose another account to scrub.
+async function scrubCentralNotifications(db, uid) {
+  const deleteValue = admin.firestore.FieldValue.delete();
+  const refs = new Map();
+  for (const [field, operator, value] of [
+    ["actorId", "==", uid],
+    ["recipientUserIds", "array-contains", uid],
+    ["readBy." + uid, "==", true],
+    ["deletedBy." + uid, "==", true]
+  ]) {
+    const snapshot = await db.collection("notifications").where(field, operator, value).get();
+    for (const doc of snapshot.docs) refs.set(doc.ref.path, doc);
+  }
+  for (const doc of refs.values()) {
+    const notification = doc.data() || {};
+    const patch = {};
+    if (notification.actorId === uid) {
+      patch.actorId = deleteValue;
+      patch.actorName = "Account eliminato";
+    }
+    if (Array.isArray(notification.recipientUserIds) &&
+        notification.recipientUserIds.includes(uid)) {
+      patch.recipientUserIds = admin.firestore.FieldValue.arrayRemove(uid);
+    }
+    if (notification.readBy &&
+        Object.prototype.hasOwnProperty.call(notification.readBy, uid)) {
+      patch["readBy." + uid] = deleteValue;
+    }
+    if (notification.deletedBy &&
+        Object.prototype.hasOwnProperty.call(notification.deletedBy, uid)) {
+      patch["deletedBy." + uid] = deleteValue;
+    }
+    if (Object.keys(patch).length) await doc.ref.update(patch);
+  }
+}
+
 exports.deleteOwnVargaAccount = onCall({
   region: REGION,
   invoker: "public", // Firebase bearer auth is enforced below
@@ -138,6 +176,9 @@ exports.deleteOwnVargaAccount = onCall({
       }
       await doc.ref.update(unlink);
     }
+
+    // Shared business notifications must not keep an obsolete Firebase UID.
+    await scrubCentralNotifications(db, uid);
 
     // Personal private records and authorization links are always owned by UID.
     for (const collection of [

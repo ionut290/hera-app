@@ -72,4 +72,10 @@ for (const pattern of [/createdByUid/, /request\.auth\.uid/, /createdAt/, /allow
 assert.ok(!catchAll.includes('"appNotifications"'),
   "Global event collection must not inherit unrestricted catchall writes");
 
+const deadlineRules = rules.match(/match \/hoursDeadlineAlerts\/\{alertId\} \{([\s\S]*?)\n    \}/);
+assert.ok(deadlineRules, "Missing explicit system deadline alert permissions");
+assert.match(deadlineRules[1], /allow create, update, delete: if isAdmin\(\)/);
+assert.ok(!catchAll.includes('"hoursDeadlineAlerts"'),
+  "Deadline alerts must not inherit broad worker writes");
+
 console.log("Security policy and privacy content regression checks passed.");

@@ -82,7 +82,7 @@
     "check:ios-geofence": "node --check timbratura-ios-geofence.js && node --check timbratura-reminders.js && node scripts/check-ios-geofence.js",
     "check:direct-easybox": "node --check timbratura-ios-notifications.js && node --check timbratura-reminders.js && node scripts/check-direct-easybox.js",
     "check:retention-readiness": "node scripts/audit-retention-readiness.cjs --self-test",
-    "check:demo-readiness": "node scripts/check-app-review-demo-readiness.cjs --self-test",
+    "check:demo-readiness": "node scripts/check-app-review-demo-readiness.cjs --self-test && node scripts/prepare-app-review-demo-claims.cjs --self-test",
     "check:account-privacy": "node scripts/check-account-privacy.js && node scripts/check-account-privacy-runtime.js && node scripts/check-account-privacy-client-runtime.js && node scripts/check-chat-scoped-runtime.cjs && node scripts/check-gps-request-subscription.cjs && node scripts/check-chat-indexes-ready.cjs --self-test && node scripts/audit-user-alert-targeting.cjs --self-test && node scripts/check-push-recipient-isolation.cjs && node scripts/check-ios-profile-fetch.js && npm run check:retention-readiness && npm run check:demo-readiness"
   },
   "devDependencies": {

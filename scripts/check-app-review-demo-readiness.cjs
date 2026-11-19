@@ -37,7 +37,14 @@ function validUid(uid) {
   return typeof uid === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(uid);
 }
 function hasTrustedDemoClaim(user) {
-  return user?.customClaims?.appReviewDemo === true;
+  const claims = user?.customClaims || {};
+  // Both claims are signed by Firebase Auth Admin. apple_review denies
+  // company Firestore/Storage access under the deployed isolation rules.
+  // appReviewDemo distinguishes a new disposable test identity from an
+  // existing reviewer account used by Apple to evaluate the normal app.
+  return claims.appReviewDemo === true && claims.apple_review === true
+    && claims.admin !== true && claims.isAdmin !== true
+    && user?.disabled !== true;
 }
 function assess(user, links) {
   const linked = links.filter(item => item.found).map(item => item.category);
@@ -56,7 +63,7 @@ function selfTest() {
   for (const uid of ["", "a.b", "../admin", "with@email", "has space", "a".repeat(129)]) {
     assert.equal(validUid(uid), false);
   }
-  const clean = assess({ customClaims: { appReviewDemo: true } }, [
+  const clean = assess({ customClaims: { appReviewDemo: true, apple_review: true } }, [
     { category: "personale", found: false },
     { category: "documents", found: false }
   ]);
@@ -64,14 +71,21 @@ function selfTest() {
   assert.equal(clean.grantsDeletionAuthorization, false);
   assert.equal(clean.comprehensiveDataInventory, false);
   assert.equal(assess({ displayName: "appReviewDemo" }, []).preliminaryGatePassed, false);
-  const linked = assess({ customClaims: { appReviewDemo: true } }, [
+  assert.equal(assess({ customClaims: { appReviewDemo: true } }, []).preliminaryGatePassed, false,
+    "Demo-only marker must not bypass the reviewer isolation claim");
+  assert.equal(assess({ customClaims: { apple_review: true } }, []).preliminaryGatePassed, false,
+    "Existing Apple reviewer must never be reused for destructive demo");
+  assert.equal(assess({ customClaims: { appReviewDemo: true, apple_review: true, admin: true } }, []).preliminaryGatePassed, false,
+    "Administrator account cannot pass demo preflight");
+  assert.equal(assess({ customClaims: { appReviewDemo: true, apple_review: true }, disabled: true }, []).preliminaryGatePassed, false);
+  const linked = assess({ customClaims: { appReviewDemo: true, apple_review: true } }, [
     { category: "personale", found: true },
     { category: "personale", found: true },
     { category: "chatMessages", found: false }
   ]);
   assert.equal(linked.preliminaryGatePassed, false);
   assert.deepEqual(linked.categoriesRequiringReview, ["personale"]);
-  console.log("PASS: isolated demo gate requires trusted claim, rejects work links, never authorizes deletion.");
+  console.log("PASS: isolated demo gate requires two signed isolation claims, rejects work links, never authorizes deletion.");
 }
 
 async function live() {

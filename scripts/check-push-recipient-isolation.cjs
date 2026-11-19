@@ -1,0 +1,95 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+const file = path.join(__dirname, "../functions/user-notifications.js");
+const src = fs.readFileSync(file, "utf8");
+const normalizeBlock = src.slice(src.indexOf("function normalize(value) {"), src.indexOf("function chunk(items, size) {"));
+const resolverBlock = src.slice(src.indexOf("function userMatches(user, rawValue) {"), src.indexOf("async function clearInvalidTokens("));
+assert.ok(normalizeBlock.includes('function normalize(value)') && resolverBlock.includes('function resolvePrivateChatRecipient('));
+const eligibilityBlock = src.slice(src.indexOf("function isEligiblePushProfile(data) {"),
+  src.indexOf("async function loadPushUsers()"));
+assert.ok(eligibilityBlock.includes("function isEligiblePushProfile(data)"));
+const { isEligiblePushProfile } = vm.runInNewContext(
+  eligibilityBlock + "\n({isEligiblePushProfile})"
+);
+assert.equal(isEligiblePushProfile({}), true, "Legacy no-status profiles remain supported");
+assert.equal(isEligiblePushProfile({statoAccount: "attivo", banned: false}), true);
+assert.equal(isEligiblePushProfile({statoAccount: "attivo", banned: true}), false);
+assert.equal(isEligiblePushProfile({statoAccount: "in_attesa"}), false);
+assert.equal(isEligiblePushProfile({accountStatus: "richiesta_inviata"}), false);
+assert.equal(isEligiblePushProfile({accountStatus: "rifiutato"}), false);
+assert.equal(isEligiblePushProfile({accountStatus: "attivo"}), true);
+assert.equal(isEligiblePushProfile({statoAccount: "", accountStatus: "attivo"}), false,
+  "Explicit inactive primary status takes precedence");
+
+const { normalize, resolveUniquePushUser, resolvePrivateChatRecipient, hasUniquePushTokenOwner } =
+  vm.runInNewContext(normalizeBlock + "\n" + resolverBlock +
+    "\n({normalize,resolveUniquePushUser,resolvePrivateChatRecipient,hasUniquePushTokenOwner})");
+
+const user = (uid, email, names, pushToken = `synthetic-token-${uid}`) => ({
+  uid, email, pushToken,
+  labels: new Set([uid, email, ...names].map(normalize))
+});
+const first = user("uid001", "mario.rossi@example.test", ["Mario Rossi", "Mario"]);
+const second = user("uid002", "mario.bianchi@example.test", ["Mario Bianchi", "Mario"]);
+const third = user("uid003", "lucia@example.test", ["Lucia Verde"], "");
+const users = [first, second, third];
+
+assert.equal(hasUniquePushTokenOwner(users, first), true);
+assert.equal(hasUniquePushTokenOwner(users, third), false, "No FCM token means no personal push");
+const sharedTokenUsers = [...users, user("uid999", "unrelated@example.test", ["Unrelated"], first.pushToken)];
+assert.equal(hasUniquePushTokenOwner(sharedTokenUsers, first), false,
+  "Reused FCM token across profiles must never receive a private worker notification");
+assert.equal(hasUniquePushTokenOwner(sharedTokenUsers, sharedTokenUsers.at(-1)), false);
+
+const upper = user("AaaaUID", "upper@example.test", ["Upper A"]);
+const lower = user("aaaaUID", "lower@example.test", ["Lower B"]);
+assert.equal(resolvePrivateChatRecipient([upper, lower], "AaaaUID"), upper,
+  "Firebase UIDs differing by case must be distinct recipients");
+assert.equal(resolvePrivateChatRecipient([upper, lower], "aaaaUID"), lower);
+assert.equal(resolvePrivateChatRecipient([upper], "aaaaUID"), null,
+  "A UID with incorrect capitalization must not match another account");
+assert.equal(resolvePrivateChatRecipient([upper], "UPPER@EXAMPLE.TEST"), upper,
+  "Legacy email may be matched case-insensitively without UID normalization");
+
+assert.equal(resolvePrivateChatRecipient(users, "uid001"), first);
+assert.equal(resolvePrivateChatRecipient(users, "mario.rossi@example.test"), first);
+assert.equal(resolvePrivateChatRecipient(users, "Mario Rossi"), null,
+  "Chat recipient names must never trigger a private push");
+assert.equal(resolvePrivateChatRecipient(users, "uid000"), null);
+assert.equal(resolvePrivateChatRecipient([...users, user("uid001", "new@example.test", [])], "uid001"), null,
+  "Duplicate UID must not lead to an ambiguous private push");
+assert.equal(resolveUniquePushUser(users, "Mario"), null,
+  "Homonymous workers must never receive a name-only personal push");
+assert.equal(resolveUniquePushUser(users, "Mario Rossi"), first);
+assert.equal(resolveUniquePushUser(users, "lucia@example.test"), third);
+assert.equal(resolveUniquePushUser(users, "Verde"), third,
+  "Unique legacy surname may still be resolved when there is no ambiguity");
+assert.equal(resolveUniquePushUser(users, "Unknown Operator"), null);
+assert.equal(resolveUniquePushUser([...users,
+  user("uid004", "other@example.test", ["Lucia Verde"], "token")], "Lucia Verde"), null,
+  "Even a no-token identity must disambiguate personal push recipients");
+
+const chat = src.slice(src.indexOf("exports.notifyAndroidChatMessage ="), src.indexOf("function extractHoursRows("));
+assert.match(chat, /resolvePrivateChatRecipient\(users, recipientId\)/);
+assert.match(chat, /hasUniquePushTokenOwner\(users, directRecipient\)/);
+assert.match(chat, /user\.uid === senderId/, "Sender identity also requires an exact UID");
+
+assert.doesNotMatch(chat, /userMatches\(user, recipientId\)/);
+const hours = src.slice(src.indexOf("exports.notifyAndroidHoursInserted ="), src.indexOf("function extractSquadraOperators("));
+assert.match(hours, /resolveUniquePushUser\(users, row.operatorName\)/);
+const squad = src.slice(src.indexOf("exports.notifyAndroidSquadraAssignment ="), src.indexOf("function getCalendarEventParticipants("));
+assert.match(squad, /resolveUniquePushUser\(users, operator\)/);
+assert.match(src, /uid: doc\.id,/, "Use immutable profile document ID, not editable data.uid, for push recipient");
+assert.ok(!src.includes("doc.id,\n      data.uid,"),
+  "Mutable profile uid must not be reused as a secondary push identity");
+assert.match(src, /\.filter\(\(doc\) => isEligiblePushProfile\(doc\.data\(\) \|\| \{\}\)\)/);
+
+assert.doesNotMatch(src, /uid: String\(data\.uid \|\| doc\.id\)/,
+  "Editable profile UID must never be a routing authority");
+assert.ok(src.includes("}); // Keep profiles without push tokens for ambiguity checks."));
+console.log("PASS: private chat UID/email exact matching; hours/squad notifications fail closed on ambiguous names.");

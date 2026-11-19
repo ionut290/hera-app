@@ -1,0 +1,144 @@
+name: Firebase private chat - protected staged release
+
+# CRITICAL: no push / PR-triggered Firestore deployment.
+# Stage 1 publishes indexes while existing rules/clients still work.
+# Stage 2 can run only after migration, privacy approval and READY indexes.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Explicitly approve this exact stage"
+        type: choice
+        required: true
+        default: DO_NOT_DEPLOY
+        options:
+          - DO_NOT_DEPLOY
+          - APPROVE_INDEXES_ONLY
+          - APPROVE_RULES_ONLY
+      reviewed_sha:
+        description: "Exact 40-character commit SHA on main"
+        type: string
+        required: true
+      privacy_signoff:
+        description: "For RULES_ONLY type PRIVACY_REVIEW_APPROVED"
+        type: string
+        required: false
+      clients_migrated:
+        description: "For RULES_ONLY type CLIENTS_MIGRATED after web/iOS/Android validation"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: varga-private-chat-firestore-production
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Validate exact source, reviewer environment and rollout stage
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    if: ${{ github.ref == 'refs/heads/main' && (inputs.approval == 'APPROVE_INDEXES_ONLY' || inputs.approval == 'APPROVE_RULES_ONLY') }}
+    steps:
+      - name: Reject unprotected or incomplete rollout
+        shell: bash
+        env:
+          APPROVED_SHA: ${{ inputs.reviewed_sha }}
+          PRIVACY_SIGNOFF: ${{ inputs.privacy_signoff }}
+          CLIENTS_MIGRATED: ${{ inputs.clients_migrated }}
+          STAGE: ${{ inputs.approval }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "ionut290/hera-app" ]] || exit 1
+          [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ && "$APPROVED_SHA" == "$GITHUB_SHA" ]] ||
+            { echo "::error::Exact approved main SHA required"; exit 1; }
+          if [[ "$STAGE" == "APPROVE_RULES_ONLY" ]]; then
+            [[ "$PRIVACY_SIGNOFF" == "PRIVACY_REVIEW_APPROVED" &&
+               "$CLIENTS_MIGRATED" == "CLIENTS_MIGRATED" ]] ||
+              { echo "::error::Do not restrict rules before all clients and privacy signoff"; exit 1; }
+          fi
+          # Existing protected GitHub environment is mandatory. Never allow
+          # a typo to silently create a new, unprotected environment.
+          ENV_URL="https://api.github.com/repos/$GITHUB_REPOSITORY/environments/firebase-private-chat-production"
+          ENV_JSON="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$ENV_URL")" ||
+            { echo "::error::Create protected firebase-private-chat-production environment with required reviewers"; exit 1; }
+          printf '%s' "$ENV_JSON" | jq -e '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' >/dev/null ||
+            { echo "::error::Protected environment must require a reviewer"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check required sources and no routine rules deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s firestore.rules
+          test -s firestore.indexes.json
+          node scripts/check-security-privacy-audit.js
+          if grep -q -- '--only firestore:rules,firestore:indexes' .github/workflows/deploy-firebase-functions.yml; then
+            echo "::error::Firestore is still deployed by routine workflow"; exit 1
+          fi
+
+  deploy:
+    name: "Stage controlled Firestore release"
+    needs: guard
+    if: ${{ needs.guard.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: firebase-private-chat-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.reviewed_sha }}
+      - name: Verify exact checkout and privacy regression
+        env:
+          APPROVED_SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          npm ci --no-audit --no-fund
+          npm run check:security-privacy
+      - name: Prepare scoped service account
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/varga-firestore-deploy.json"
+          python3 - "$RUNNER_TEMP/varga-firestore-deploy.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1]) as f: account=json.load(f)
+          assert account.get("project_id")=="hera-app-6cd2b", "Wrong project"
+          PY
+      - name: Ensure chat indexes are READY before restrictive rules
+        if: ${{ inputs.approval == 'APPROVE_RULES_ONLY' }}
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/varga-firestore-deploy.json
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --no-audit --no-fund google-auth-library@9.15.1
+          node scripts/check-chat-indexes-ready.cjs
+      - name: Deploy exactly selected stage
+        shell: bash
+        env:
+          STAGE: ${{ inputs.approval }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/varga-firestore-deploy.json
+        run: |
+          set -euo pipefail
+          if [[ "$STAGE" == "APPROVE_INDEXES_ONLY" ]]; then
+            npx --yes firebase-tools@14.23.0 deploy --only firestore:indexes --project hera-app-6cd2b --non-interactive
+          elif [[ "$STAGE" == "APPROVE_RULES_ONLY" ]]; then
+            npx --yes firebase-tools@14.23.0 deploy --only firestore:rules --project hera-app-6cd2b --non-interactive
+          else
+            echo "::error::Invalid stage"; exit 1
+          fi
+      - name: Destroy temporary credential
+        if: always()
+        run: rm -f "$RUNNER_TEMP/varga-firestore-deploy.json"

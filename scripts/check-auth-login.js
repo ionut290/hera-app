@@ -19,6 +19,10 @@ const rulesDeployWorkflowSource = fs.readFileSync(
   path.join(root, ".github", "workflows", "deploy-self-registration.yml"),
   "utf8"
 );
+const protectedRulesWorkflowSource = fs.readFileSync(
+  path.join(root, ".github", "workflows", "deploy-firestore-chat-protected.yml"),
+  "utf8"
+);
 
 if (!/<script\s+src=["'](?:\.\/)?auth-login-fix\.js\?v=[^"']+["']><\/script>/.test(indexSource)) {
   throw new Error("auth-login-fix.js non viene caricato da index.html con cache-busting.");
@@ -36,13 +40,24 @@ if (rulesSource.includes(".data.banned == true")) {
   throw new Error("Le regole leggono ancora direttamente il campo banned opzionale.");
 }
 
-if (!rulesDeployWorkflowSource.includes("--only firestore:rules")) {
-  throw new Error("Il workflow non distribuisce le regole Firestore.");
+// The prior automatic registration workflow must not deploy the entire
+// Firestore ruleset when main is updated. Only the protected, manual two-stage
+// workflow may publish new rules after client migration and reviewer sign-off.
+if (!protectedRulesWorkflowSource.includes("--only firestore:rules")
+    || !protectedRulesWorkflowSource.includes("APPROVE_RULES_ONLY")
+    || !protectedRulesWorkflowSource.includes("CLIENTS_MIGRATED")
+    || !protectedRulesWorkflowSource.includes("firebase-private-chat-production")) {
+  throw new Error("Il rilascio delle regole Firestore non è più protetto e verificabile.");
 }
-
+for (const forbidden of ["npx --yes firebase-tools@latest deploy",
+  "FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B", "credentials_json:"]) {
+  if (rulesDeployWorkflowSource.includes(forbidden)) {
+    throw new Error("Il vecchio workflow di registrazione non deve pubblicare regole: " + forbidden);
+  }
+}
 for (const obsolete of ["TESTER_TEMP_PASSWORD", "functions:registerTester"]) {
-  if (rulesDeployWorkflowSource.includes(obsolete)) {
-    throw new Error(`Il deploy regole dipende ancora dalla registrazione legacy: ${obsolete}`);
+  if (protectedRulesWorkflowSource.includes(obsolete)) {
+    throw new Error("Il rilascio protetto dipende dalla registrazione legacy: " + obsolete);
   }
 }
 

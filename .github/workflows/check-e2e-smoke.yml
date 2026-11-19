@@ -9,7 +9,11 @@ on:
 jobs:
   e2e-smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Prebuilt Playwright image pins Chromium and Linux dependencies to the
+    # exact test-runner version, avoiding intermittent apt/browser downloads.
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-noble
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,13 +29,13 @@ jobs:
           node scripts/check-fatto-whazzup-isolation.js
       - name: Install Playwright test runner
         run: npm install --no-save --no-audit --no-fund @playwright/test@1.55.0
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
       - name: Start local PWA server
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/varga-e2e-server.log 2>&1 &
           echo $! > /tmp/varga-e2e-server.pid
-          for i in {1..30}; do
+          # GitHub container steps use POSIX sh, not Bash: brace expansion would
+          # run just once and fail before the background server starts.
+          for i in $(seq 1 30); do
             curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0
             sleep 1
           done

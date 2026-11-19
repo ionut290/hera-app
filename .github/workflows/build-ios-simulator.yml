@@ -72,6 +72,8 @@ jobs:
           npx cap sync ios
           python3 scripts/mark-ios-native-safe-area.py
           ruby scripts/install-ios-native-geofence.rb
+          ruby scripts/install-ios-apple-signin.rb
+          test -s ios/App/App/App.entitlements
           IOS_APPLE_TEAM_ID=DEMO123456 IOS_PROFILE_NAME=VARGA_CI_TEST_PROFILE ruby scripts/configure-ios-distribution-signing.rb
           ruby -r xcodeproj -e 'p=Xcodeproj::Project.open("ios/App/App.xcodeproj"); t=p.targets.find{|x| x.name=="App"}; a=t.build_configurations.find{|x| x.name=="Release"}.build_settings; d=t.build_configurations.find{|x| x.name=="Debug"}.build_settings; abort "App Release profile signing missing" unless a["CODE_SIGN_IDENTITY[sdk=iphoneos*]"]=="Apple Distribution" && a["CODE_SIGN_STYLE"]=="Manual" && a["PROVISIONING_PROFILE_SPECIFIER"]=="VARGA_CI_TEST_PROFILE"; abort "Debug identity changed" if d["CODE_SIGN_IDENTITY[sdk=iphoneos*]"]=="Apple Distribution"; abort "Pods unexpectedly modified" if Xcodeproj::Project.open("ios/App/Pods/Pods.xcodeproj").targets.any?{|x| x.build_configurations.any?{|z| z.build_settings["CODE_SIGN_IDENTITY[sdk=iphoneos*]"]=="Apple Distribution"}}'
           python3 scripts/configure-ios-plist.py
@@ -95,6 +97,7 @@ jobs:
           python3 -m py_compile scripts/configure-ios-firebase.py
           ruby -c scripts/register-ios-firebase-plist.rb
           ruby -c scripts/install-ios-native-geofence.rb
+          ruby -c scripts/install-ios-apple-signin.rb
           if [[ -z "${IOS_FIREBASE_CONFIG_BASE64}" ]]; then
             echo "::warning::Firebase iOS config absent. The simulator build does not validate native Firebase sign-in."
           else

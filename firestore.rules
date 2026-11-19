@@ -112,18 +112,30 @@ service cloud.firestore {
     }
 
     function validSelfProfileUpdate() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        "statoAccount", "accountStatus", "role", "ruolo", "isAdmin", "admin",
-        "approvatoAt", "approvedAt", "approvatoDa", "approvedBy", "approvatoDaEmail",
-        "rifiutatoAt", "rejectedAt", "rifiutatoDa", "rejectedBy", "motivoRifiuto"
-      ]) || (
-        resource.data.get("statoAccount", "") in ["in_attesa", "richiesta_inviata"]
-        && request.resource.data.statoAccount == "richiesta_inviata"
-        && request.resource.data.accountStatus == "richiesta_inviata"
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "statoAccount", "accountStatus", "richiestaWhatsappAt", "whatsappRequestedAt",
-          "ultimaRichiestaAt", "lastRequestAt", "numeroRichieste", "requestCount"
-        ])
+      // A normal user must not impersonate another recipient by changing the
+      // profile UID/email consumed by backend notification dispatchers.
+      // A verified Firebase Auth email change may be mirrored into the profile.
+      return (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(["uid"])
+        || request.resource.data.get("uid", "") == request.auth.uid
+      ) && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(["email"])
+        || (request.auth.token.email_verified == true
+          && request.resource.data.get("email", "") == request.auth.token.email)
+      ) && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          "statoAccount", "accountStatus", "role", "ruolo", "isAdmin", "admin",
+          "approvatoAt", "approvedAt", "approvatoDa", "approvedBy", "approvatoDaEmail",
+          "rifiutatoAt", "rejectedAt", "rifiutatoDa", "rejectedBy", "motivoRifiuto"
+        ]) || (
+          resource.data.get("statoAccount", "") in ["in_attesa", "richiesta_inviata"]
+          && request.resource.data.statoAccount == "richiesta_inviata"
+          && request.resource.data.accountStatus == "richiesta_inviata"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "statoAccount", "accountStatus", "richiestaWhatsappAt", "whatsappRequestedAt",
+            "ultimaRichiestaAt", "lastRequestAt", "numeroRichieste", "requestCount"
+          ])
+        )
       );
     }
 
@@ -450,9 +462,20 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Individual messages are readable only by their sender, recipient or a
+    // privileged administrator. Global announcements have an empty recipientId.
+    // Client-side filtering is NOT a substitute for this Firestore permission.
     match /chatMessages/{messageId} {
-      allow read, create, update: if signedIn();
-      allow delete: if isAdmin();
+      allow read: if signedIn() && (
+        isAdmin() ||
+        (resource.data.keys().hasAll(["recipientId"]) && resource.data.recipientId == "") ||
+        (resource.data.keys().hasAll(["recipientId"]) && resource.data.recipientId == request.auth.uid) ||
+        (resource.data.keys().hasAll(["senderId"]) && resource.data.senderId == request.auth.uid)
+      );
+      allow create: if signedIn()
+        && (isAdmin() || request.resource.data.get("senderId", "") == request.auth.uid)
+        && request.resource.data.get("recipientId", "") is string;
+      allow update, delete: if isAdmin();
     }
 
     match /safetyContacts/{contactId} {
@@ -520,22 +543,86 @@ service cloud.firestore {
       }
     }
 
+    // GPS requests contain precise worker coordinates and personal details.
+    // Operators may submit their own request; only admins may approve, reject,
+    // list all requests or access other workers' locations.
+    match /gpsUpdateRequests/{requestId} {
+      allow get: if signedIn() && (
+        isAdmin() || resource.data.get("operatorId", "") == request.auth.uid
+      );
+      allow list: if isAdmin() || (
+        signedIn() && request.query.limit <= 100
+        && resource.data.get("operatorId", "") == request.auth.uid
+      );
+      allow create: if signedIn() && (
+        isAdmin() || (
+          request.resource.data.get("operatorId", "") == request.auth.uid
+          && request.resource.data.get("status", "") == "pending"
+        )
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // Email queue bodies/addresses are administrative data, not global data
+    // for any signed-in user. Firebase Admin/privileged delivery bypass rules.
+    match /notificationEmailQueue/{emailId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    // Global operational events are intentionally read by active workers.
+    // A worker can only publish an event attributed to their own Firebase UID;
+    // no user can pose as the synthetic "system" author or rewrite event history.
+    match /appNotifications/{eventId} {
+      allow read: if signedIn();
+      allow create: if isAdmin() || (
+        signedIn()
+        && request.resource.data.get("createdByUid", "") == request.auth.uid
+        && request.resource.data.get("eventType", "") in [
+          "impianto-done", "impianto-navigate", "hours-inserted",
+          "next-day-squadre-published", "impianto-near",
+          "impianto-away-without-done"
+        ]
+        && request.resource.data.get("createdAt", null) == request.time
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // Missing-hours warnings are generated only in administrator workflows.
+    // Ordinary workers must not forge, overwrite or suppress deadline alerts.
+    match /hoursDeadlineAlerts/{alertId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Read confirmations contain identities of individual workers.
+    // Each employee accesses only the deterministic document suffixed by
+    // their Firebase UID; date-wide summaries remain administrator-only.
+    match /userAlertAcknowledgements/{ackId} {
+      allow get: if isAdmin() || (
+        signedIn() && ackId.matches(".*__" + request.auth.uid)
+      );
+      allow list: if isAdmin();
+      allow create: if isAdmin() || (
+        signedIn()
+        && request.resource.data.get("userId", "") == request.auth.uid
+        && request.resource.data.get("notificationId", "") is string
+        && ackId == request.resource.data.notificationId + "__" + request.auth.uid
+        && request.resource.data.get("acknowledgedAt", null) == request.time
+      );
+      allow update, delete: if isAdmin();
+    }
+
     match /{collection}/{docId} {
       allow read, write: if signedIn() && collection in [
-        "appNotifications",
         "commessaResources",
-        "gpsUpdateRequests",
-        "hoursDeadlineAlerts",
         "items",
         "noteCommessa",
-        "notificationEmailQueue",
         "oreApprovalRequests",
         "oreLocks",
         "oreReports",
         "neve_ore_richieste",
         "neve_ore",
         "sheetExportQueue",
-        "userAlertAcknowledgements",
         "userAlerts",
         "utenti"
       ];

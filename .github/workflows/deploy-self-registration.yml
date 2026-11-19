@@ -1,9 +1,18 @@
-name: Deploy Firestore rules
+name: Verify Firestore registration rules (NEVER deploy)
 
+# PRIVACY RELEASE GATE:
+# This legacy workflow previously deployed the ENTIRE firestore.rules file
+# automatically whenever it changed on main. It must not bypass the manually
+# reviewed staged production rollout for private chat, GPS and email queues.
+# Deployment is exclusively handled by deploy-firestore-chat-protected.yml.
 on:
+  pull_request:
+    paths:
+      - "firestore.rules"
+      - "scripts/check-security-privacy-audit.js"
+      - ".github/workflows/deploy-self-registration.yml"
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "firestore.rules"
       - ".github/workflows/deploy-self-registration.yml"
@@ -13,27 +22,18 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
-    name: Deploy verified-user access rules
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  verify:
+    name: Validate Firestore security source without credentials or deployment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: "22"
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
-
-      - name: Deploy Firestore rules
-        run: >
-          npx --yes firebase-tools@latest deploy
-          --only firestore:rules
-          --project hera-app-6cd2b
-          --non-interactive
+          persist-credentials: false
+      - name: Validate security rules and registration access
+        run: |
+          set -euo pipefail
+          test -s firestore.rules
+          node scripts/check-security-privacy-audit.js
+          echo "PASS: registration rules source validated; no production changes"

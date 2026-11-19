@@ -32,13 +32,28 @@ function getDb() {
   return admin.firestore();
 }
 
+// Match the active-account policy used by Firestore security rules. Pending,
+// rejected and banned workers must not receive operational push content.
+// Legacy profiles without either status field remain supported.
+function isEligiblePushProfile(data) {
+  if (data.banned === true) return false;
+  if (Object.prototype.hasOwnProperty.call(data, "statoAccount")) {
+    return data.statoAccount === "attivo";
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "accountStatus")) {
+    return data.accountStatus === "attivo";
+  }
+  return true;
+}
+
 async function loadPushUsers() {
   const snapshot = await getDb().collection("platformUsers").get();
-  return snapshot.docs.map((doc) => {
+  return snapshot.docs
+    .filter((doc) => isEligiblePushProfile(doc.data() || {}))
+    .map((doc) => {
     const data = doc.data() || {};
     const labels = new Set([
       doc.id,
-      data.uid,
       data.email,
       data.displayName,
       data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "",
@@ -47,13 +62,15 @@ async function loadPushUsers() {
     ].map(normalize).filter(Boolean));
     return {
       ref: doc.ref,
-      uid: String(data.uid || doc.id),
+      // Firestore document ID is the Auth UID. Profile data.uid is not an
+      // authority and could be stale or self-edited in a legacy client.
+      uid: doc.id,
       email: String(data.email || ""),
       displayName: String(data.displayName || data.userName || data.email || "Utente"),
       pushToken: String(data.pushToken || "").trim(),
       labels
     };
-  }).filter((user) => user.pushToken);
+  }); // Keep profiles without push tokens for ambiguity checks.
 }
 
 function userMatches(user, rawValue) {
@@ -64,6 +81,44 @@ function userMatches(user, rawValue) {
     if (label && value && (label.includes(value) || value.includes(label))) return true;
   }
   return false;
+}
+
+/**
+ * Only deliver a personal push when ONE user can be identified among ALL
+ * platform profiles, including profiles without a push token. Prefer exact
+ * UID/email/name identity labels; ambiguous exact or fuzzy matches fail closed.
+ */
+function resolveUniquePushUser(users, rawValue) {
+  const value = normalize(rawValue);
+  if (!value) return null;
+  const exact = users.filter((user) => user.labels.has(value));
+  if (exact.length) return exact.length === 1 ? exact[0] : null;
+  const fuzzy = users.filter((user) => userMatches(user, rawValue));
+  return fuzzy.length === 1 ? fuzzy[0] : null;
+}
+
+/**
+ * For private chats, never try fuzzy names. A recipientId must be a unique
+ * authenticated Firebase UID, or a unique exact legacy email. Unmatched or
+ * ambiguous addresses receive no push at all.
+ */
+function resolvePrivateChatRecipient(users, recipientId) {
+  const raw = String(recipientId || "").trim();
+  if (!raw) return null;
+  const emailValue = raw.includes("@") ? raw.toLowerCase() : "";
+  const exact = users.filter((user) =>
+    // Firebase Auth UIDs are case-sensitive; never lowercase a recipient UID.
+    user.uid === raw ||
+    (emailValue && user.email.toLowerCase() === emailValue)
+  );
+  return exact.length === 1 ? exact[0] : null;
+}
+
+// Shared/stale FCM tokens across multiple Firebase profiles are unsafe for
+// personal pushes. Do not send until a token is uniquely tied to one profile.
+function hasUniquePushTokenOwner(users, user) {
+  if (!user || !user.pushToken) return false;
+  return users.filter((candidate) => candidate.pushToken === user.pushToken).length === 1;
 }
 
 async function clearInvalidTokens(users, invalidTokens) {
@@ -139,15 +194,19 @@ exports.notifyAndroidChatMessage = onDocumentCreated(
     if (!snapshot) return null;
     const message = snapshot.data() || {};
     const users = await loadPushUsers();
-    const senderId = normalize(message.senderId);
-    const senderEmail = normalize(message.senderEmail);
+    const senderId = String(message.senderId || "").trim();
+    const senderEmail = String(message.senderEmail || "").trim().toLowerCase();
     const recipientId = String(message.recipientId || "").trim();
 
-    const recipients = users.filter((user) => {
-      const isSender = user.labels.has(senderId) || user.labels.has(senderEmail);
-      if (isSender) return false;
-      return recipientId ? userMatches(user, recipientId) : true;
-    });
+    const directRecipient = recipientId ? resolvePrivateChatRecipient(users, recipientId) : null;
+    const recipients = (recipientId
+      ? (hasUniquePushTokenOwner(users, directRecipient) ? [directRecipient] : [])
+      : users)
+      .filter((user) => {
+        const isSender = user.uid === senderId ||
+          (senderEmail && user.email.toLowerCase() === senderEmail);
+        return !isSender;
+      });
 
     const senderName = String(message.senderName || "Nuovo messaggio").trim();
     const result = await sendToUsers(recipients, {
@@ -189,9 +248,14 @@ exports.notifyAndroidHoursInserted = onDocumentCreated(
     if (!rows.length) return null;
 
     const users = await loadPushUsers();
-    for (const user of users) {
-      const matchingRows = rows.filter((row) => userMatches(user, row.operatorName));
-      if (!matchingRows.length) continue;
+    const matchedRowsByUser = new Map();
+    for (const row of rows) {
+      const user = resolveUniquePushUser(users, row.operatorName);
+      if (!hasUniquePushTokenOwner(users, user)) continue; // Never guess a person or device.
+      if (!matchedRowsByUser.has(user.uid)) matchedRowsByUser.set(user.uid, { user, rows: [] });
+      matchedRowsByUser.get(user.uid).rows.push(row);
+    }
+    for (const { user, rows: matchingRows } of matchedRowsByUser.values()) {
       const total = matchingRows.reduce((sum, row) => sum + row.hours, 0);
       const commesse = [...new Set(matchingRows.map((row) => row.commessaName).filter(Boolean))];
       await sendToUsers([user], {
@@ -252,8 +316,12 @@ exports.notifyAndroidSquadraAssignment = onDocumentWritten(
     const users = await loadPushUsers();
     const commessaName = String(after.commessaNome || "Commessa");
     const date = String(after.riferimentoData || after.dateKey || "");
-    for (const user of users) {
-      if (added.some((operator) => userMatches(user, operator))) {
+    const uniquelyResolved = new Map();
+    for (const operator of added) {
+      const user = resolveUniquePushUser(users, operator);
+      if (hasUniquePushTokenOwner(users, user)) uniquelyResolved.set(user.uid, user);
+    }
+    for (const user of uniquelyResolved.values()) {
         await sendToUsers([user], {
           title: "👷 Aggiunto a una squadra",
           body: `Sei stato aggiunto alla squadra di ${commessaName}${date ? ` per il ${date}` : ""}.`,
@@ -261,7 +329,6 @@ exports.notifyAndroidSquadraAssignment = onDocumentWritten(
           data: { commessaId: event.params.commessaId, date },
           tag: `squadra-${event.params.commessaId}-${date}-${user.uid}`
         });
-      }
     }
     return null;
   }

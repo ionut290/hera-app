@@ -121,12 +121,11 @@
     // Provide deletion in the profile, normal menu, AND pending-user view.
     const locations = [
       ["user-details-panel", "varga-account-delete-profile", "btn"],
-      ["side-menu-body-placeholder", "unused", "btn"],
       ["access-approval-logout", "varga-account-delete-pending", "btn"]
     ];
     const profile = document.getElementById(locations[0][0]);
     const menu = document.querySelector("#side-menu .side-menu-body .menu-section:nth-child(2)");
-    const pending = document.getElementById(locations[2][0]);
+    const pending = document.getElementById(locations[1][0]);
 
     function attach(parent, id, className, after) {
       if (!parent || document.getElementById(id)) return;
@@ -138,7 +137,7 @@
     }
     attach(profile, "varga-account-delete-profile", "btn");
     attach(menu, "varga-account-delete-menu", "btn menu-title-btn");
-    attach(null, "varga-account-delete-pending", "btn", pending);
+    attach(pending?.parentElement, "varga-account-delete-pending", "btn", pending);
   }
 
   if (document.readyState === "loading") {

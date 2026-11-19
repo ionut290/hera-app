@@ -25,7 +25,7 @@ jobs:
           if node scripts/audit-retention-readiness.cjs --live > "$RUNNER_TEMP/retention-guard.log" 2>&1; then
             echo "::error::Unapproved live mode must fail"; exit 1
           fi
-          grep -F 'Retention read-only audit stopped: blocked-or-error' "$RUNNER_TEMP/retention-guard.log"
+          grep -F 'Retention read-only audit stopped: ERR_ASSERTION' "$RUNNER_TEMP/retention-guard.log"
       - name: Check fail-closed privacy gates, metadata-only and mandatory reviewer
         run: |
           set -euo pipefail

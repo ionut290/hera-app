@@ -3,7 +3,7 @@
 // Run only in a local Firestore emulator; never against a Firebase project.
 // Example: npx firebase emulators:exec --only firestore --project demo-review-isolation //   "node scripts/test-apple-review-firestore-rules.cjs"
 const fs = require("node:fs");
-const { doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit } = require("firebase/firestore");
+const { doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, serverTimestamp } = require("firebase/firestore");
 const assert = require("node:assert/strict");
 const { initializeTestEnvironment, assertFails, assertSucceeds } =
   require("@firebase/rules-unit-testing");
@@ -59,6 +59,14 @@ async function run() {
       });
       await setDoc(doc(db, "notificationEmailQueue/emailOther"), {
         to: "other@example.test", status: "pending", html: "synthetic text"
+      });
+      await setDoc(doc(db, "appNotifications/normalEvent"), {
+        eventType: "impianto-done", createdByUid: "normalUser", createdAt: 3,
+        title: "Synthetic work done", body: "Synthetic approved event"
+      });
+      await setDoc(doc(db, "appNotifications/systemEvent"), {
+        eventType: "hours-deadline-missing", createdByUid: "system", createdAt: 4,
+        title: "Synthetic system deadline", body: "Synthetic system notice"
       });
       await setDoc(doc(db, "sharedStaticViews/currentTeam"), { demo: false });
       await setDoc(doc(db, "appleReviewDemo/onlySynthetic"), {title: "Synthetic exercise", demo: true});
@@ -174,6 +182,35 @@ async function run() {
     await assertSucceeds(getDocs(collection(administrator, "notificationEmailQueue")));
     await assertSucceeds(setDoc(doc(administrator, "notificationEmailQueue/emailAdmin"), {
       to: "normal@example.test", status: "pending", html: "only admin sends"
+    }));
+
+    // Notification events remain broadly viewable for work coordination, but
+    // only the genuine author can add normal events. No fake system records.
+    await assertSucceeds(getDoc(doc(normal, "appNotifications/systemEvent")));
+    await assertSucceeds(getDocs(collection(normal, "appNotifications")));
+    await assertFails(getDoc(doc(anonymous, "appNotifications/normalEvent")));
+    await assertFails(getDoc(doc(review, "appNotifications/normalEvent")));
+    await assertSucceeds(setDoc(doc(normal, "appNotifications/validNew"), {
+      eventType: "impianto-done", createdByUid: "normalUser",
+      createdAt: serverTimestamp(), title: "My synthetic event", body: "Owner"
+    }));
+    await assertFails(setDoc(doc(normal, "appNotifications/fakeOther"), {
+      eventType: "impianto-done", createdByUid: "otherUser",
+      createdAt: serverTimestamp(), title: "Fake other worker"
+    }));
+    await assertFails(setDoc(doc(normal, "appNotifications/fakeSystem"), {
+      eventType: "hours-deadline-missing", createdByUid: "system",
+      createdAt: serverTimestamp(), title: "Fake system"
+    }));
+    await assertFails(setDoc(doc(normal, "appNotifications/fakeEvent"), {
+      eventType: "unrecognized", createdByUid: "normalUser",
+      createdAt: serverTimestamp(), title: "Invalid"
+    }));
+    await assertFails(updateDoc(doc(normal, "appNotifications/normalEvent"), { title: "Tamper" }));
+    await assertFails(deleteDoc(doc(normal, "appNotifications/normalEvent")));
+    await assertSucceeds(setDoc(doc(administrator, "appNotifications/systemNew"), {
+      eventType: "hours-deadline-missing", createdByUid: "system",
+      createdAt: serverTimestamp(), title: "Authentic admin notice"
     }));
 
     await assertSucceeds(getDoc(doc(normal, "commesse/syntheticJob")));

@@ -30,6 +30,12 @@ function setup(options = {}) {
       actorName: "Deleted Worker", recipientUserIds: ["worker-1", "worker-2"],
       readBy: { "worker-1": true, "worker-2": true },
       deletedBy: { "worker-1": true }, message: "Retained business notification" },
+    { collection: "notifications", id: "false-read-state",
+      actorId: "worker-2", actorName: "Other Worker",
+      recipientUserIds: ["worker-2"],
+      readBy: { "worker-1": false, "worker-2": true },
+      deletedBy: { "worker-1": false },
+      message: "Retained message with a false read state" },
     { collection: "notifications", id: "other-message", actorId: "worker-2",
       actorName: "Other Worker", recipientUserIds: ["worker-2"],
       readBy: { "worker-2": true }, message: "Another user's business notification" },
@@ -210,7 +216,7 @@ async function rejectedCode(promise, expected) {
   assert.equal(businessPortrait.contractCode, "another-retained");
   const otherEmployee = state.docs.find((d) => d.id === "employee-2");
   assert.equal(otherEmployee.linkedUserId, "worker-2");
-  assert.equal(state.updated.length, 6);
+  assert.equal(state.updated.length, 7);
   const priorChat = state.docs.find((d) => d.id === "chat-from-deleted");
   assert.equal(priorChat.senderId, undefined);
   assert.equal(priorChat.senderEmail, undefined);
@@ -240,6 +246,12 @@ async function rejectedCode(promise, expected) {
   assert.deepEqual(sharedNotice.readBy, { "worker-2": true });
   assert.deepEqual(sharedNotice.deletedBy, {});
   assert.equal(sharedNotice.message, "Retained business notification");
+  const falseStateNotice = state.docs.find((d) => d.id === "false-read-state");
+  assert.equal(falseStateNotice.actorId, "worker-2");
+  assert.deepEqual(falseStateNotice.recipientUserIds, ["worker-2"]);
+  assert.deepEqual(falseStateNotice.readBy, { "worker-2": true });
+  assert.deepEqual(falseStateNotice.deletedBy, {});
+  assert.equal(falseStateNotice.message, "Retained message with a false read state");
   const otherNotice = state.docs.find((d) => d.id === "other-message");
   assert.equal(otherNotice.actorId, "worker-2");
   assert.deepEqual(otherNotice.recipientUserIds, ["worker-2"]);

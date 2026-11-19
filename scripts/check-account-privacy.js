@@ -45,6 +45,21 @@ contains("functions/account-deletion.js", 'unlinkSharedAuthor(db, "appNotificati
 const standardDeploy = read(".github/workflows/deploy-firebase-functions.yml");
 assert.ok(!/--only[^\n]*functions:deleteOwnVargaAccount/.test(standardDeploy),
   "Destructive account deletion must never be included in routine Firebase deployment");
+// A merge must NOT push restrictive Firestore chat rules before migrating
+// old web/iOS/Android clients. Deploy indexes and rules in separate approvals.
+assert.ok(!standardDeploy.includes("--only firestore:rules,firestore:indexes"),
+  "Routine function deployment must never update Firestore rules/indexes");
+const stagedChat = read(".github/workflows/deploy-firestore-chat-protected.yml");
+for (const marker of ["workflow_dispatch:", "firebase-private-chat-production",
+  "required_reviewers", "APPROVE_INDEXES_ONLY", "APPROVE_RULES_ONLY",
+  "CLIENTS_MIGRATED", "PRIVACY_REVIEW_APPROVED",
+  "--only firestore:indexes", "--only firestore:rules",
+  "node scripts/check-chat-indexes-ready.cjs"]) {
+  assert.ok(stagedChat.includes(marker), "Missing staged-chat release guard: " + marker);
+}
+assert.ok(!stagedChat.includes("  push:"),
+  "Staged private-chat production workflow cannot auto-trigger on push");
+
 const protectedRelease = read(".github/workflows/deploy-account-deletion-protected.yml");
 assert.ok(protectedRelease.includes("workflow_dispatch:"));
 assert.ok(!protectedRelease.includes("  push:"));

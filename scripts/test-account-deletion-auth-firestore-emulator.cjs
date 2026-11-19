@@ -40,6 +40,7 @@ const sandbox = {
   exports: {},
   require: (id) => {
     if (id === "firebase-admin") return adminHarness;
+    if (id === "node:crypto") return require("node:crypto");
     if (id === "firebase-functions/v2/https") {
       return { HttpsError: MockHttpsError, onCall: (_opts, handler) => handler };
     }
@@ -153,7 +154,8 @@ const request = (who, data, age = 0) => ({
   assert.equal(otherChat.senderId, otherUid);
   assert.equal(otherChat.senderEmail, "other@example.test");
   assert.equal(otherChat.text, "Preserve another worker's message");
-  assert.equal(otherChat.recipientId, undefined);
+  assert.match(otherChat.recipientId, /^deleted-recipient-[0-9a-f-]{36}$/);
+  assert.notEqual(otherChat.recipientId, uid);
   const ownedNotice = (await db.doc("appNotifications/synthetic-app-notice-owned").get()).data();
   assert.equal(ownedNotice.createdByUid, undefined);
   assert.equal(ownedNotice.createdByEmail, undefined);

@@ -16,7 +16,7 @@ L'inventario è una **mappa di aree da verificare**, non una prova che le singol
 | `privateDocuments/{uid}`, `operatorPositions/{uid}`, `userOperatorLinks/{uid}` | Rimuove ricorsivamente | Solo chiave UID del richiedente |
 | `documents` | Rimuove metadati di documenti personali associati al proprio UID | Include documenti legacy senza `visibility`; non elimina documenti condivisi/global |
 | Firebase Storage `documents/{uid}/...` | Rimuove allegati personali noti | Percorsi convalidati; non rimuove file richiamati da documenti aziendali. Percorsi legacy ignoti fanno fallire il preflight |
-| `documentReminderAcknowledgements`, `alertReadConfirmations`, `userAlertAcknowledgements`, `userAlerts` | Rimuove record associati con campi UID specifici | La corrispondenza dipende dai campi previsti nel codice |
+| `documentReminderAcknowledgements`, `alertReadConfirmations`, `userAlertAcknowledgements`, `userAlerts`, `passwordRecoveryChallenges` | Rimuove conferme e sfide di recupero password per l’UID dell’utente | Le password-reset challenges vengono eliminate solo quando la colonna `uid` corrisponde al richiedente; la corrispondenza di altre collezioni dipende dallo schema |
 | `personale` | Scollega `linkedUserId` e attributi di login derivati; conserva la scheda aziendale | Non cancella il rapporto di lavoro, la foto aziendale e i documenti amministrativi |
 
 ## Aree osservate da esaminare prima del rilascio

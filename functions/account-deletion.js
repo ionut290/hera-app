@@ -69,7 +69,9 @@ exports.deleteOwnVargaAccount = onCall({
     // Personal documents only. Shared/global operational documents must remain
     // available to the business and are not removed by account deletion.
     const owned = await db.collection("documents").where("ownerUserId", "==", uid).get();
-    const personal = owned.docs.filter((doc) => doc.data()?.visibility === "personal");
+    // Legacy documents with no visibility are shown as personal in documents.js.
+    // Include them so account deletion cannot silently orphan personal data.
+    const personal = owned.docs.filter((doc) => !doc.data()?.visibility || doc.data()?.visibility === "personal");
     const paths = [];
     for (const doc of personal) {
       const file = doc.data()?.storagePath;

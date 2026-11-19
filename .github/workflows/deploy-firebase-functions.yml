@@ -7,8 +7,6 @@ on:
       - main
     paths:
       - "functions/**"
-      - "firestore.rules"
-      - "firestore.indexes.json"
       - "firebase.json"
       - ".firebaserc"
       - ".github/workflows/deploy-firebase-functions.yml"
@@ -78,15 +76,10 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
           chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
 
-      - name: Deploy Firestore rules and controlled-query indexes
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
-        run: >-
-          firebase deploy
-          --only firestore:rules,firestore:indexes
-          --project hera-app-6cd2b
-          --non-interactive
-          --force
+      # CHAT PRIVACY RELEASE GATE: DO NOT auto-deploy Firestore rules or indexes.
+      # The former broad chat listener will fail after enforcing participant-only reads.
+      # Use the manually reviewed, two-stage deploy-firestore-chat-protected.yml,
+      # after indices READY and migration of legacy iOS/Android/web clients.
 
       # PRIVACY RELEASE GATE: deleteOwnVargaAccount is deliberately excluded.
       # Deploy it only through the separate, manually reviewed account-deletion workflow

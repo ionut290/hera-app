@@ -74,3 +74,15 @@ Il controllo della PR ha trovato altre due raccolte nel permesso generico `allow
 - `hoursDeadlineAlerts`: il controllo automatico delle ore mancanti viene eseguito dal client solo se `canManageData()` è vero; pertanto soltanto gli amministratori possono creare/modificare/eliminare i record di allerta. La lettura continua per gli utenti attivi.
 
 Aggiunte prove Firebase Emulator con operatori, amministratori, utenti non autenticati e account di revisione Apple, oltre a verifiche statiche contro il ripristino del fallback generico. **Le nuove regole non sono state distribuite.** Devono attraversare gli stessi passaggi manuali protetti indici/client/regole descritti sopra. Prima dell'attivazione verificare gli eventi legacy, i client ancora installati e la coerenza della visibilità globale con le basi giuridiche aziendali.
+
+
+## Conferme di lettura personale — ulteriore controllo Firestore
+
+La collezione `userAlertAcknowledgements` conteneva identificativi e nomi dei lavoratori ma utilizzava il vecchio `allow read, write: if signedIn()`, che permetteva a ogni account attivo di leggere o modificare le conferme altrui. Nel ramo della PR si applica una regola esplicita:
+
+- Ogni lavoratore può eseguire `get` soltanto sul documento con ID `<notificationId>__<proprio UID>`, anche prima che il documento esista, come richiesto dall'interfaccia.
+- La creazione è ammessa soltanto per l'ID deterministico, con `userId` corrispondente all'autenticazione e timestamp server.
+- La lista completa per data, la modifica e la cancellazione sono riservate agli amministratori, che usano il calendario di conferma in gestione.
+- La vecchia autorizzazione generica è eliminata; emulatori Firebase testano account proprietario, altro lavoratore, reviewer Apple e amministratore.
+
+Questa restrizione non risolve da sola la raccolta `userAlerts`: il client ordinario carica ancora il feed generale e filtra sul dispositivo le notifiche dirette ad altri utenti. Per evitare interruzioni o mancata consegna degli avvisi legacy basati su nomi di squadra, occorre **progettare e collaudare una migrazione della lettura con regole server-side e query per destinatari** prima di applicare restrizioni simili. La revisione di `userAlerts` rimane un elemento privacy **aperto**, non una funzione dichiarata sicura. Non distribuire automaticamente la nuova regola delle conferme a client che non hanno superato i test di compatibilità.

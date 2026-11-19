@@ -49,6 +49,11 @@ assert.ok(!/--only[^\n]*functions:deleteOwnVargaAccount/.test(standardDeploy),
 // old web/iOS/Android clients. Deploy indexes and rules in separate approvals.
 assert.ok(!standardDeploy.includes("--only firestore:rules,firestore:indexes"),
   "Routine function deployment must never update Firestore rules/indexes");
+const formerAutoDeploy = read(".github/workflows/deploy-self-registration.yml");
+assert.ok(!formerAutoDeploy.includes("npx --yes firebase-tools@latest deploy") &&
+  !formerAutoDeploy.includes("credentials_json:") &&
+  !formerAutoDeploy.includes("FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B"),
+  "Legacy registration workflow must be test-only, never a production Firestore deploy");
 const stagedChat = read(".github/workflows/deploy-firestore-chat-protected.yml");
 for (const marker of ["workflow_dispatch:", "firebase-private-chat-production",
   "required_reviewers", "APPROVE_INDEXES_ONLY", "APPROVE_RULES_ONLY",

@@ -64,4 +64,12 @@ assert.ok(app.includes("if (!currentUser || !canManageData()) {") &&
   app.includes("gpsUpdateRequests = [];"),
   "Non-admin client must not run global GPS queue listener");
 
+const appNoticeRules = rules.match(/match \/appNotifications\/\{eventId\} \{([\s\S]*?)\n    \}/);
+assert.ok(appNoticeRules, "Missing explicit appNotifications security rule");
+for (const pattern of [/createdByUid/, /request\.auth\.uid/, /createdAt/, /allow update, delete: if isAdmin\(\)/]) {
+  assert.match(appNoticeRules[1], pattern, "Notification event ownership regression");
+}
+assert.ok(!catchAll.includes('"appNotifications"'),
+  "Global event collection must not inherit unrestricted catchall writes");
+
 console.log("Security policy and privacy content regression checks passed.");

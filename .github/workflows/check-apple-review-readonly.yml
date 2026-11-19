@@ -32,8 +32,9 @@ jobs:
           node --check scripts/test-apple-review-firestore-rules.cjs
           node --check scripts/test-apple-review-storage-rules.cjs
           node --check scripts/test-account-deletion-firestore-emulator.cjs
+          node --check scripts/test-account-deletion-auth-firestore-emulator.cjs
           node scripts/check-fatto-whazzup-immutable.js
           node scripts/check-fatto-whazzup-isolation.js
           node scripts/check-auth-stability-contract.js
-      - name: Test read-only reviewer claims in local Firestore and Storage emulators (never production)
-        run: npx firebase emulators:exec --only firestore,storage --project demo-review-isolation "node scripts/test-apple-review-firestore-rules.cjs && node scripts/test-apple-review-storage-rules.cjs && node scripts/test-account-deletion-firestore-emulator.cjs"
+      - name: Test reviewer isolation and real synthetic Auth+Firestore account deletion (emulators only)
+        run: npx firebase emulators:exec --only auth,firestore,storage --project demo-review-isolation "node scripts/test-apple-review-firestore-rules.cjs && node scripts/test-apple-review-storage-rules.cjs && node scripts/test-account-deletion-firestore-emulator.cjs && node scripts/test-account-deletion-auth-firestore-emulator.cjs"

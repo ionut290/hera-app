@@ -15,7 +15,7 @@ class MockHttpsError extends Error {
 function setup() {
   const users = new Set(["worker-1", "worker-2"]);
   const docs = [
-    { collection: "documents", id: "private-1", ownerUserId: "worker-1", visibility: "personal", storagePath: "documents/worker-1/doc1/private.pdf" },
+    { collection: "documents", id: "private-1", ownerUserId: "worker-1", visibility: "personal", storagePath: "documents/worker-1/doc1/private.pdf", thumbnailPath: "documents/worker-1/doc1/thumbnail.jpg" },
     { collection: "documents", id: "shared-1", ownerUserId: "worker-1", visibility: "shared", storagePath: "documents/worker-1/doc2/shared.pdf" },
     { collection: "documents", id: "other-1", ownerUserId: "worker-2", visibility: "personal", storagePath: "documents/worker-2/doc3/other.pdf" },
     { collection: "documentReminderAcknowledgements", id: "ack-1", userId: "worker-1" },
@@ -119,7 +119,7 @@ async function rejectedCode(promise, expected) {
   });
   assert.equal(result.deleted, true);
   assert.deepEqual(state.removedUsers, ["worker-1"]);
-  assert.deepEqual(state.removedFiles, ["documents/worker-1/doc1/private.pdf"]);
+  assert.deepEqual(state.removedFiles, ["documents/worker-1/doc1/private.pdf", "documents/worker-1/doc1/thumbnail.jpg"]);
   assert.ok(state.removed.includes("documents/private-1"));
   assert.ok(state.removed.includes("platformUsers/worker-1"));
   assert.ok(state.removed.includes("privateDocuments/worker-1"));

@@ -55,11 +55,11 @@
         }
         const result = await plugin.signInWithApple({ skipNativeAuth: true });
         const idToken = result?.credential?.idToken;
-        const rawNonce = result?.credential?.nonce;
+        const rawNonce = result?.credential?.nonce; // Capacitor FirebaseAuthentication: credential.nonce is the raw nonce
         if (!idToken || !rawNonce) {
           throw new Error("Apple non ha restituito i dati di accesso necessari. Riprova.");
         }
-        const credential = provider.credential({ idToken: idToken, rawNonce: rawNonce });
+        const credential = provider.credential({ idToken, rawNonce });
         await currentAuth.signInWithCredential(credential);
       } else {
         await currentAuth.signInWithPopup(provider);
@@ -86,9 +86,8 @@
       if (confirmation !== null) alert("Conferma non valida. Account non eliminato.");
       return;
     }
-    // When deleting an Apple-linked account on iOS, request a fresh code,
-    // reauthenticate the SAME Firebase user and revoke the Apple credential.
-    // If Apple does not provide a code, account deletion must still proceed.
+    // Apple requires credential revocation when deleting an Apple-linked account.
+    // Request a fresh Apple code, reauthenticate the same Firebase account, then revoke.
     if (nativePlatform() === "ios" &&
         user.providerData?.some((provider) => provider.providerId === "apple.com")) {
       const plugin = window.Capacitor?.Plugins?.FirebaseAuthentication;
@@ -96,15 +95,15 @@
         try {
           const fresh = await plugin.signInWithApple({ skipNativeAuth: true });
           const appleProvider = new firebase.auth.OAuthProvider("apple.com");
-          const credential = appleProvider.credential({
-            idToken: fresh?.credential?.idToken,
-            rawNonce: fresh?.credential?.nonce
-          });
-          await user.reauthenticateWithCredential(credential);
+          const idToken = fresh?.credential?.idToken;
+          const rawNonce = fresh?.credential?.nonce;
           const code = fresh?.credential?.authorizationCode;
-          if (code && plugin.revokeAccessToken) {
-            await plugin.revokeAccessToken({ token: code });
+          if (!idToken || !rawNonce || !code || typeof plugin.revokeAccessToken !== "function") {
+            throw new Error("Impossibile ottenere le credenziali per la revoca dell'accesso Apple.");
           }
+          const credential = appleProvider.credential({ idToken, rawNonce });
+          await user.reauthenticateWithCredential(credential);
+          await plugin.revokeAccessToken({ token: code });
         } catch (error) {
           alert("Verifica Apple non riuscita: " + errorText(error) +
             "\nL'account non è stato eliminato.");

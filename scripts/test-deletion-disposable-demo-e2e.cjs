@@ -55,6 +55,29 @@ async function assertDeleted(auth, uid) {
     err => err?.code === "auth/user-not-found", "Target disposable Auth identity must be missing");
 }
 
+// Extra narrow checks for legacy schemas that the common 20-check gate
+// does not inspect (especially the email-queue creator and nested states).
+async function assertNoLegacySideLinks(db, uid, email) {
+  const queries = [
+    ["notificationEmailQueue", "createdBy", email],
+    ["appNotifications", "createdByEmail", email],
+    ["notifications", "readBy." + uid, true],
+    ["notifications", "readBy." + uid, false],
+    ["notifications", "deletedBy." + uid, true],
+    ["notifications", "deletedBy." + uid, false],
+    ["documentReminderAcknowledgements", "userId", uid],
+    ["alertReadConfirmations", "utente", uid],
+    ["userAlertAcknowledgements", "userId", uid],
+    ["passwordRecoveryChallenges", "uid", uid]
+  ];
+  for (const [col, field, value] of queries) {
+    const match = await db.collection(col).where(field, "==", value).select(field).limit(1).get();
+    assert.equal(match.empty, true,
+      "Legacy demo identity linked to a record: STOP before any deletion");
+  }
+  return queries.length;
+}
+
 async function live() {
   assert.equal(process.env.APPROVE_DISPOSABLE_DEMO_DELETION, "1",
     "Only a human-approved protected workflow may run destructive demo test");
@@ -70,6 +93,7 @@ async function live() {
     // The account must start DISABLED and have no unrelated Firestore links.
     assert.equal(record.disabled, true);
     assert.equal(await assertNoWorkLinks(db, uid, ALIAS), 20);
+    assert.equal(await assertNoLegacySideLinks(db, uid, ALIAS), 10);
     const original = await auth.getUser(uid);
     validateDisposable(original);
     assert.equal(original.disabled, true);
@@ -107,6 +131,7 @@ async function live() {
     assert.equal(preflight.data?.result?.personalDocuments, 0,
       "Demo has personal documents and is NOT safe to delete");
     assert.equal(await assertNoWorkLinks(db, uid, ALIAS), 20);
+    assert.equal(await assertNoLegacySideLinks(db, uid, ALIAS), 10);
     assert.equal((await auth.getUser(uid)).disabled, false);
     assertDemoAccount({ ...(await auth.getUser(uid)), disabled: true });
 
@@ -120,6 +145,7 @@ async function live() {
     assert.equal(erased.data?.result?.deleted, true, "No deleted=true acknowledgment");
     await assertDeleted(auth, uid);
     assert.equal(await assertNoWorkLinks(db, uid, ALIAS), 20);
+    assert.equal(await assertNoLegacySideLinks(db, uid, ALIAS), 10);
     deletionConfirmed = true;
     console.log("PASS: one exact disposable demo Firebase Auth account deleted via REAL callable; 20 work-link checks still empty; no other account targeted.");
   } finally {
@@ -156,6 +182,12 @@ async function selfTest() {
     { ...record, providerData: [{ providerId: "apple.com" }] },
     { ...record, metadata: { creationTime: "2024-11-19T12:00:00Z" } }
   ]) assert.throws(() => validateDisposable(other));
+  const mockDb = { collection: () => ({
+    where: () => ({ select: () => ({ limit: () => ({
+      get: async () => ({ empty: true })
+    }) }) })
+  }) };
+  assert.equal(await assertNoLegacySideLinks(mockDb, record.uid, ALIAS), 10);
   await assertDeleted({ getUser: async () => {
     const e = Error("not found");e.code="auth/user-not-found";throw e;
   } }, "fake-disposable");

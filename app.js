@@ -26380,6 +26380,13 @@ function stopPresenceHeartbeat() {
 
 function subscribeGpsRequests() {
   if (unsubscribeGpsRequests) unsubscribeGpsRequests();
+  unsubscribeGpsRequests = null;
+  // Only administrators display the global GPS approval queue. Never issue a
+  // broad read of workers' precise coordinates for an ordinary user session.
+  if (!currentUser || !canManageData()) {
+    gpsUpdateRequests = [];
+    return;
+  }
   unsubscribeGpsRequests = db
     .collection("gpsUpdateRequests")
     .orderBy("createdAt", "desc")

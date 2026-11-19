@@ -18,11 +18,12 @@ L'inventario è una **mappa di aree da verificare**, non una prova che le singol
 | Firebase Storage `documents/{uid}/...` | Rimuove allegati personali noti | Percorsi convalidati; non rimuove file richiamati da documenti aziendali. Percorsi legacy ignoti fanno fallire il preflight |
 | `documentReminderAcknowledgements`, `alertReadConfirmations`, `userAlertAcknowledgements`, `userAlerts`, `passwordRecoveryChallenges` | Rimuove conferme e sfide di recupero password per l’UID dell’utente | Le password-reset challenges vengono eliminate solo quando la colonna `uid` corrisponde al richiedente; la corrispondenza di altre collezioni dipende dallo schema |
 | `personale` | Scollega `linkedUserId` e attributi di login derivati; conserva la scheda aziendale | Non cancella il rapporto di lavoro, la foto aziendale e i documenti amministrativi |
+| `notifications` (notifiche centrali) | Rimuove l’`actorId`, anonimizza `actorName` se corrispondono all’UID cancellato, elimina l’UID da `recipientUserIds`, `readBy`, `deletedBy` | Conserva il messaggio di lavoro e gli altri destinatari; il testo e `metadata` richiedono una distinta valutazione privacy |
 
 ## Aree osservate da esaminare prima del rilascio
 | Area e collezioni osservate | Rischio da verificare | Stato |
 | --- | --- | --- |
-| Messaggi e notifiche: `chatMessages`, `notifications`, `appNotifications`, `notificationEmailQueue`, `hoursDeadlineAlerts` | UIDs, email, testo dei messaggi, liste destinatari: definire cancellazione, anonimizzazione o conservazione motivata | **Non inventariato a livello di campi** |
+| Messaggi e notifiche non interamente coperte: `chatMessages`, `appNotifications`, `notificationEmailQueue`, `hoursDeadlineAlerts`, testi e metadata di `notifications` | UIDs, email, testo dei messaggi, liste destinatari: definire cancellazione, anonimizzazione o conservazione motivata | **Non inventariato a livello di campi** |
 | Ore e registri operativi: `oreReports`, `oreApprovalRequests`, `oreLocks`, `ferieColleghi`, `operatorCommessaHistory` | Rapporti lavorativi ed eventuali obblighi di conservazione; evitare la perdita delle ore degli altri dipendenti | **Retention da approvare** |
 | Log, sicurezza e autorizzazioni: `activityLogs`, `auditLogsWhazzup`, `operatorUserLinkHistory`, `securityPrivate`, `passwordRecoveryAttempts`, `passwordRecoveryChallenges`, `appErrorGroups` | Dati di sicurezza e storico di accesso; definire minimizzazione e tempi di conservazione | **Retention da approvare** |
 | Geolocalizzazione e impianti: `gpsUpdateRequests`, `impianti`, `impiantoSafetyChecks`, `operatorPositions` | Identificativi operatore, posizione e cronologia: verificare se ci sono dati personali persistenti | **Non inventariato a livello di campi** |

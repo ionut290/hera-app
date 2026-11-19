@@ -1,0 +1,109 @@
+name: App Review demo account - approved read-only preflight
+
+# Does NOT create or delete Firebase users. Never runs on push or PR.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Type APPROVE_DEMO_METADATA_READ_ONLY"
+        type: string
+        required: true
+      reviewed_sha:
+        description: "Exact reviewed HEAD SHA on main"
+        type: string
+        required: true
+      demo_uid:
+        description: "Disposable Firebase Auth UID explicitly marked appReviewDemo"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: varga-app-review-demo-preflight
+  cancel-in-progress: false
+
+jobs:
+  review-only:
+    name: Inspect isolated demo account links WITHOUT writing
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'APPROVE_DEMO_METADATA_READ_ONLY' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: firebase-account-deletion-production
+    steps:
+      - name: Validate exact SHA and existing reviewer-protected environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_SHA: ${{ inputs.reviewed_sha }}
+          DEMO_UID: ${{ inputs.demo_uid }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "ionut290/hera-app" ]] || exit 1
+          [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ && "$APPROVED_SHA" == "$GITHUB_SHA" ]] || {
+            echo "::error::Exact reviewed main SHA required"; exit 1;
+          }
+          [[ "$DEMO_UID" =~ ^[a-zA-Z0-9_-]{1,128}$ ]] || {
+            echo "::error::Invalid demo UID format"; exit 1;
+          }
+          RESPONSE="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/environments/firebase-account-deletion-production")" || {
+              echo "::error::Protected environment not found"; exit 1;
+            }
+          printf '%s' "$RESPONSE" | jq -e \
+            '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' >/dev/null || {
+              echo "::error::Mandatory reviewer not configured"; exit 1;
+            }
+
+      - name: Checkout the reviewed commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.reviewed_sha }}
+      - name: Run isolated synthetic preflight and prevent mutations
+        env:
+          APPROVED_SHA: ${{ inputs.reviewed_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          node --check scripts/check-app-review-demo-readiness.cjs
+          node scripts/check-app-review-demo-readiness.cjs --self-test
+          # Firebase app() teardown is allowed; database writes are not.
+          if grep -En '\.(set|create|add|update|recursiveDelete|deleteUser|setCustomUserClaims|runTransaction|batch|bulkWriter)\s*\(' \
+              scripts/check-app-review-demo-readiness.cjs; then
+            echo "::error::Unexpected mutation API in demo preflight"; exit 1;
+          fi
+
+      - name: Install Firebase Admin SDK
+        run: npm ci --prefix functions --no-audit --no-fund
+
+      - name: Validate project-limited Firebase credential
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/varga-demo-audit.json"
+          python3 - "$RUNNER_TEMP/varga-demo-audit.json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf8") as f:
+              account = json.load(f)
+          assert account.get("project_id") == "hera-app-6cd2b", "Wrong project"
+          PY
+
+      - name: Check custom claim and exact UID references (READ ONLY)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/varga-demo-audit.json
+          ALLOW_READ_ONLY_DEMO_AUDIT: "1"
+          REVIEW_DEMO_UID: ${{ inputs.demo_uid }}
+        run: node scripts/check-app-review-demo-readiness.cjs --live
+
+      - name: Destroy temporary Firebase credential
+        if: always()
+        run: rm -f "$RUNNER_TEMP/varga-demo-audit.json"

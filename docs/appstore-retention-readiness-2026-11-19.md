@@ -35,6 +35,18 @@ Il codice prevede una **modalità live solo in lettura**, disabilitata finché n
 
 È un controllo preliminare, **non** un audit completo GDPR. I campi `resolvedAt`, `retentionPurpose`, `legalHold` e `retentionException` sono requisiti conservativi di classificazione, **non** campi che risultano uniformemente presenti nel database. Nessuna riga viene eliminata in automatico. I riferimenti di chiusura delle commesse, le conversazioni private, le foto, le copie Drive, gli export, i backup e gli allegati Storage richiedono verifiche e decisioni a parte.
 
+
+## Workflow manuale di inventario predisposto (NON eseguito)
+
+La PR introduce `.github/workflows/audit-retention-readonly-protected.yml`. La sua attivazione richiede tutti i seguenti gate:
+
+- `workflow_dispatch` **esclusivamente da main**, SHA completo corrispondente al commit revisionato, e stringhe deliberate `APPROVE_AGGREGATE_READ_ONLY_AUDIT` e `RETENTION_METADATA_AUDIT_APPROVED`.
+- Environment `firebase-private-chat-production` già esistente e protetto da reviewer obbligatorio; un ambiente mancante o senza revisori deve causare il fallimento.
+- Credenziali Firebase custodite nei secrets GitHub, verifica del progetto `hera-app-6cd2b`, prove sintetiche e controllo statico di assenza di mutazioni (eccezione per la chiusura dell'istanza locale Firebase Admin SDK).
+- Interrogazioni `select` di campi limitati, senza allegati né testo. Restituisce solo conteggi per categorie di riesame; non cambia tempi di retention o dati Firebase.
+
+**Stato al 19/11/2026:** workflow e test soltanto nel ramo draft; nessun audit live eseguito e nessuna credenziale di produzione letta. Non usare i numeri del test sintetico come prova sui dati reali. Il workflow non implementa cancellazioni, TTL o anonimizzazioni temporizzate.
+
 ## Bloccanti e ordine di rilascio
 
 1. Verificare titolarità e accordi GDPR di aziende e dipendenti, classificazioni/retention ed eccezioni, e definire la gestione dei dati in Drive e nei backup.

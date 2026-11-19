@@ -1,0 +1,80 @@
+name: VARGA CANTIERI Apple profile read-only check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Validate Apple API, active profile and distribution certificate
+    runs-on: macos-26
+    timeout-minutes: 15
+    environment: ios-internal-testflight
+    env:
+      IOS_APPSTORE_KEY_ID: ${{ secrets.IOS_APPSTORE_KEY_ID }}
+      IOS_APPSTORE_ISSUER_ID: ${{ secrets.IOS_APPSTORE_ISSUER_ID }}
+      IOS_APPSTORE_PRIVATE_KEY_BASE64: ${{ secrets.IOS_APPSTORE_PRIVATE_KEY_BASE64 }}
+      IOS_APPLE_TEAM_ID: ${{ secrets.IOS_APPLE_TEAM_ID }}
+      IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+      IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+    steps:
+      - name: Checkout only the approved main commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Test Apple profile downloader without real secrets
+        run: |
+          node --check scripts/fetch-ios-appstore-profile.js
+          node scripts/check-ios-profile-fetch.js
+
+      - name: Download VARGA profile from Apple API without exposing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$IOS_APPLE_TEAM_ID" = "NJ64236Q54"
+          node scripts/fetch-ios-appstore-profile.js "$RUNNER_TEMP/varga-profile-preflight.mobileprovision"
+
+      - name: Verify Apple capability, team, expiry and certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/varga-profile-preflight.p12"
+          openssl pkcs12 -in "$RUNNER_TEMP/varga-profile-preflight.p12" -clcerts -nokeys -passin env:IOS_DISTRIBUTION_CERTIFICATE_PASSWORD -out "$RUNNER_TEMP/varga-leaf.pem"
+          openssl x509 -in "$RUNNER_TEMP/varga-leaf.pem" -outform DER -out "$RUNNER_TEMP/varga-leaf.der"
+          security cms -D -i "$RUNNER_TEMP/varga-profile-preflight.mobileprovision" > "$RUNNER_TEMP/varga-profile-preflight.plist"
+          python3 - "$RUNNER_TEMP/varga-profile-preflight.plist" "$RUNNER_TEMP/varga-leaf.der" <<'PY'
+          import datetime, os, plistlib, sys
+          from pathlib import Path
+          p = plistlib.loads(Path(sys.argv[1]).read_bytes())
+          cert = Path(sys.argv[2]).read_bytes()
+          e = p.get("Entitlements", {})
+          team = os.environ["IOS_APPLE_TEAM_ID"]
+          if e.get("application-identifier") != team + ".it.vargacantieri.hera":
+              raise SystemExit("Unexpected Apple app ID")
+          if "Default" not in e.get("com.apple.developer.applesignin", []):
+              raise SystemExit("Sign in with Apple entitlement missing")
+          if team not in p.get("TeamIdentifier", []):
+              raise SystemExit("Apple team does not match")
+          if e.get("get-task-allow") is not False:
+              raise SystemExit("Not an App Store distribution profile")
+          if "ProvisionedDevices" in p or p.get("ProvisionsAllDevices"):
+              raise SystemExit("Unexpected developer/enterprise profile")
+          if p.get("Name") != "VARGA CANTIERI - TestFlight":
+              raise SystemExit("Unexpected provisioning profile")
+          if not p.get("ExpirationDate") or p["ExpirationDate"] <= datetime.datetime.utcnow():
+              raise SystemExit("Provisioning profile expired")
+          if cert not in p.get("DeveloperCertificates", []):
+              raise SystemExit("Apple Distribution certificate does not match profile")
+          print("PASS: Apple API, VARGA CANTIERI profile, Apple entitlement, certificate and expiry.")
+          PY
+
+      - name: Remove private assets from temporary runner
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/varga-profile-preflight.mobileprovision" "$RUNNER_TEMP/varga-profile-preflight.p12" "$RUNNER_TEMP/varga-profile-preflight.plist" "$RUNNER_TEMP/varga-leaf.pem" "$RUNNER_TEMP/varga-leaf.der"

@@ -1,0 +1,94 @@
+name: Firebase published Storage rules - protected READ ONLY audit
+
+# Only GET Firebase Rules API releases and rulesets. No changes to deployed rules.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Type APPROVE_PUBLISHED_RULES_READ_ONLY"
+        required: true
+        type: string
+      reviewed_sha:
+        description: "Exact reviewed current main SHA"
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: varga-firebase-rules-published-read-only
+  cancel-in-progress: false
+jobs:
+  guard:
+    name: Verify exact main SHA and environment protection
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'APPROVE_PUBLISHED_RULES_READ_ONLY' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Reject wrong SHA, repo or unprotected environment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "ionut290/hera-app" ]] || exit 1
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ && "$SHA" == "$GITHUB_SHA" ]] || {
+            echo "::error::Current exact main SHA required"; exit 1;
+          }
+          RESPONSE="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/environments/firebase-account-deletion-production")" || exit 1
+          printf '%s' "$RESPONSE" | jq -e \
+            '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' >/dev/null || {
+              echo "::error::Required reviewer protection missing"; exit 1;
+            }
+  audit:
+    needs: guard
+    if: ${{ needs.guard.result == 'success' }}
+    runs-on: ubuntu-24.04
+    environment: firebase-account-deletion-production
+    timeout-minutes: 20
+    steps:
+      - name: Checkout audited commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.reviewed_sha }}
+          persist-credentials: false
+      - name: Self-test read-only analyzer
+        env:
+          SHA: ${{ inputs.reviewed_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SHA"
+          node --check scripts/audit-published-storage-rules.cjs
+          node scripts/audit-published-storage-rules.cjs --self-test
+          if grep -En '\.(deleteUser|updateUser|setCustomUserClaims|write|set|update|create|patch|put)\s*\(' \
+             scripts/audit-published-storage-rules.cjs; then
+            echo "::error::Unexpected mutation API in read-only audit"; exit 1
+          fi
+      - name: Install locked Google Auth client
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Validate scoped service account without showing secrets
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/varga-rules-readonly.json"
+          python3 - "$RUNNER_TEMP/varga-rules-readonly.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding="utf8") as f: service=json.load(f)
+          assert service.get("project_id")=="hera-app-6cd2b"
+          PY
+      - name: Get PUBLISHED Storage releases via read-only Firebase Rules API
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/varga-rules-readonly.json
+          APPROVE_PUBLISHED_RULES_READ_ONLY: "1"
+        run: node scripts/audit-published-storage-rules.cjs --live
+      - name: Destroy scoped temporary credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/varga-rules-readonly.json"

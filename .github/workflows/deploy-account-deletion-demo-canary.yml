@@ -1,0 +1,162 @@
+name: Firebase account deletion - demo-only protected canary
+
+# Manual and protected: deploys only a hard-coded demo-only callable.
+# It never authorizes deletion of normal worker/customer accounts.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Exact approval APPROVE_DEMO_CANARY_ONLY"
+        type: choice
+        required: true
+        default: DO_NOT_DEPLOY
+        options:
+          - DO_NOT_DEPLOY
+          - APPROVE_DEMO_CANARY_ONLY
+      reviewed_sha:
+        description: "Exact 40-character HEAD SHA of reviewed main"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: varga-account-deletion-production
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Verify exact SHA, hard-coded demo lock and protected environment
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'APPROVE_DEMO_CANARY_ONLY' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Check immutable reviewed main commit and required reviewer environment
+        env:
+          APPROVED_SHA: ${{ inputs.reviewed_sha }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "ionut290/hera-app" ]] || exit 1
+          [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ && "$APPROVED_SHA" == "$GITHUB_SHA" ]] || {
+            echo "::error::Reviewed SHA must match current main exactly"; exit 1;
+          }
+          ENV_JSON="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/environments/firebase-account-deletion-production")" || {
+            echo "::error::Missing existing protected environment"; exit 1;
+          }
+          printf '%s' "$ENV_JSON" | jq -e \
+            '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' >/dev/null || {
+            echo "::error::A human reviewer is mandatory"; exit 1;
+          }
+
+  demo_canary:
+    name: Inspect isolated disabled demo, then deploy DEMO-ONLY callable
+    needs: guard
+    if: ${{ needs.guard.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: firebase-account-deletion-production
+    steps:
+      - name: Checkout only approved commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.reviewed_sha }}
+      - name: Verify canary code and synthetic isolation BEFORE accessing credentials
+        env:
+          APPROVED_SHA: ${{ inputs.reviewed_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          grep -Fxq 'const DEMO_ONLY_RELEASE = true;' functions/account-deletion.js
+          grep -Fq 'auth.token?.appReviewDemo !== true || auth.token?.apple_review !== true' functions/account-deletion.js
+          grep -Fq 'ownAuthRecord.customClaims?.appReviewDemo !== true' functions/account-deletion.js
+          grep -Fq 'APPROVED_DEMO_EMAIL_SHA256' functions/account-deletion.js
+          test -s .github/workflows/deploy-account-deletion-protected.yml
+          grep -Fq '"!functions/account-deletion.js"' .github/workflows/deploy-firebase-functions.yml
+          if grep -E -- '--only .*functions:deleteOwnVargaAccount' .github/workflows/deploy-firebase-functions.yml; then
+            echo "::error::Routine deploy must not include account deletion"; exit 1
+          fi
+          npm ci --no-audit --no-fund
+          node --check functions/account-deletion.js
+          node scripts/check-account-privacy-runtime.js
+          node scripts/prepare-app-review-demo-claims.cjs --self-test
+          npm run check:auth-stability
+
+      - name: Prepare deployed functions with established registration workaround
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix functions --no-audit --no-fund
+          node -e "require('./functions/main.js')"
+          node <<'NODE'
+          const fs=require("node:fs"), path="functions/main.js";
+          const source=fs.readFileSync(path,"utf8");
+          const safe=source
+            .replace(/^const errorReportingFunctions = require\("\.\/error-reporting"\);\r?\n/m,"")
+            .replace(/^\s*errorReportingFunctions,\r?\n/m,"");
+          if(safe===source || safe.includes("errorReportingFunctions") ||
+            !safe.includes('require("./account-deletion")')) {
+            throw Error("Unexpected functions registration; no deployment");
+          }
+          fs.writeFileSync(path,safe);
+          require("./functions/main.js");
+          NODE
+
+      - name: Validate existing scoped Firebase credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/varga-demo-only.json"
+          python3 - "$RUNNER_TEMP/varga-demo-only.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding="utf8") as f:
+              data=json.load(f)
+          assert data.get("project_id")=="hera-app-6cd2b","Wrong Firebase project"
+          PY
+
+      - name: Inspect exact DISABLED demo claims and zero work links (read-only)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/varga-demo-only.json
+          REVIEW_DEMO_EMAIL: "sqadrahera+varga-demo@gmail.com"
+          ALLOW_PROTECTED_DEMO_CLAIM_PREPARATION: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prepare-app-review-demo-claims.cjs --inspect > "$RUNNER_TEMP/demo-inspection.json"
+          node - "$RUNNER_TEMP/demo-inspection.json" <<'NODE'
+          const fs=require("node:fs");
+          const result=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));
+          if(result.mode!=="inspect" || result.disabled!==true ||
+            result.claimsReady!==true || result.workLinkChecks!==20 ||
+            result.accountDeleted!==false) {
+            throw Error("Demo-only deployment blocked: Auth demo must be disabled, fully claimed and unlinked");
+          }
+          console.log("PASS: disabled reviewer demo has BOTH claims and no verified work links.");
+          NODE
+          rm -f "$RUNNER_TEMP/demo-inspection.json"
+
+      - name: Deploy only deleteOwnVargaAccount (hard-coded demo-only)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/varga-demo-only.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14.23.0 deploy \
+            --only functions:deleteOwnVargaAccount \
+            --project hera-app-6cd2b --non-interactive --force
+
+      - name: Remove temporary credential and metadata
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/varga-demo-only.json" "$RUNNER_TEMP/demo-inspection.json"

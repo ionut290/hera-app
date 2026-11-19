@@ -7,11 +7,13 @@ on:
       - main
     paths:
       - "functions/**"
+      # Account deletion is manually deployed with protected reviewer approval only.
+      - "!functions/account-deletion.js"
       - "firestore.rules"
       - "firestore.indexes.json"
       - "firebase.json"
       - ".firebaserc"
-      - ".github/workflows/deploy-firebase-functions.yml"
+      # Workflow configuration changes do not by themselves redeploy production.
 
 permissions:
   contents: read

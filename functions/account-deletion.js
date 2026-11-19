@@ -78,6 +78,21 @@ async function scrubCentralNotifications(db, uid) {
   }
 }
 
+// Preserve work messages, but unlink the deleted user's author identity.
+// Never edit the recipient, message body or job metadata: they can belong to
+// other staff or be necessary for a still-active business conversation.
+async function unlinkSharedAuthor(db, collectionName, identityField, uid, nameField, emailField) {
+  const records = await db.collection(collectionName).where(identityField, "==", uid).get();
+  const deleted = admin.firestore.FieldValue.delete();
+  for (const doc of records.docs) {
+    const data = doc.data() || {};
+    const patch = { [identityField]: deleted };
+    if (Object.prototype.hasOwnProperty.call(data, emailField)) patch[emailField] = deleted;
+    if (Object.prototype.hasOwnProperty.call(data, nameField)) patch[nameField] = "Account eliminato";
+    await doc.ref.update(patch);
+  }
+}
+
 exports.deleteOwnVargaAccount = onCall({
   region: REGION,
   invoker: "public", // Firebase bearer auth is enforced below
@@ -179,6 +194,12 @@ exports.deleteOwnVargaAccount = onCall({
 
     // Shared business notifications must not keep an obsolete Firebase UID.
     await scrubCentralNotifications(db, uid);
+
+    // The operator approved minimising identity in retained work communications.
+    // Only author-linked rows are touched; recipientId, message content and
+    // other participants stay unchanged. TTL/retention are separate controls.
+    await unlinkSharedAuthor(db, "chatMessages", "senderId", uid, "senderName", "senderEmail");
+    await unlinkSharedAuthor(db, "appNotifications", "createdByUid", uid, "createdByName", "createdByEmail");
 
     // Personal private records and authorization links are always owned by UID.
     for (const collection of [

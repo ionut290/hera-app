@@ -86,6 +86,9 @@
       if (confirmation !== null) alert("Conferma non valida. Account non eliminato.");
       return;
     }
+    // Lock immediately, including preflight and Apple revocation. A second tap
+    // must not start a concurrent deletion or revoke the same Apple code twice.
+    deleting = true;
     // Preflight first: do not revoke Apple access if the server already knows
     // that personal files cannot be safely removed.
     let callable;
@@ -95,6 +98,7 @@
       if (check?.data?.ready !== true) throw new Error("Verifica cancellazione non confermata.");
     } catch (error) {
       alert("Impossibile procedere con la cancellazione. " + errorText(error));
+      deleting = false;
       return;
     }
     // Apple requires credential revocation when deleting an Apple-linked account.
@@ -105,6 +109,7 @@
       if (!plugin || typeof plugin.signInWithApple !== "function" ||
           typeof plugin.revokeAccessToken !== "function") {
         alert("Impossibile revocare l'accesso Apple su questo dispositivo. Aggiorna l'app e riprova: l'account non è stato eliminato.");
+        deleting = false;
         return;
       }
       {
@@ -123,11 +128,11 @@
         } catch (error) {
           alert("Verifica Apple non riuscita: " + errorText(error) +
             "\nL'account non è stato eliminato.");
+          deleting = false;
           return;
         }
       }
     }
-    deleting = true;
     const buttons = document.querySelectorAll("[data-delete-varga-account]");
     buttons.forEach((button) => { button.disabled = true; button.textContent = "Eliminazione in corso..."; });
     try {

@@ -105,6 +105,7 @@ jobs:
           python3 -m py_compile scripts/configure-ios-plist.py scripts/configure-ios-firebase.py
           ruby -c scripts/register-ios-firebase-plist.rb
           ruby -c scripts/install-ios-native-geofence.rb
+          ruby -c scripts/install-ios-apple-signin.rb
           ruby -c scripts/configure-ios-distribution-signing.rb
           npm run android:aab:prepare
           test -s www/index.html
@@ -120,6 +121,8 @@ jobs:
           npx cap sync ios
           python3 scripts/mark-ios-native-safe-area.py
           ruby scripts/install-ios-native-geofence.rb
+          ruby scripts/install-ios-apple-signin.rb
+          test -s ios/App/App/App.entitlements
           python3 scripts/configure-ios-plist.py
           swift scripts/prepare-ios-app-icon.swift icons/varga-cantieri-512.png ios/App/App/Assets.xcassets/AppIcon.appiconset
 
@@ -160,6 +163,9 @@ jobs:
           actual_app = profile.get("Entitlements", {}).get("application-identifier")
           if actual_app != expected_app:
               raise SystemExit("App Store profile App ID does not match the approved bundle/team")
+          apple_signin = profile.get("Entitlements", {}).get("com.apple.developer.applesignin", [])
+          if "Default" not in apple_signin:
+              raise SystemExit("Provisioning profile lacks Sign in with Apple; update App ID and regenerate App Store profile")
           if team not in profile.get("TeamIdentifier", []):
               raise SystemExit("App Store profile has the wrong Apple team")
           if profile.get("Entitlements", {}).get("get-task-allow", True):

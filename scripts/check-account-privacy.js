@@ -96,4 +96,27 @@ const cfg = JSON.parse(read("capacitor.config.json"));
 assert.equal(cfg.appId, "it.vargacantieri.hera");
 assert.equal(cfg.plugins.FirebaseAuthentication.skipNativeAuth, true);
 assert.ok(cfg.plugins.FirebaseAuthentication.providers.includes("apple.com"));
+// Retention checks must be opt-in, reviewer-protected and read-only.
+// They must not be confused with a scheduled cleanup or a production deploy.
+const retentionAuditWorkflow = read(".github/workflows/audit-retention-readonly-protected.yml");
+for (const name of [
+  "workflow_dispatch:", "firebase-private-chat-production",
+  "APPROVE_AGGREGATE_READ_ONLY_AUDIT", "RETENTION_METADATA_AUDIT_APPROVED",
+  "required_reviewers", "inputs.reviewed_sha",
+  "ALLOW_READ_ONLY_RETENTION_AUDIT", "--self-test", "--live"
+]) {
+  assert.ok(retentionAuditWorkflow.includes(name), "Missing approved-only retention audit gate: " + name);
+}
+assert.ok(!retentionAuditWorkflow.includes("  push:") &&
+  !retentionAuditWorkflow.includes("  schedule:") &&
+  !retentionAuditWorkflow.includes("firebase-tools deploy") &&
+  !retentionAuditWorkflow.includes("functions:deleteOwnVargaAccount"),
+  "Retention audit must never auto-run, deploy or trigger account deletion");
+const retentionAuditSource = read("scripts/audit-retention-readiness.cjs");
+assert.ok(retentionAuditSource.includes('ALLOW_READ_ONLY_RETENTION_AUDIT') &&
+  retentionAuditSource.includes('assert.equal(serviceAccount.project_id, PROJECT') &&
+  retentionAuditSource.includes('.select(...fields)') &&
+  retentionAuditSource.includes('automatedDeletion: false'),
+  "Retention audit must stay scoped, field-selective and non-destructive");
+
 console.log("PASS: App Review account deletion and Apple Sign In source checks.");

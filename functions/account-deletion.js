@@ -6,6 +6,8 @@ const admin = require("firebase-admin");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
 const REGION = "europe-west1";
+// Explicit default Storage bucket: functions/index.js initializes Admin without storageBucket.
+const STORAGE_BUCKET = "hera-app-6cd2b.firebasestorage.app";
 const MAX_AUTH_AGE_SECONDS = 600;
 
 function validUserId(value) {
@@ -90,7 +92,7 @@ exports.deleteOwnVargaAccount = onCall({
     // Do not destroy business files, shared geodata, timesheets, commesse or
     // records belonging to other people. Remove personal files before metadata.
     if (paths.length) {
-      const bucket = admin.storage().bucket();
+      const bucket = admin.storage().bucket(STORAGE_BUCKET);
       const personalIds = new Set(personal.map((doc) => doc.id));
       for (const path of new Set(paths)) {
         // Retain objects also referenced by company/shared document metadata.

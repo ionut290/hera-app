@@ -53,7 +53,7 @@ async function loadPushUsers() {
       pushToken: String(data.pushToken || "").trim(),
       labels
     };
-  }).filter((user) => user.pushToken);
+  }); // Keep profiles without push tokens for ambiguity checks.
 }
 
 function userMatches(user, rawValue) {
@@ -64,6 +64,36 @@ function userMatches(user, rawValue) {
     if (label && value && (label.includes(value) || value.includes(label))) return true;
   }
   return false;
+}
+
+/**
+ * Only deliver a personal push when ONE user can be identified among ALL
+ * platform profiles, including profiles without a push token. Prefer exact
+ * UID/email/name identity labels; ambiguous exact or fuzzy matches fail closed.
+ */
+function resolveUniquePushUser(users, rawValue) {
+  const value = normalize(rawValue);
+  if (!value) return null;
+  const exact = users.filter((user) => user.labels.has(value));
+  if (exact.length) return exact.length === 1 ? exact[0] : null;
+  const fuzzy = users.filter((user) => userMatches(user, rawValue));
+  return fuzzy.length === 1 ? fuzzy[0] : null;
+}
+
+/**
+ * For private chats, never try fuzzy names. A recipientId must be a unique
+ * authenticated Firebase UID, or a unique exact legacy email. Unmatched or
+ * ambiguous addresses receive no push at all.
+ */
+function resolvePrivateChatRecipient(users, recipientId) {
+  const raw = String(recipientId || "").trim();
+  if (!raw) return null;
+  const value = normalize(raw);
+  const exact = users.filter((user) =>
+    normalize(user.uid) === value ||
+    (raw.includes("@") && normalize(user.email) === value)
+  );
+  return exact.length === 1 ? exact[0] : null;
 }
 
 async function clearInvalidTokens(users, invalidTokens) {
@@ -143,11 +173,13 @@ exports.notifyAndroidChatMessage = onDocumentCreated(
     const senderEmail = normalize(message.senderEmail);
     const recipientId = String(message.recipientId || "").trim();
 
-    const recipients = users.filter((user) => {
-      const isSender = user.labels.has(senderId) || user.labels.has(senderEmail);
-      if (isSender) return false;
-      return recipientId ? userMatches(user, recipientId) : true;
-    });
+    const directRecipient = recipientId ? resolvePrivateChatRecipient(users, recipientId) : null;
+    const recipients = (recipientId ? (directRecipient ? [directRecipient] : []) : users)
+      .filter((user) => {
+        const isSender = normalize(user.uid) === senderId ||
+          (senderEmail && normalize(user.email) === senderEmail);
+        return !isSender;
+      });
 
     const senderName = String(message.senderName || "Nuovo messaggio").trim();
     const result = await sendToUsers(recipients, {
@@ -189,9 +221,14 @@ exports.notifyAndroidHoursInserted = onDocumentCreated(
     if (!rows.length) return null;
 
     const users = await loadPushUsers();
-    for (const user of users) {
-      const matchingRows = rows.filter((row) => userMatches(user, row.operatorName));
-      if (!matchingRows.length) continue;
+    const matchedRowsByUser = new Map();
+    for (const row of rows) {
+      const user = resolveUniquePushUser(users, row.operatorName);
+      if (!user || !user.pushToken) continue; // Never guess a personal recipient.
+      if (!matchedRowsByUser.has(user.uid)) matchedRowsByUser.set(user.uid, { user, rows: [] });
+      matchedRowsByUser.get(user.uid).rows.push(row);
+    }
+    for (const { user, rows: matchingRows } of matchedRowsByUser.values()) {
       const total = matchingRows.reduce((sum, row) => sum + row.hours, 0);
       const commesse = [...new Set(matchingRows.map((row) => row.commessaName).filter(Boolean))];
       await sendToUsers([user], {
@@ -252,8 +289,12 @@ exports.notifyAndroidSquadraAssignment = onDocumentWritten(
     const users = await loadPushUsers();
     const commessaName = String(after.commessaNome || "Commessa");
     const date = String(after.riferimentoData || after.dateKey || "");
-    for (const user of users) {
-      if (added.some((operator) => userMatches(user, operator))) {
+    const uniquelyResolved = new Map();
+    for (const operator of added) {
+      const user = resolveUniquePushUser(users, operator);
+      if (user && user.pushToken) uniquelyResolved.set(user.uid, user);
+    }
+    for (const user of uniquelyResolved.values()) {
         await sendToUsers([user], {
           title: "👷 Aggiunto a una squadra",
           body: `Sei stato aggiunto alla squadra di ${commessaName}${date ? ` per il ${date}` : ""}.`,
@@ -261,7 +302,6 @@ exports.notifyAndroidSquadraAssignment = onDocumentWritten(
           data: { commessaId: event.params.commessaId, date },
           tag: `squadra-${event.params.commessaId}-${date}-${user.uid}`
         });
-      }
     }
     return null;
   }

@@ -79,6 +79,7 @@ jobs:
           grep -Fq 'ownAuthRecord.customClaims?.appReviewDemo !== true' functions/account-deletion.js
           grep -Fq 'APPROVED_DEMO_EMAIL_SHA256' functions/account-deletion.js
           test -s .github/workflows/deploy-account-deletion-protected.yml
+          grep -Fq '"!functions/account-deletion.js"' .github/workflows/deploy-firebase-functions.yml
           if grep -E -- '--only .*functions:deleteOwnVargaAccount' .github/workflows/deploy-firebase-functions.yml; then
             echo "::error::Routine deploy must not include account deletion"; exit 1
           fi

@@ -50,6 +50,7 @@ const sandbox = {
   exports: {},
   require: (name) => {
     if (name === "firebase-admin") return adminHarness;
+    if (name === "node:crypto") return require("node:crypto");
     if (name === "firebase-functions/v2/https") return {
       HttpsError: MockHttpsError,
       onCall: (_opts, handler) => handler

@@ -162,6 +162,36 @@ async function selfTest() {
     metadata: { creationTime: "2026-11-19T11:00:00Z" }, providerData: []
   };
   assertDemoAccount(demo);
+  // Test the real lockdown function with a purely synthetic Firebase Admin stub.
+  let record = { ...demo };
+  let revoked = 0;
+  const fakeAuth = {
+    async getUser(uid) {
+      assert.equal(uid, demo.uid);
+      return { ...record };
+    },
+    async updateUser(uid, fields) {
+      assert.equal(uid, demo.uid);
+      record = { ...record, ...fields };
+    },
+    async setCustomUserClaims(uid, claims) {
+      assert.equal(uid, demo.uid);
+      record = { ...record, customClaims: claims };
+    },
+    async revokeRefreshTokens(uid) {
+      assert.equal(uid, demo.uid);
+      revoked++;
+    }
+  };
+  record = { ...record, disabled: false };
+  await lockDown(fakeAuth, demo.uid);
+  assert.equal(record.disabled, true);
+  assert.deepEqual(record.customClaims, {});
+  assert.equal(revoked, 1);
+  // A different, real user must never be changed, even by cleanup.
+  record = { ...record, email: "someone-else@example.test", disabled: false };
+  await assert.rejects(() => lockDown(fakeAuth, demo.uid), /Refuse to lock/);
+  assert.equal(record.disabled, false);
   for (const bad of [
     { ...demo, disabled: false },
     { ...demo, email: "other@example.test" },

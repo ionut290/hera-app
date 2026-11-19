@@ -3,7 +3,7 @@
 // Run only in a local Firestore emulator; never against a Firebase project.
 // Example: npx firebase emulators:exec --only firestore --project demo-review-isolation //   "node scripts/test-apple-review-firestore-rules.cjs"
 const fs = require("node:fs");
-const { doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc } = require("firebase/firestore");
+const { doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit } = require("firebase/firestore");
 const assert = require("node:assert/strict");
 const { initializeTestEnvironment, assertFails, assertSucceeds } =
   require("@firebase/rules-unit-testing");
@@ -30,6 +30,10 @@ async function run() {
         uid: "normalUser", email: "normal@example.test",
         statoAccount: "attivo", accountStatus: "attivo", role: "user"
       });
+      await setDoc(doc(db, "platformUsers/otherUser"), {
+        uid: "otherUser", email: "other@example.test",
+        statoAccount: "attivo", accountStatus: "attivo", role: "user"
+      });
       await setDoc(doc(db, "platformUsers/reviewerUser"), {
         uid: "reviewerUser", email: "reviewer@example.test",
         statoAccount: "attivo", accountStatus: "attivo", role: "user"
@@ -41,10 +45,26 @@ async function run() {
       await setDoc(doc(db, "oreReports/one"), { date: "2026-11-12" });
       await setDoc(doc(db, "sharedStaticViews/currentTeam"), { demo: false });
       await setDoc(doc(db, "appleReviewDemo/onlySynthetic"), {title: "Synthetic exercise", demo: true});
+      // Each fixture is synthetic; the tombstone must stay private after
+      // the recipient's account is deleted.
+      for (const [id, senderId, recipientId, createdAt] of [
+        ["public", "otherUser", "", 1],
+        ["incoming", "otherUser", "normalUser", 2],
+        ["outgoing", "normalUser", "otherUser", 3],
+        ["otherSecret", "otherUser", "reviewerUser", 4],
+        ["deletedRecipient", "normalUser", "deleted-recipient-example", 5]
+      ]) {
+        await setDoc(doc(db, "chatMessages/" + id), {
+          senderId, recipientId, createdAt, text: "Synthetic chat " + id
+        });
+      }
     });
 
     const normal = testEnv.authenticatedContext("normalUser", {
       email: "normal@example.test", email_verified: true
+    }).firestore();
+    const other = testEnv.authenticatedContext("otherUser", {
+      email: "other@example.test", email_verified: true
     }).firestore();
     const review = testEnv.authenticatedContext("reviewerUser", {
       email: "reviewer@example.test", email_verified: true, apple_review: true
@@ -60,6 +80,28 @@ async function run() {
     await assertFails(updateDoc(doc(review, "appleReviewDemo/onlySynthetic"), { demo: false }));
     await assertFails(deleteDoc(doc(review, "appleReviewDemo/onlySynthetic")));
     await assertFails(getDoc(doc(normal, "appleReviewDemo/onlySynthetic")));
+
+    // Direct reads and queries must enforce privacy at the Firestore server,
+    // not merely by filtering a global listener in the browser.
+    await assertSucceeds(getDoc(doc(normal, "chatMessages/public")));
+    await assertSucceeds(getDoc(doc(normal, "chatMessages/incoming")));
+    await assertSucceeds(getDoc(doc(normal, "chatMessages/outgoing")));
+    await assertSucceeds(getDoc(doc(normal, "chatMessages/deletedRecipient")));
+    await assertFails(getDoc(doc(normal, "chatMessages/otherSecret")));
+    await assertFails(getDoc(doc(other, "chatMessages/deletedRecipient")));
+    await assertFails(getDocs(collection(normal, "chatMessages"))); // global chat listener is forbidden
+    for (const [field, value] of [
+      ["recipientId", ""], ["recipientId", "normalUser"], ["senderId", "normalUser"]
+    ]) {
+      await assertSucceeds(getDocs(query(collection(normal, "chatMessages"),
+        where(field, "==", value), orderBy("createdAt", "desc"), limit(500))));
+    }
+    await assertFails(setDoc(doc(normal, "chatMessages/spoofedSender"),
+      { senderId: "otherUser", recipientId: "normalUser", text: "Spoofed" }));
+    await assertSucceeds(setDoc(doc(normal, "chatMessages/validNew"),
+      { senderId: "normalUser", recipientId: "otherUser", createdAt: 6, text: "Valid synthetic" }));
+    await assertFails(updateDoc(doc(normal, "chatMessages/outgoing"), { recipientId: "" }));
+    await assertFails(deleteDoc(doc(normal, "chatMessages/incoming")));
 
     await assertSucceeds(getDoc(doc(normal, "commesse/syntheticJob")));
     await assertSucceeds(getDoc(doc(normal, "sharedStaticViews/currentTeam")));

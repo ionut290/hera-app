@@ -39,6 +39,12 @@ async function run() {
         statoAccount: "attivo", accountStatus: "attivo", role: "user"
       });
       await setDoc(doc(db, "commesse/syntheticJob"), { name: "Synthetic fixture" });
+      await setDoc(doc(db, "chatMessages/legacyPrivate"), {
+        senderId: "normalUser", createdAt: 0, text: "Historical sender-only record"
+      });
+      await setDoc(doc(db, "chatMessages/legacyOther"), {
+        senderId: "otherUser", createdAt: -1, text: "Historical record from other sender"
+      });
       await setDoc(doc(db, "commesse/syntheticJob/impianti/testPlant"), { name: "Plant" });
       await setDoc(doc(db, "personale/staff"), { displayName: "Private staff" });
       await setDoc(doc(db, "utenti/staff"), { displayName: "Private user" });
@@ -60,6 +66,11 @@ async function run() {
       }
     });
 
+    const anonymous = testEnv.unauthenticatedContext().firestore();
+    // Admin privileges are still needed for controlled company moderation.
+    const administrator = testEnv.authenticatedContext("adminSynthetic", {
+      email: "ionut29019@gmail.com", email_verified: true
+    }).firestore();
     const normal = testEnv.authenticatedContext("normalUser", {
       email: "normal@example.test", email_verified: true
     }).firestore();
@@ -83,12 +94,22 @@ async function run() {
 
     // Direct reads and queries must enforce privacy at the Firestore server,
     // not merely by filtering a global listener in the browser.
+    await assertFails(getDoc(doc(anonymous, "chatMessages/public")));
+    await assertFails(getDocs(collection(anonymous, "chatMessages")));
+    await assertFails(getDoc(doc(review, "chatMessages/public")));
+    await assertFails(getDoc(doc(reviewAdminEmail, "chatMessages/outgoing")));
+
     await assertSucceeds(getDoc(doc(normal, "chatMessages/public")));
     await assertSucceeds(getDoc(doc(normal, "chatMessages/incoming")));
     await assertSucceeds(getDoc(doc(normal, "chatMessages/outgoing")));
     await assertSucceeds(getDoc(doc(normal, "chatMessages/deletedRecipient")));
     await assertFails(getDoc(doc(normal, "chatMessages/otherSecret")));
     await assertFails(getDoc(doc(other, "chatMessages/deletedRecipient")));
+    // Missing recipientId must NOT make an old private message public.
+    await assertSucceeds(getDoc(doc(normal, "chatMessages/legacyPrivate")));
+    await assertFails(getDoc(doc(other, "chatMessages/legacyPrivate")));
+    await assertFails(getDoc(doc(normal, "chatMessages/legacyOther")));
+    await assertSucceeds(getDocs(collection(administrator, "chatMessages")));
     await assertFails(getDocs(collection(normal, "chatMessages"))); // global chat listener is forbidden
     await assertFails(getDocs(query(collection(normal, "chatMessages"), limit(500)))); // limit alone must not bypass per-message rules
     for (const [field, value] of [
@@ -97,6 +118,10 @@ async function run() {
       await assertSucceeds(getDocs(query(collection(normal, "chatMessages"),
         where(field, "==", value), orderBy("createdAt", "desc"), limit(500))));
     }
+    await assertFails(setDoc(doc(normal, "chatMessages/spoofedSystem"),
+      { senderId: "system", recipientId: "", createdAt: 7, text: "Fake system notice" }));
+    await assertSucceeds(setDoc(doc(administrator, "chatMessages/validSystemNotice"),
+      { senderId: "system", recipientId: "", createdAt: 8, text: "Legitimate synthetic admin notice" }));
     await assertFails(setDoc(doc(normal, "chatMessages/spoofedSender"),
       { senderId: "otherUser", recipientId: "normalUser", text: "Spoofed" }));
     await assertSucceeds(setDoc(doc(normal, "chatMessages/validNew"),

@@ -45,6 +45,9 @@ app.build_configurations.each do |configuration|
     abort "Existing signing entitlements at #{previous}; refusing to overwrite"
   end
   configuration.build_settings["CODE_SIGN_ENTITLEMENTS"] = "App/App.entitlements"
+  # Apple warns that iOS 14 deployments will be rejected starting April 2027.
+  # Apply the supported floor only to the generated App target (not Pods).
+  configuration.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "15.0"
 end
 
 attributes = project.root_object.attributes["TargetAttributes"] ||= {}
@@ -56,8 +59,9 @@ project.save
 check = Xcodeproj::Project.open(project_path)
 target = check.targets.find { |t| t.name == "App" }
 abort "Missing Sign in with Apple build setting" unless target.build_configurations.all? do |c|
-  c.build_settings["CODE_SIGN_ENTITLEMENTS"] == "App/App.entitlements"
+  c.build_settings["CODE_SIGN_ENTITLEMENTS"] == "App/App.entitlements" &&
+    c.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] == "15.0"
 end
 abort "Sign in with Apple entitlement missing" unless File.read(entitlements_path)
   .include?("com.apple.developer.applesignin")
-puts "Sign in with Apple installed in generated iOS App target (Debug and Release)."
+puts "Sign in with Apple installed; iOS deployment target 15.0 for App Debug and Release."

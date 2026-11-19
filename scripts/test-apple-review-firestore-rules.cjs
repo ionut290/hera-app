@@ -152,6 +152,13 @@ async function run() {
     await assertFails(updateDoc(doc(normal, "platformUsers/normalUser"), {
       email: "unverified@example.test"
     }));
+    const unverifiedAuthEmail = testEnv.authenticatedContext("normalUser", {
+      email: "unverified@example.test", email_verified: false
+    }).firestore();
+    await assertFails(updateDoc(doc(unverifiedAuthEmail, "platformUsers/normalUser"), {
+      email: "unverified@example.test"
+    }));
+
 
     // Direct reads and queries must enforce privacy at the Firestore server,
     // not merely by filtering a global listener in the browser.

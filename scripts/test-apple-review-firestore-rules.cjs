@@ -90,6 +90,7 @@ async function run() {
     await assertFails(getDoc(doc(normal, "chatMessages/otherSecret")));
     await assertFails(getDoc(doc(other, "chatMessages/deletedRecipient")));
     await assertFails(getDocs(collection(normal, "chatMessages"))); // global chat listener is forbidden
+    await assertFails(getDocs(query(collection(normal, "chatMessages"), limit(500)))); // limit alone must not bypass per-message rules
     for (const [field, value] of [
       ["recipientId", ""], ["recipientId", "normalUser"], ["senderId", "normalUser"]
     ]) {

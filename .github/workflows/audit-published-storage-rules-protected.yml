@@ -64,8 +64,11 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SHA"
           node --check scripts/audit-published-storage-rules.cjs
           node scripts/audit-published-storage-rules.cjs --self-test
+          # Hash.update() is a pure local digest operation, not Firebase mutation.
+          # Ignore ONLY the audited, exact one-line SHA-256 expression.
           if grep -En '\.(deleteUser|updateUser|setCustomUserClaims|write|set|update|create|patch|put)\s*\(' \
-             scripts/audit-published-storage-rules.cjs; then
+             scripts/audit-published-storage-rules.cjs | \
+             grep -vFx '11:const sha256 = s => crypto.createHash("sha256").update(s).digest("hex");'; then
             echo "::error::Unexpected mutation API in read-only audit"; exit 1
           fi
       - name: Install locked Google Auth client

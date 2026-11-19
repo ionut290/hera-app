@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: private-user-alerts-audit
@@ -35,6 +36,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Verify existing protected environment has mandatory reviewers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RESPONSE="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$GITHUB_REPOSITORY/environments/firebase-private-chat-production")" ||
+            { echo "::error::Protected audit environment missing or inaccessible"; exit 1; }
+          echo "$RESPONSE" | jq -e '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' > /dev/null ||
+            { echo "::error::Audit requires a protected environment with mandatory reviewers"; exit 1; }
       - name: Require exact reviewed main SHA
         env:
           APPROVED_SHA: ${{ inputs.reviewed_sha }}

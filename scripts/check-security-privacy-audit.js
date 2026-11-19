@@ -78,4 +78,13 @@ assert.match(deadlineRules[1], /allow create, update, delete: if isAdmin\(\)/);
 assert.ok(!catchAll.includes('"hoursDeadlineAlerts"'),
   "Deadline alerts must not inherit broad worker writes");
 
+const ackRules = rules.match(/match \/userAlertAcknowledgements\/\{ackId\} \{([\s\S]*?)\n    \}/);
+assert.ok(ackRules, "Missing explicit personal alert acknowledgement rules");
+assert.match(ackRules[1], /ackId\.matches/);
+assert.match(ackRules[1], /request\.auth\.uid/);
+assert.match(ackRules[1], /allow list: if isAdmin\(\)/);
+assert.match(ackRules[1], /allow update, delete: if isAdmin\(\)/);
+assert.ok(!catchAll.includes('"userAlertAcknowledgements"'),
+  "Alert acknowledgement collection must not inherit broad writes and reads");
+
 console.log("Security policy and privacy content regression checks passed.");

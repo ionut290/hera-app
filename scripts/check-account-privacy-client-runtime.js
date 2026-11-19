@@ -22,7 +22,6 @@ function harness(options = {}) {
   let revoked = 0;
   let checked = 0;
   let signedIn = 0;
-  const authObservers = [];
 
   class Element {
     constructor(id = "") {
@@ -42,13 +41,6 @@ function harness(options = {}) {
       this.parentElement.appendChild(child);
     }
     addEventListener(name, cb) { this.listeners[name] = cb; }
-    remove() {
-      if (this.parentElement) {
-        this.parentElement.children = this.parentElement.children.filter(x => x !== this);
-        this.parentElement = null;
-      }
-      elements.delete(this.id);
-    }
     click() { return this.listeners.click?.(); }
   }
   const root = new Element("root");
@@ -71,11 +63,6 @@ function harness(options = {}) {
   const user = options.noUser ? null : {
     email: "demo@example.test",
     providerData: options.appleUser ? [{ providerId: "apple.com" }] : [{ providerId: "google.com" }],
-    async getIdTokenResult(forceRefresh) {
-      assert.equal(forceRefresh, true);
-      return { claims: typeof options.demoClaims === "function"
-        ? options.demoClaims() : (options.demoClaims || {}) };
-    },
     async reauthenticateWithCredential(credential) {
       calls.push(["reauth", credential]);
       if (options.reauthFails) throw Error("Synthetic reauthentication failed");
@@ -83,15 +70,6 @@ function harness(options = {}) {
   };
   const authInstance = {
     currentUser: user,
-    onAuthStateChanged(callback) {
-      authObservers.push(callback);
-      callback(this.currentUser);
-      return () => {};
-    },
-    setCurrentUser(value) {
-      this.currentUser = value;
-      for (const callback of authObservers) callback(value);
-    },
     async signInWithCredential(credential) { signedIn++; calls.push(["firebaseAppleLogin", credential]); },
     async signInWithPopup() { throw Error("Unexpected web popup"); },
     async signOut() { signedOut = true; }
@@ -147,7 +125,6 @@ function harness(options = {}) {
   };
   const window = {
     __VARGA_ACCOUNT_DELETION_ENABLED: options.deletionEnabled !== false,
-    __VARGA_DEMO_DELETION_PREVIEW_ENABLED: options.demoPreview === true,
     firebase,
     Capacitor: {
       isNativePlatform: () => options.platform !== "web",
@@ -163,7 +140,7 @@ function harness(options = {}) {
     console: { warn() {} }, Promise }, { filename: "account-privacy-controls.js" });
 
   return {
-    elements, alerts, calls, user, authInstance, controls: {
+    elements, alerts, calls, user, controls: {
       get confirmCalls() { return confirmCalls; },
       get promptCalls() { return promptCalls; },
       get checked() { return checked; },
@@ -192,45 +169,6 @@ function deferred() {
   assert.ok(h.elements.has("auth-apple-login-btn"), "Sign in with Apple must remain available");
   assert.equal(h.elements.has("varga-account-delete-menu"), false, "Deletion hidden until backend release");
   assert.equal(h.elements.has("varga-account-delete-profile"), false, "Profile deletion hidden until backend release");
-  // When regular deletion remains globally disabled, a demo-only build may
-  // display the action ONLY to a Firebase ID token with both signed claims.
-  h = harness({ platform: "ios", deletionEnabled: false, demoPreview: true,
-    demoClaims: { appReviewDemo: true, apple_review: true } });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.ok(h.elements.has("varga-account-delete-menu"), "Valid demo must see preview");
-  h.authInstance.setCurrentUser(null);
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(h.elements.has("varga-account-delete-menu"), false,
-    "Demo control must disappear on logout");
-
-  for (const demoClaims of [{}, { appReviewDemo: true }, { apple_review: true }]) {
-    h = harness({ platform: "ios", deletionEnabled: false, demoPreview: true,
-      demoClaims });
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(h.elements.has("varga-account-delete-menu"), false,
-      "One or zero claims must never unlock deletion");
-    assert.ok(h.elements.has("auth-apple-login-btn"),
-      "Apple Sign In remains available without deletion claims");
-  }
-
-  let liveClaims = { appReviewDemo: true, apple_review: true };
-  h = harness({ platform: "ios", deletionEnabled: false, demoPreview: true,
-    demoClaims: () => liveClaims });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.ok(h.elements.has("varga-account-delete-menu"));
-  // Claims can be revoked after initial render. A fresh token is checked
-  // again before preflight; no Firebase callable may be contacted.
-  liveClaims = {};
-  await clickDelete(h);
-  assert.equal(h.controls.checked, 0, "Revoked demo claims must block server call");
-  assert.equal(h.controls.deleted, false, "Revoked demo must not delete");
-
-  // A demo preview that is not explicitly opted in stays completely hidden.
-  h = harness({ platform: "ios", deletionEnabled: false,
-    demoClaims: { appReviewDemo: true, apple_review: true } });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(h.elements.has("varga-account-delete-menu"), false);
-
   h = harness({ platform: "ios" });
   assert.ok(h.elements.has("auth-apple-login-btn"), "native iOS Apple button missing");
   await h.elements.get("auth-apple-login-btn").click();

@@ -124,6 +124,7 @@ function harness(options = {}) {
     async signOut() { calls.push(["nativeSignOut"]); }
   };
   const window = {
+    __VARGA_ACCOUNT_DELETION_ENABLED: options.deletionEnabled !== false,
     firebase,
     Capacitor: {
       isNativePlatform: () => options.platform !== "web",
@@ -164,7 +165,11 @@ function deferred() {
   return { promise, resolve, reject };
 }
 (async () => {
-  let h = harness({ platform: "ios" });
+  let h = harness({ platform: "ios", deletionEnabled: false });
+  assert.ok(h.elements.has("auth-apple-login-btn"), "Sign in with Apple must remain available");
+  assert.equal(h.elements.has("varga-account-delete-menu"), false, "Deletion hidden until backend release");
+  assert.equal(h.elements.has("varga-account-delete-profile"), false, "Profile deletion hidden until backend release");
+  h = harness({ platform: "ios" });
   assert.ok(h.elements.has("auth-apple-login-btn"), "native iOS Apple button missing");
   await h.elements.get("auth-apple-login-btn").click();
   assert.equal(h.controls.appleSignIns, 1);

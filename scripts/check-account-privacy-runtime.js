@@ -26,6 +26,13 @@ function setup(options = {}) {
     { collection: "platformUsers", id: "worker-1" },
     { collection: "platformUsers", id: "worker-2" },
     { collection: "privateDocuments", id: "worker-1" },
+    { collection: "notifications", id: "shared-message", actorId: "worker-1",
+      actorName: "Deleted Worker", recipientUserIds: ["worker-1", "worker-2"],
+      readBy: { "worker-1": true, "worker-2": true },
+      deletedBy: { "worker-1": true }, message: "Retained business notification" },
+    { collection: "notifications", id: "other-message", actorId: "worker-2",
+      actorName: "Other Worker", recipientUserIds: ["worker-2"],
+      readBy: { "worker-2": true }, message: "Another user's business notification" },
     { collection: "personale", id: "employee-1", linkedUserId: "worker-1", linkedAuthProvider: "google.com", googleLastLoginAt: 123, googleDisplayName: "Test", emailVerified: true, profilePhotoSource: "google", photoURL: "https://example.test/google.jpg", contractCode: "business-retained" },
     { collection: "personale", id: "employee-2", linkedUserId: "worker-2", linkedAuthProvider: "google.com", contractCode: "other-employee" },
     { collection: "personale", id: "employee-3", linkedUserId: "worker-1", linkedAuthProvider: "apple.com", profilePhotoSource: "operator", photoURL: "https://example.test/business.jpg", contractCode: "another-retained" }
@@ -38,11 +45,15 @@ function setup(options = {}) {
     collection(collection) {
       return {
         where(field, op, value) {
-          assert.equal(op, "==");
+          assert.ok(["==", "array-contains"].includes(op));
           return {
             async get() {
               return {
-                docs: docs.filter((d) => d.collection === collection && d[field] === value)
+                docs: docs.filter((d) => {
+                  const actual = field.split(".").reduce((obj, key) => obj?.[key], d);
+                  return d.collection === collection && (op === "array-contains"
+                    ? Array.isArray(actual) && actual.includes(value) : actual === value);
+                })
                   .map((d) => ({
                     id: d.id,
                     ref: {
@@ -54,8 +65,13 @@ function setup(options = {}) {
                         }
                         updated.push({ path: this.path, fields: Object.keys(fields) });
                         for (const [key, value] of Object.entries(fields)) {
-                          if (value === Symbol.for("firebase-field-delete")) delete d[key];
-                          else d[key] = value;
+                          const parts = key.split(".");
+                          const parent = parts.length === 2 ? d[parts[0]] : d;
+                          const field = parts.length === 2 ? parts[1] : key;
+                          if (value === Symbol.for("firebase-field-delete")) delete parent[field];
+                          else if (value?.arrayRemove) {
+                            parent[field] = (parent[field] || []).filter((item) => !value.arrayRemove.includes(item));
+                          } else parent[field] = value;
                         }
                       }
                     },
@@ -79,7 +95,10 @@ function setup(options = {}) {
     }
   };
   const mockFirestore = () => db;
-  mockFirestore.FieldValue = { delete: () => Symbol.for("firebase-field-delete") };
+  mockFirestore.FieldValue = {
+    delete: () => Symbol.for("firebase-field-delete"),
+    arrayRemove: (...values) => ({ arrayRemove: values })
+  };
   const admin = {
     firestore: mockFirestore,
     auth: () => ({
@@ -179,7 +198,19 @@ async function rejectedCode(promise, expected) {
   assert.equal(businessPortrait.contractCode, "another-retained");
   const otherEmployee = state.docs.find((d) => d.id === "employee-2");
   assert.equal(otherEmployee.linkedUserId, "worker-2");
-  assert.equal(state.updated.length, 2);
+  assert.equal(state.updated.length, 3);
+  // Shared notifications survive, but this UID, read-state and sender identity do not.
+  const sharedNotice = state.docs.find((d) => d.id === "shared-message");
+  assert.equal(sharedNotice.actorId, undefined);
+  assert.equal(sharedNotice.actorName, "Account eliminato");
+  assert.deepEqual(sharedNotice.recipientUserIds, ["worker-2"]);
+  assert.deepEqual(sharedNotice.readBy, { "worker-2": true });
+  assert.deepEqual(sharedNotice.deletedBy, {});
+  assert.equal(sharedNotice.message, "Retained business notification");
+  const otherNotice = state.docs.find((d) => d.id === "other-message");
+  assert.equal(otherNotice.actorId, "worker-2");
+  assert.deepEqual(otherNotice.recipientUserIds, ["worker-2"]);
+  assert.equal(otherNotice.message, "Another user's business notification");
   assert.ok(state.removed.includes("documentReminderAcknowledgements/ack-1"));
   assert.ok(state.removed.includes("passwordRecoveryChallenges/challenge-1"));
   assert.ok(!state.removed.includes("passwordRecoveryChallenges/challenge-2"));

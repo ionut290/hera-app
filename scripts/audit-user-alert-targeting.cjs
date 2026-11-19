@@ -83,7 +83,9 @@ async function liveReadOnly() {
   let total = 0;
   let last = null;
   do {
-    let q = col.orderBy(admin.firestore.FieldPath.documentId()).limit(250);
+    let q = col.orderBy(admin.firestore.FieldPath.documentId())
+      .select("sendToAllRegistered", "targetUserIds", "targetUserId", "targetMemberNames", "source")
+      .limit(250);
     if (last) q = q.startAfter(last);
     const snapshot = await q.get();
     if (snapshot.empty) break;

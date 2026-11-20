@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v227";
-const CACHE_RESET_VERSION = "20261104-rdi-buffering3";
+const CACHE_NAME = "varga-cantieri-shell-v228";
+const CACHE_RESET_VERSION = "20261120-password-selfservice1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -45,7 +45,7 @@ const APP_SHELL = [
   "./auth-login-fix.js?v=20261120-ios-native-google1",
   "./password-recovery-code.js?v=20260906b",
   "./login-retry-fix.js?v=20260906-recovery-code1",
-  "./first-login-password.js?v=20260726b",
+  "./first-login-password.js?v=20261120-selfservice1",
   "./approval-access.js?v=20260828-authfix",
   "./coordinate-repair.js?v=20260728a",
   "./inrete-work-items-v2.js?v=20260728b",

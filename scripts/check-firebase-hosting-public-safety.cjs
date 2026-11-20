@@ -25,8 +25,8 @@ for (const asset of criticalAssets) {
 for (const content of [html, sw]) {
   // No page/service-worker dependency may point into an intentionally
   // excluded private toolchain directory.
-  assert.doesNotMatch(content, /(?:src|href)=["'](?:scripts|docs|netlify|android|ios)\\//i);
-  assert.doesNotMatch(content, /["']\\/(?:scripts|docs|netlify|android|ios)\\//i);
+  assert.doesNotMatch(content, /(?:src|href)=["'](?:scripts|docs|netlify|android|ios)[/]/i);
+  assert.doesNotMatch(content, /["'][/](?:scripts|docs|netlify|android|ios)[/]/i);
 }
 assert.ok(ignores.includes("**/node_modules/**"));
 assert.ok(ignores.includes("**/.*"));

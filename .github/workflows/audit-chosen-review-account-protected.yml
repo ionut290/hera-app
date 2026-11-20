@@ -1,0 +1,74 @@
+name: Audit chosen App Review account - Firebase READ ONLY
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        type: choice
+        required: true
+        default: DO_NOT_RUN
+        options:
+          - DO_NOT_RUN
+          - INSPECT_ONLY_NO_CHANGES
+      reviewed_sha:
+        type: string
+        required: true
+        description: "Exact reviewed SHA on main"
+permissions:
+  contents: read
+  actions: read
+jobs:
+  guard:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'INSPECT_ONLY_NO_CHANGES' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Guard SHA and protected environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "ionut290/hera-app" ]] || exit 1
+          [[ "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ && "$REVIEWED_SHA" == "$GITHUB_SHA" ]] || exit 1
+          RESPONSE="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/environments/firebase-account-deletion-production")" || exit 1
+          printf '%s' "$RESPONSE" | jq -e \
+            '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' >/dev/null
+  inspect:
+    needs: guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    environment: firebase-account-deletion-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.reviewed_sha }}
+      - name: Self-test exact email and safe output (no secrets)
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
+          node --check scripts/audit-chosen-review-account-readonly.cjs
+          node scripts/audit-chosen-review-account-readonly.cjs --self-test
+          if grep -E '\.(updateUser|createUser|deleteUser|setCustomUserClaims|update|set|delete|create)\s*\(' scripts/audit-chosen-review-account-readonly.cjs; then
+            echo "::error::Account mutation in read-only audit";exit 1
+          fi
+      - name: Install Firebase Admin SDK
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Inspect only existing account metadata and profile role
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+          ALLOW_SCOPED_REVIEW_ACCOUNT_AUDIT: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/readonly-audit.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/readonly-audit.json"
+          node scripts/audit-chosen-review-account-readonly.cjs --audit
+      - name: Remove temporary credentials
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/readonly-audit.json"

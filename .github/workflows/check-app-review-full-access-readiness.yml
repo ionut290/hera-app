@@ -52,6 +52,14 @@ jobs:
             console.log("::warning title=App Review NOT READY::" + issue.replace(/[\r\n]/g," "));
           }
           NODE
+      - name: Assert App Store candidate upload fails closed on blocked review
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The reporting audit can remain green. The upload workflow must not.
+          grep -Fq 'node scripts/audit-app-review-full-access.cjs --require-ready' .github/workflows/ios-appstore-candidate.yml
+          grep -Fq 'needs: preflight' .github/workflows/ios-appstore-candidate.yml
+
       - name: Confirm no ordinary iOS reviewer assets are accidentally included
         run: |
           set -euo pipefail

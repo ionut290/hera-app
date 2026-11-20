@@ -1,0 +1,64 @@
+name: Verify account deletion with real LOCAL Auth Firestore Storage emulators (NO DEPLOY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "functions/account-deletion.js"
+      - "scripts/test-demo-deletion-auth-firestore-storage-emulators.cjs"
+      - "firebase.deletion-storage-emulators.json"
+      - ".github/workflows/check-demo-deletion-storage-emulators.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-storage-deletion-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-deletion-canary-storage
+      GOOGLE_CLOUD_PROJECT: demo-deletion-canary-storage
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install local Admin SDK dependencies
+        run: |
+          set -euo pipefail
+          (cd functions && npm ci --no-audit --no-fund)
+      - name: Assert test is isolated and no production credentials exist
+        run: |
+          set -euo pipefail
+          node --check scripts/test-demo-deletion-auth-firestore-storage-emulators.cjs
+          node --check functions/account-deletion.js
+          if env | grep -Eq '^(GOOGLE_APPLICATION_CREDENTIALS|STORAGE_EMULATOR_HOST)='; then
+            echo "::error::Ambient Google credentials or Storage endpoint override forbidden"
+            exit 1
+          fi
+          grep -Fq 'demo-deletion-canary-storage' scripts/test-demo-deletion-auth-firestore-storage-emulators.cjs
+          for key in FIREBASE_AUTH_EMULATOR_HOST FIRESTORE_EMULATOR_HOST FIREBASE_STORAGE_EMULATOR_HOST; do
+            grep -Fq "$key" scripts/test-demo-deletion-auth-firestore-storage-emulators.cjs
+          done
+          grep -Fq 'storage: () => admin.storage()' scripts/test-demo-deletion-auth-firestore-storage-emulators.cjs
+          grep -Fq '127.0.0.1' firebase.deletion-storage-emulators.json
+          if grep -Eq 'https://' scripts/test-demo-deletion-auth-firestore-storage-emulators.cjs; then
+            echo "::error::External service URLs forbidden in test harness"
+            exit 1
+          fi
+      - name: Run real Auth Firestore and Storage local emulator integration
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14.23.0 emulators:exec \
+            --config firebase.deletion-storage-emulators.json \
+            --only auth,firestore,storage \
+            --project demo-deletion-canary-storage \
+            'node scripts/test-demo-deletion-auth-firestore-storage-emulators.cjs'
+      - name: Confirm no production changes
+        run: echo "Synthetic users and Storage objects only. Zero production operations or deployments."

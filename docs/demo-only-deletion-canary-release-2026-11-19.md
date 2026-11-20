@@ -30,6 +30,15 @@ Dopo il deploy canary, verificare la presenza della callable in `europe-west1` e
 
 La UI della beta 20011 resta nascosta perché `window.__VARGA_ACCOUNT_DELETION_ENABLED` non è impostata a true. Per il video serve una build successiva che mostri la cancellazione esclusivamente nel contesto di test appropriato.
 
+## Ulteriori protezioni nel codice (20 novembre 2026)
+
+Prima di una futura valutazione del rilascio generale, il canary applica anche due controlli fail-closed:
+
+- La pre-verifica dei file personali accetta soltanto percorsi Firebase Storage canonici `documents/{uid}/{documentId}/{filename}` con UID del richiedente, quattro segmenti semplici e nome file compatibile con `documents.js`/`storage.rules`. Percorsi annidati, traversal `..`, riferimenti Drive/legacy, nomi malformati o oggetti che sembrano appartenere a un'altra persona producono `failed-precondition`, **prima di cancellare qualsiasi dato**. I riferimenti storici non canonici richiedono revisione manuale, non una cancellazione forzata.
+- La funzione accetta `mode: "preflight"` per il controllo non distruttivo e **assenza di `mode`** per la richiesta di cancellazione espressamente confermata. Qualsiasi altra modalità viene rifiutata con `invalid-argument`; non può cadere accidentalmente nella procedura irreversibile.
+
+I test `scripts/check-account-privacy-runtime.js` verificano con stub e identità **sintetiche** la mancata cancellazione di Auth, Storage, Firestore e comunicazioni condivise in questi casi. Il controllo non equivale alla prova su iPhone e **non abilita account ordinari**: il blocco demo-only, il workflow protetto e la revisione privacy rimangono obbligatori.
+
 ## Fase 3: rilascio generale e App Store
 
 Solo dopo l'inventario GDPR, titolarità con le aziende, backup/export, politica di minimizzazione e collaudo end-to-end documentati, proporre una **nuova PR di promozione** che rimuova il blocco demo, con revisione e test separati. Usare il workflow `deploy-account-deletion-protected.yml` con signoff legale vero, poi abilitare il pulsante per gli utenti reali in una nuova build. Non auto-approvare i gate, non cancellare account di dipendenti e non inviare una revisione App Store che dichiari completata la cancellazione quando ancora non lo è.

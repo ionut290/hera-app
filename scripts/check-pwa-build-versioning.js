@@ -43,8 +43,15 @@ for (const criticalPath of ["/app.js", "/fatto-button-immediate.js"]) {
   }
 }
 
-if (!/\[build\][\s\S]*command\s*=\s*["']node scripts\/stamp-pwa-build-version\.js["']/.test(netlify)) {
-  throw new Error("Netlify non esegue lo stamp automatico della versione PWA");
+// Stamp must remain FIRST even when the web-only deploy adds packaging and
+// checks afterwards; otherwise Netlify would serve a stale service-worker cache.
+const netlifyBuildCommand = netlify.match(/^\s*command\s*=\s*"([^"]+)"/m)?.[1] || "";
+if (!netlify.includes("[build]") ||
+    !netlifyBuildCommand.startsWith("node scripts/stamp-pwa-build-version.js") ||
+    !netlifyBuildCommand.includes("&& node scripts/prepare-capacitor-web.js") ||
+    !netlifyBuildCommand.includes("&& node scripts/prepare-netlify-web.cjs") ||
+    !netlifyBuildCommand.includes("&& node scripts/check-netlify-public-build.cjs")) {
+  throw new Error("Netlify deve versionare la PWA, creare il bundle web isolato e validarlo");
 }
 if (!workflow.includes("node scripts/check-pwa-build-versioning.js")) {
   throw new Error("Il controllo PWA non è collegato alla CI critica");

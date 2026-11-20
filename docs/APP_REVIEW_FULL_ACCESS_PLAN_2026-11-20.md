@@ -67,6 +67,12 @@ Il workflow `check-apple-functional-sandbox.yml` verifica con **Firestore Emulat
 - Questo test è un primo collaudo dei **permessi Firestore**, non un ambiente Firebase separato pronto per revisori esterni, non un vero accesso Apple e non una prova della UI iOS.
 - L'audit per App Store resta **BLOCKED** finché non siano verificati account attivo, dati autorizzati/isolamento, cancellazione dell'account ordinario, prove sul dispositivo e video.
 
+## Test supplementare degli allegati Storage (20 novembre 2026)
+
+Il workflow `check-apple-review-storage-isolation.yml` prova le regole reali `storage.rules` e `firestore.rules` in due **emulatori locali**, senza credenziali di produzione. I test utilizzano soltanto file fittizi, un bucket `demo-apple-storage-isolation` e metadati sintetici: file personali, condivisi, globali, allegati PDF legacy, proprietario, collega, estraneo, anonimo e reviewer con claim Apple (anche con falso ruolo admin). Verificano letture/scritture consentite o rifiutate, revoca per reviewer e cancellazione dei soli file di prova.
+
+Questi test non creano un archivio accessibile ad Apple e non certificano il caricamento reale su iPhone. La richiesta di accesso completo resta soggetta a regole minimizzate, consenso/autorizzazioni pertinenti e prove reali, senza indebolire la separazione fra account di prova e dati aziendali.
+
 ## Gate di rilascio
 
 - Eseguire `node scripts/audit-app-review-full-access.cjs`. Il report odierno indica **BLOCKED**; NON trasformarlo in successo fittizio.

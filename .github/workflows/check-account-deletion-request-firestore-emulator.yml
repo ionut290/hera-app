@@ -1,0 +1,55 @@
+name: Test staged account deletion with real Firestore Emulator (NO DEPLOY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "functions/account-deletion-request.js"
+      - "scripts/test-account-deletion-request-firestore-emulator.cjs"
+      - ".github/workflows/check-account-deletion-request-firestore-emulator.yml"
+      - "firestore.rules"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  firestore-requests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      GOOGLE_CLOUD_PROJECT: demo-account-deletion-request
+      GCLOUD_PROJECT: demo-account-deletion-request
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install scoped local Admin SDK
+        run: |
+          set -euo pipefail
+          cd functions && npm ci --no-audit --no-fund
+      - name: Fail closed on production references or secrets
+        run: |
+          set -euo pipefail
+          node --check scripts/test-account-deletion-request-firestore-emulator.cjs
+          grep -Fq 'FIRESTORE_EMULATOR_HOST' scripts/test-account-deletion-request-firestore-emulator.cjs
+          grep -Fq 'demo-account-deletion-request' scripts/test-account-deletion-request-firestore-emulator.cjs
+          if grep -Eq 'hera-app-6cd2b|https?://' scripts/test-account-deletion-request-firestore-emulator.cjs; then
+            echo "::error::Remote endpoint or production project detected"
+            exit 1
+          fi
+          if env | grep -q '^GOOGLE_APPLICATION_CREDENTIALS='; then
+            echo "::error::Production credentials are forbidden"
+            exit 1
+          fi
+      - name: Exercise true Firestore transactions in demo-only emulator
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14.23.0 emulators:exec --only firestore \
+            --project demo-account-deletion-request \
+            'node scripts/test-account-deletion-request-firestore-emulator.cjs'

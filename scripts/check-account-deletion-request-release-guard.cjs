@@ -14,6 +14,8 @@ assert.match(source, /PRIVACY_REVIEW_APPROVED/);
 assert.match(source, /FULFILLMENT_PROCESS_VERIFIED/);
 assert.match(source, /APPROVAL_REFERENCE/);
 assert.match(source, /required_reviewers/);
+assert.match(source, /\.prevent_self_review == true/,
+  "Never deploy deletion request without independent approval");
 assert.match(source, /environment: firebase-account-deletion-production/);
 assert.match(source, /needs: guard/);
 assert.match(source, /ref: \$\{\{ inputs\.reviewed_sha \}\}/);

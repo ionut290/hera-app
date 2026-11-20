@@ -1,0 +1,30 @@
+name: Check staged privacy deletion reviewer queue (NO DEPLOY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "functions/account-deletion-review-staged.js"
+      - "scripts/check-staged-deletion-review-queue.cjs"
+      - ".github/workflows/check-staged-deletion-review-queue.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-staged-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Static and behavioral tests with mock identities and DB only
+        run: |
+          set -euo pipefail
+          node --check functions/account-deletion-review-staged.js
+          node --check scripts/check-staged-deletion-review-queue.cjs
+          node scripts/check-staged-deletion-review-queue.cjs
+      - name: Explain boundaries
+        run: echo "Review queue is staged only. No Firebase credentials, user data, account deletion, role assignment, production deploy or Apple upload."

@@ -14,6 +14,7 @@ const PROJECT = "demo-apple-functional-sandbox";
 const OPERATOR = "demoOperator";
 const OTHER = "demoColleague";
 const ADMIN = "demoAdministrator";
+const REVIEWER = "demoAppleReviewer";
 
 async function main() {
   assert.equal(process.env.GOOGLE_CLOUD_PROJECT, PROJECT,
@@ -45,6 +46,22 @@ async function main() {
         ["platformUsers/demoPending", {
           email: "pending@example.test", statoAccount: "in_attesa",
           role: "user", banned: false
+        }],
+        ["platformUsers/" + REVIEWER, {
+          uid: REVIEWER, email: "reviewer@example.test",
+          role: "apple_review", ruolo: "apple_review", reviewer: true,
+          isAdmin: false, admin: false, statoAccount: "attivo",
+          accountStatus: "attivo", synthetic: true
+        }],
+        ["platformUsers/demoFalseReviewer", {
+          uid: "demoFalseReviewer", email: "false@example.test",
+          role: "user", reviewer: true, isAdmin: false, admin: false,
+          statoAccount: "attivo", synthetic: true
+        }],
+        ["platformUsers/demoElevatedReviewer", {
+          uid: "demoElevatedReviewer", email: "elevated@example.test",
+          role: "apple_review", reviewer: true, isAdmin: true, admin: true,
+          statoAccount: "attivo", synthetic: true
         }],
         ["appConfig/adminUsers", { emails: ["demo-admin@example.test"] }],
         ["commesse/demoJobAlpha", {
@@ -110,6 +127,18 @@ async function main() {
     }).firestore();
     const reviewer = env.authenticatedContext(OPERATOR, {
       email: "operator@example.test", email_verified: true,
+      apple_review: true, appReviewDemo: true
+    }).firestore();
+    const isolatedReviewer = env.authenticatedContext(REVIEWER, {
+      email: "reviewer@example.test", email_verified: true,
+      apple_review: true, appReviewDemo: true
+    }).firestore();
+    const fakeRoleReviewer = env.authenticatedContext("demoFalseReviewer", {
+      email: "false@example.test", email_verified: true,
+      apple_review: true, appReviewDemo: true
+    }).firestore();
+    const elevatedReviewer = env.authenticatedContext("demoElevatedReviewer", {
+      email: "elevated@example.test", email_verified: true,
       apple_review: true, appReviewDemo: true
     }).firestore();
     const pending = env.authenticatedContext("demoPending", {
@@ -211,6 +240,25 @@ async function main() {
     await assertFails(getDoc(doc(operator, "appConfig/adminUsers")));
     await assertFails(getDoc(doc(operator, "platformUsers/" + OTHER)));
 
+    // Reviewer may read ONLY its own Admin-provisioned non-admin profile.
+    // This fixes login/profile display without relaxing access to any employee
+    // data or allowing a reviewer to mutate Firestore documents.
+    const ownReviewProfile = doc(isolatedReviewer, "platformUsers/" + REVIEWER);
+    await assertSucceeds(getDoc(ownReviewProfile));
+    await assertFails(getDocs(collection(isolatedReviewer, "platformUsers")));
+    await assertFails(getDoc(doc(isolatedReviewer, "platformUsers/" + OPERATOR)));
+    await assertFails(getDoc(doc(isolatedReviewer, "platformUsers/" + OTHER)));
+    await assertFails(getDoc(doc(isolatedReviewer, "commesse/demoJobAlpha")));
+    await assertFails(getDoc(doc(isolatedReviewer, "documents/demoSharedPdf")));
+    await assertFails(setDoc(ownReviewProfile, { role: "apple_review" }));
+    await assertFails(updateDoc(ownReviewProfile, { displayName: "edited" }));
+    await assertFails(deleteDoc(ownReviewProfile));
+    // A valid claim by itself is insufficient to read a normal user profile,
+    // a fake 'reviewer: true' marker, or an admin-marked record.
+    await assertFails(getDoc(doc(reviewer, "platformUsers/" + OPERATOR)));
+    await assertFails(getDoc(doc(fakeRoleReviewer, "platformUsers/demoFalseReviewer")));
+    await assertFails(getDoc(doc(elevatedReviewer, "platformUsers/demoElevatedReviewer")));
+
     // The special reviewer claim must not silently unlock production-style data.
     await assertSucceeds(getDoc(doc(reviewer, "appleReviewDemo/demoSummary")));
     await assertFails(setDoc(doc(reviewer, "appleReviewDemo/demoWrite"), {
@@ -222,6 +270,7 @@ async function main() {
 
     console.log("PASS: synthetic commesse, 3 impianti, squadre, personnel, vehicle,");
     console.log("hours, calendar, documents, admin price list and notifications.");
+    console.log("PASS: reviewer may read ONLY its own server-marked non-admin profile; all reviewer writes, lists and employee reads denied.");
     console.log("PASS: local-only create/update/delete and reviewer/pending/guest isolation.");
     console.log("PASS: accountDeletionRequests rejects client read/list/create/update/delete for all five roles.");
     console.log("NOT PROVEN: iPhone UI, GPS/push, Storage files, real login or full Apple access.");

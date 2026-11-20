@@ -63,10 +63,12 @@ if (/apple-review-demo-deletion-ui\.js/.test(packager) || demoUI.includes("inter
   blockers.push("DEMO_DELETE_UI_SEPARATE: internal demo-only preview is not shipped in standard native app.");
 }
 blockers.push("NO_VERIFIED_FULL_FEATURE_SANDBOX: Firebase emulator fixtures are not a deployed reviewer sandbox; no iPhone feature-by-feature access proof is available.");
-// Last observed via read-only Firebase console audit on 20 Nov 2026:
-// the demo identity EXISTED but was DISABLED. This is a dated observation,
-// NOT a live status check. Do not claim it was deleted or is now enabled.
-blockers.push("NO_ACTIVE_VERIFIED_REVIEW_LOGIN: demo account was present but DISABLED on 2026-11-20; current active login and isolation are unverified.");
+// Two DIFFERENT accounts, observed via READ-ONLY Firebase console on
+// 2026-11-20. The actual ASC login was active, but its own Firestore profile
+// lacked review role markers. The separate deletion canary was DISABLED.
+// This STATIC script does not inspect either live identity or claims.
+blockers.push("NO_VERIFIED_REVIEWER_ISOLATION: ASC reviewer login was ENABLED and its profile active on 2026-11-20, but the profile lacked role/ruolo/reviewer markers; current live Auth claims, credentials and safe full-feature access are UNVERIFIED.");
+blockers.push("DELETION_CANARY_DISABLED: the separate disposable deletion-demo account was DISABLED on 2026-11-20; iPhone deletion proof is missing.");
 blockers.push("NO_CONFIRMED_GENERAL_ACCOUNT_DELETION: ordinary account-deletion UI remains gated and real privacy fulfillment has not been approved/deployed.");
 blockers.push("NO_APPLE_SIGNIN_DELETION_DEVICE_TEST: iPhone Apple login works per user report, but Apple credential revocation and ordinary account deletion are NOT verified.");
 
@@ -76,6 +78,9 @@ const report = {
   evidence: {
     appleTestFlightBuildLastConfirmed: "1.0 (20015)",
     liveFirebaseAuthCheckedByThisScript: false,
+    ascReviewerAuthObservedOn20261120: "enabled",
+    ascReviewerFirestoreProfileObservedOn20261120: "active_without_reviewer_markers",
+    separateDeletionCanaryObservedOn20261120: "disabled",
     realIphoneAccountDeletionPassed: false,
     fullReviewerFeatureAccessPassed: false
   },

@@ -28,16 +28,22 @@ assert.ok(observation.data.coverage.every(row =>
   row.demoFunctionalTestPassed === false));
 const blockers = observation.data.blockers.join("\n");
 for (const token of [
-  "NO_ACTIVE_VERIFIED_REVIEW_LOGIN",
-  "DISABLED",
+  "NO_VERIFIED_REVIEWER_ISOLATION",
+  "ENABLED",
+  "DELETION_CANARY_DISABLED",
   "NO_VERIFIED_FULL_FEATURE_SANDBOX",
   "NO_CONFIRMED_GENERAL_ACCOUNT_DELETION",
   "NO_APPLE_SIGNIN_DELETION_DEVICE_TEST"
 ]) {
   assert.ok(blockers.includes(token), "Missing release blocker: " + token);
 }
-assert.ok(!blockers.includes("was deleted in protected E2E test"),
-  "Historical deleted claim must not override current disabled observation");
+assert.equal(observation.data.evidence.ascReviewerAuthObservedOn20261120, "enabled");
+assert.equal(observation.data.evidence.ascReviewerFirestoreProfileObservedOn20261120,
+  "active_without_reviewer_markers");
+assert.equal(observation.data.evidence.separateDeletionCanaryObservedOn20261120,
+  "disabled");
+assert.ok(!blockers.includes("NO_ACTIVE_VERIFIED_REVIEW_LOGIN"),
+  "Do not conflate active ASC login with separate disabled deletion canary");
 
 const release = readReport(["--require-ready"]);
 assert.equal(release.code, 1, "Release path must be denied");
@@ -67,4 +73,4 @@ assert.ok(missing.blockers.some(b =>
   b.includes("MISSING_FEATURE_SOURCE") && b.includes("management-v2.js")));
 assert.equal(missing.coverage.find(c => c.file === "management-v2.js").sourcePresent, false);
 
-console.log("PASS: App Review readiness remains BLOCKED until proven; stale deleted-account claim corrected and missing source reported without crash.");
+console.log("PASS: App Review readiness remains BLOCKED until proven; separate reviewer and deletion-canary states correctly distinguished and missing source reported without crash.");

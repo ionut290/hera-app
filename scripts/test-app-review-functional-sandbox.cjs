@@ -94,6 +94,9 @@ async function main() {
         }],
         ["appleReviewDemo/demoSummary", {
           title: "Demo statica isolata", synthetic: true
+        }],
+        ["accountDeletionRequests/demoOperator", {
+          uid: OPERATOR, status: "pending", synthetic: true
         }]
       ];
       for (const [path, data] of entries) await setDoc(doc(db, path), data);
@@ -113,6 +116,24 @@ async function main() {
       email: "pending@example.test", email_verified: true
     }).firestore();
     const anonymous = env.unauthenticatedContext().firestore();
+
+    // A deletion request is server-managed. No client identity, including
+    // a Firebase admin or a special Apple reviewer, may read/list/edit it.
+    // The real Firestore rules are loaded above into this LOCAL emulator.
+    for (const [role, scopedDb] of [
+      ["ordinary-user", operator], ["administrator", admin],
+      ["apple-reviewer", reviewer], ["pending-user", pending],
+      ["unauthenticated", anonymous]
+    ]) {
+      const ownRequest = doc(scopedDb, "accountDeletionRequests/demoOperator");
+      await assertFails(getDoc(ownRequest));
+      await assertFails(getDocs(collection(scopedDb, "accountDeletionRequests")));
+      await assertFails(setDoc(ownRequest, {
+        uid: OPERATOR, status: "completed", synthetic: true
+      }));
+      await assertFails(updateDoc(ownRequest, { status: "completed" }));
+      await assertFails(deleteDoc(ownRequest));
+    }
 
     // Synthetic access to the same module collections used by the real app.
     const ordinaryReadable = [
@@ -202,6 +223,7 @@ async function main() {
     console.log("PASS: synthetic commesse, 3 impianti, squadre, personnel, vehicle,");
     console.log("hours, calendar, documents, admin price list and notifications.");
     console.log("PASS: local-only create/update/delete and reviewer/pending/guest isolation.");
+    console.log("PASS: accountDeletionRequests rejects client read/list/create/update/delete for all five roles.");
     console.log("NOT PROVEN: iPhone UI, GPS/push, Storage files, real login or full Apple access.");
   } finally {
     await env.cleanup();

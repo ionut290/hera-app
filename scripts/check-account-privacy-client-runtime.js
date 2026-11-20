@@ -182,6 +182,33 @@ function deferred() {
   h = harness({ platform: "web" });
   assert.equal(h.elements.has("auth-apple-login-btn"), false);
 
+  // Do not silently delete an Apple-linked Firebase account on platforms
+  // without a working Apple OAuth revocation flow.
+  for (const platform of ["web", "android"]) {
+    h = harness({ platform, appleUser: true });
+    await clickDelete(h);
+    assert.equal(h.controls.checked, 1, "Preflight must still run first");
+    assert.equal(h.controls.deleted, false, platform + " deleted Apple-linked account");
+    assert.equal(h.controls.revoked, 0);
+    assert.equal(h.controls.signedOut, false);
+    assert.equal(h.controls.reloaded, false);
+    assert.ok(h.alerts.some((value) =>
+      value.includes("solo nell'app iPhone") &&
+      value.includes("Nessun account è stato eliminato")
+    ));
+    // Failed attempt should release the lock and remain non-destructive.
+    await clickDelete(h);
+    assert.equal(h.controls.checked, 2);
+    assert.equal(h.controls.deleted, false);
+  }
+
+  // Normal non-Apple users retain the existing deletion flow on the web.
+  h = harness({ platform: "web" });
+  await clickDelete(h);
+  assert.equal(h.controls.checked, 1);
+  assert.equal(h.controls.deleted, true);
+  assert.equal(h.controls.signedOut, true);
+
   h = harness({ noUser: true });
   await clickDelete(h);
   assert.equal(h.controls.checked, 0);

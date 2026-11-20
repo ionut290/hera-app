@@ -1,0 +1,34 @@
+name: Require independent approval for sensitive Firebase changes (NO DEPLOY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-account-deletion-protected.yml"
+      - ".github/workflows/deploy-account-deletion-request-protected.yml"
+      - ".github/workflows/prepare-app-review-demo-claims-protected.yml"
+      - "scripts/check-account-deletion-request-release-guard.cjs"
+      - "scripts/check-independent-firebase-deploy-review.cjs"
+      - ".github/workflows/check-independent-firebase-deploy-review.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test fail-closed GitHub environment approval expression without API access
+        run: |
+          set -euo pipefail
+          command -v jq
+          node --check scripts/check-independent-firebase-deploy-review.cjs
+          node scripts/check-independent-firebase-deploy-review.cjs
+          node scripts/check-account-deletion-request-release-guard.cjs
+      - name: Confirm zero production operations
+        run: echo "No GitHub environment API requests, Firebase credentials, deploy, account or user data changes."

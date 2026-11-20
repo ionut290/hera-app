@@ -60,8 +60,8 @@ jobs:
             -H "Accept: application/vnd.github+json" "$ENV_URL")" ||
             { echo "::error::Configure the dedicated protected environment first"; exit 1; }
           printf '%s' "$ENV_JSON" | jq -e \
-            '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' >/dev/null ||
-            { echo "::error::The environment has no required reviewers"; exit 1; }
+            '.protection_rules | any(.type == "required_reviewers" and .prevent_self_review == true and ([.reviewers[]?] | length > 0))' >/dev/null ||
+            { echo "::error::Require at least one reviewer AND prevent self-review; configure independent approver first"; exit 1; }
 
       - name: Check that routine deployment excludes deletion
         uses: actions/checkout@v4

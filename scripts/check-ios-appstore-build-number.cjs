@@ -22,8 +22,8 @@ const scriptPos = preflight.indexOf('bash scripts/check-ios-appstore-build-numbe
 const readinessPos = preflight.indexOf("node scripts/audit-app-review-full-access.cjs --require-ready");
 assert.ok(checkoutPos !== -1 && checkoutPos < inputPos && inputPos < scriptPos && scriptPos < readinessPos,
   "Linux preflight must checkout files before executing repo scripts, without weakening the release gate");
-assert.match(preflight.slice(checkoutPos, inputPos), /uses: actions\\/checkout@v4/);
-assert.equal((preflight.match(/uses: actions\\/checkout@v4/g) || []).length, 1,
+assert.match(preflight.slice(checkoutPos, inputPos), /uses: actions\/checkout@v4/);
+assert.equal((preflight.match(/uses: actions\/checkout@v4/g) || []).length, 1,
   "Only one preflight checkout is needed; no redundant checkout");
 
 assert.match(workflow, /202704/);

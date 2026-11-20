@@ -81,6 +81,19 @@ async function cleanup(){
     // Create actual local Auth user records, no email or personal information.
     await Promise.all(users.map(uid=>auth.createUser({uid})));
     await auth.setCustomUserClaims(reviewerUid,{admin:true,privacy_deletion_reviewer:true});
+    // A Firebase token can remain unexpired after the real account is
+    // disabled/deleted. Intake and status must check the live Auth record.
+    const missingUid=pid+"-missing";
+    await rejects(intake.requestOwnVargaAccountDeletion(workerRequest(missingUid)),"unauthenticated");
+    await rejects(intake.getOwnVargaAccountDeletionStatus(
+      {auth:{uid:missingUid,token:{auth_time:now}},data:{}}),"unauthenticated");
+    await auth.updateUser(workerUid,{disabled:true});
+    await rejects(intake.requestOwnVargaAccountDeletion(workerRequest(workerUid)),"unauthenticated");
+    await rejects(intake.getOwnVargaAccountDeletionStatus(
+      {auth:{uid:workerUid,token:{auth_time:now}},data:{}}),"unauthenticated");
+    assert.equal((await db.collection("accountDeletionRequests").get()).size,0);
+    await auth.updateUser(workerUid,{disabled:false});
+
     const business={synthetic:true,retainedBusiness:"KEEP"};
     await db.doc("platformUsers/"+workerUid).set(business);
     await db.doc("privateDocuments/"+workerUid).set({synthetic:true,ownerUserId:workerUid});

@@ -22,7 +22,21 @@ class HttpsError extends Error {
 }
 const records = new Map();
 const updates = [];
+const activeUsers = new Map([
+  ["worker-one", { disabled: false }],
+  ["worker-two", { disabled: false }]
+]);
 const admin = {
+  auth() {
+    return { async getUser(uid) {
+      if (!activeUsers.has(uid)) {
+        const error = new Error("No synthetic Auth record");
+        error.code = "auth/user-not-found";
+        throw error;
+      }
+      return activeUsers.get(uid);
+    }};
+  },
   firestore: Object.assign(() => ({
     collection(name) {
       assert.equal(name, "accountDeletionRequests");
@@ -98,6 +112,16 @@ async function rejectsCode(promise, code) {
   await rejectsCode(request({auth:auth("worker-one"),data:{confirmation:"RICHIEDO ELIMINAZIONE",email:"pii@example.test"}}), "invalid-argument");
   await rejectsCode(request({auth:{uid:"worker-one",token:{auth_time:now-601}},data:valid("worker-one").data}), "failed-precondition");
   assert.equal(records.size, 0);
+
+  // A token for a deleted, never-created or disabled Auth user must not
+  // create a request or expose status (even when its auth_time is fresh).
+  await rejectsCode(request(valid("ghost-worker")), "unauthenticated");
+  await rejectsCode(status({ auth: auth("ghost-worker"), data: {} }), "unauthenticated");
+  activeUsers.get("worker-one").disabled = true;
+  await rejectsCode(request(valid("worker-one")), "unauthenticated");
+  await rejectsCode(status({ auth: auth("worker-one"), data: {} }), "unauthenticated");
+  assert.equal(records.size, 0);
+  activeUsers.get("worker-one").disabled = false;
 
   const first = await request(valid("worker-one"));
   assert.equal(first.requested, true);

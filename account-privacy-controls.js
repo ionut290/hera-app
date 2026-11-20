@@ -108,10 +108,21 @@
       deleting = false;
       return;
     }
-    // Apple requires credential revocation when deleting an Apple-linked account.
-    // Request a fresh Apple code, reauthenticate the same Firebase account, then revoke.
-    if (nativePlatform() === "ios" &&
-        user.providerData?.some((provider) => provider.providerId === "apple.com")) {
+    // Apple-linked identities require Apple OAuth token revocation before
+    // account deletion. This client currently implements that flow only via
+    // the iOS Capacitor plugin. The web and Android paths must fail CLOSED;
+    // they cannot silently remove Firebase Auth while leaving Apple's grant.
+    // The web-specific path needs a separate, tested Firebase modular
+    // revokeAccessToken implementation before being enabled.
+    const appleLinked = user.providerData?.some((provider) => provider.providerId === "apple.com");
+    if (appleLinked && nativePlatform() !== "ios") {
+      alert("L'eliminazione di un account collegato ad Apple è attualmente disponibile solo nell'app iPhone con revoca Apple verificata. Nessun account è stato eliminato. Per assistenza contatta il responsabile.");
+      deleting = false;
+      return;
+    }
+    // Request a fresh Apple code, reauthenticate the same Firebase account,
+    // then revoke through the native plugin before deleting the Firebase user.
+    if (appleLinked) {
       const plugin = window.Capacitor?.Plugins?.FirebaseAuthentication;
       if (!plugin || typeof plugin.signInWithApple !== "function" ||
           typeof plugin.revokeAccessToken !== "function") {

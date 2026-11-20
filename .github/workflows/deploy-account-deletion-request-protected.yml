@@ -69,8 +69,8 @@ jobs:
             -H "Accept: application/vnd.github+json" "$ENV_URL")" ||
             { echo "::error::Protected environment is not accessible"; exit 1; }
           printf '%s' "$ENV_JSON" | jq -e \
-            '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' >/dev/null ||
-            { echo "::error::Environment must have required reviewers"; exit 1; }
+            '.protection_rules | any(.type == "required_reviewers" and .prevent_self_review == true and ([.reviewers[]?] | length > 0))' >/dev/null ||
+            { echo "::error::Require independent reviewer approval; enable Prevent self-review"; exit 1; }
 
       - name: Checkout audited source without persisting credentials
         uses: actions/checkout@v4

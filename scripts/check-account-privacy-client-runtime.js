@@ -22,6 +22,7 @@ function harness(options = {}) {
   let revoked = 0;
   let checked = 0;
   let signedIn = 0;
+  let requested = 0;
 
   class Element {
     constructor(id = "") {
@@ -89,7 +90,15 @@ function harness(options = {}) {
         assert.equal(region, "europe-west1");
         return {
           httpsCallable(name) {
-            assert.equal(name, "deleteOwnVargaAccount");
+            assert.ok(["deleteOwnVargaAccount", "requestOwnVargaAccountDeletion"].includes(name));
+            if (name === "requestOwnVargaAccountDeletion") {
+              return async (payload) => {
+                calls.push(["requestCallable", payload]);
+                requested++;
+                if (options.requestFn) return options.requestFn(payload);
+                return { data: { requested: true, status: "pending" } };
+              };
+            }
             return async (payload) => {
               calls.push(["callable", payload]);
               if (payload.mode === "preflight") {
@@ -126,6 +135,7 @@ function harness(options = {}) {
   };
   const window = {
     __VARGA_ACCOUNT_DELETION_ENABLED: options.deletionEnabled !== false,
+    __VARGA_ACCOUNT_DELETION_REQUEST_ENABLED: options.requestEnabled === true,
     firebase,
     Capacitor: {
       isNativePlatform: () => options.platform !== "web",
@@ -150,7 +160,8 @@ function harness(options = {}) {
       get reloaded() { return reloaded; },
       get appleSignIns() { return appleSignIns; },
       get revoked() { return revoked; },
-      get signedIn() { return signedIn; }
+      get signedIn() { return signedIn; },
+      get requested() { return requested; }
     }
   };
 }
@@ -170,6 +181,41 @@ function deferred() {
   assert.ok(h.elements.has("auth-apple-login-btn"), "Sign in with Apple must remain available");
   assert.equal(h.elements.has("varga-account-delete-menu"), false, "Deletion hidden until backend release");
   assert.equal(h.elements.has("varga-account-delete-profile"), false, "Profile deletion hidden until backend release");
+  // Request intake is opt-in only; no ghost UI before backend deployment.
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: false });
+  assert.equal(h.elements.has("varga-deletion-request-menu"), false);
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+    typedConfirmation: "RICHIEDO" });
+  assert.ok(h.elements.has("varga-deletion-request-menu"));
+  assert.equal(h.elements.has("varga-account-delete-menu"), false);
+  await h.elements.get("varga-deletion-request-menu").click();
+  assert.equal(h.controls.requested, 1);
+  assert.equal(h.controls.deleted, false);
+  assert.equal(h.controls.signedOut, false);
+  assert.ok(h.alerts.some(text => text.includes("NON è ancora eliminato")));
+  assert.deepEqual(JSON.parse(JSON.stringify(h.calls.filter(x => x[0] === "requestCallable").map(x => x[1]))),
+    [{ confirmation: "RICHIEDO ELIMINAZIONE" }]);
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+    typedConfirmation: "RICHIEDO", requestFn: async () => { throw new Error("Synthetic backend offline"); } });
+  await h.elements.get("varga-deletion-request-menu").click();
+  assert.equal(h.controls.requested, 1);
+  assert.equal(h.controls.deleted, false);
+  assert.ok(h.alerts.some(text => text.includes("non è stata confermata dal server")));
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+    typedConfirmation: "RICHIEDO", requestFn: async () => ({data:{requested:true,status:"in_review",alreadyExists:true}}) });
+  await h.elements.get("varga-deletion-request-menu").click();
+  assert.ok(h.alerts.some(text => text.includes("NON è ancora eliminato")));
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+    typedConfirmation: "RICHIEDO", requestFn: async () => ({data:{requested:true,status:"completed",alreadyExists:true}}) });
+  await h.elements.get("varga-deletion-request-menu").click();
+  assert.ok(h.alerts.some(text => text.includes("nessuna nuova cancellazione")));
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+    typedConfirmation: "NO" });
+  await h.elements.get("varga-deletion-request-menu").click();
+  assert.equal(h.controls.requested, 0);
+  h = harness({ platform: "ios", deletionEnabled: true, requestEnabled: true });
+  assert.equal(h.elements.has("varga-deletion-request-menu"), false);
+
   h = harness({ platform: "ios" });
   assert.ok(h.elements.has("auth-apple-login-btn"), "native iOS Apple button missing");
   await h.elements.get("auth-apple-login-btn").click();

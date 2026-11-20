@@ -19,8 +19,8 @@ const exportsForTest={};
 // checks that a transaction callback returns an instanceof Promise.
 // vm.runInNewContext would create a foreign-realm Promise and reject it.
 const loadHandlers=vm.runInThisContext(
-  "(function(exports, require, console) {\\n" +
-  fs.readFileSync("functions/account-deletion-request.js","utf8") + "\\n})",
+  "(function(exports, require, console) {\n" +
+  fs.readFileSync("functions/account-deletion-request.js","utf8") + "\n})",
   {filename:"functions/account-deletion-request.js"}
 );
 loadHandlers(exportsForTest, function(name){

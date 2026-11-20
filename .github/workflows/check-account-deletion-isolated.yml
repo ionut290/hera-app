@@ -6,6 +6,9 @@ on:
       - "functions/account-deletion.js"
       - "functions/main.js"
       - "scripts/check-account-privacy-runtime.js"
+      - "scripts/check-account-retention-coverage.cjs"
+      - "scripts/audit-retention-readiness.cjs"
+      - "privacy.html"
       - ".github/workflows/deploy-account-deletion-protected.yml"
       - ".github/workflows/deploy-account-deletion-demo-canary.yml"
       - ".github/workflows/deploy-firebase-functions.yml"
@@ -35,6 +38,11 @@ jobs:
           node -e "const m=require('./functions/main.js'); if (typeof m.deleteOwnVargaAccount !== 'function') throw Error('Callable missing');"
       - name: Mocked account deletion and privacy isolation tests (NO FIREBASE ACCESS)
         run: node scripts/check-account-privacy-runtime.js
+      - name: Cross-check account deletion source against published retention policy (OFFLINE)
+        run: |
+          set -euo pipefail
+          node --check scripts/check-account-retention-coverage.cjs
+          node scripts/check-account-retention-coverage.cjs
       - name: Keep production deployment protected
         run: |
           test -s .github/workflows/deploy-account-deletion-protected.yml

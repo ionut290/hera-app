@@ -35,7 +35,22 @@ jobs:
           if(report.status==="READY") assert.equal(report.blockers.length,0);
           else assert.ok(report.blockers.length>0);
           console.log("App Review full-access assessment:",report.status);
-          for(const issue of report.blockers) console.log("BLOCKER:",issue);
+          const summary = [
+            `## Apple App Review readiness: ${report.status}`,
+            "",
+            `**Feature source checks:** ${report.coverage.length}`,
+            "",
+            ...(report.blockers.length
+              ? report.blockers.map(issue => `- BLOCKER: ${issue}`)
+              : ["- No blockers found by this static audit"]),
+            "",
+            "**Important:** Successful GitHub Actions execution confirms that the audit ran, not that the app is ready for Apple review."
+          ].join("\n");
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + "\n");
+          for(const issue of report.blockers) {
+            console.log("BLOCKER:",issue);
+            console.log("::warning title=App Review NOT READY::" + issue.replace(/[\r\n]/g," "));
+          }
           NODE
       - name: Confirm no ordinary iOS reviewer assets are accidentally included
         run: |

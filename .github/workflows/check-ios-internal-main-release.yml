@@ -1,0 +1,32 @@
+name: Check iOS internal TestFlight main workflow (NO UPLOAD)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios-internal-testflight-main.yml"
+      - ".github/workflows/check-ios-internal-main-release.yml"
+      - "scripts/check-ios-internal-main-release.cjs"
+      - "docs/SOLO_OWNER_RELEASE_PROTOCOL_2026-11-20.md"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  internal-upload-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check private TestFlight job can never submit public release
+        run: |
+          set -euo pipefail
+          node --check scripts/check-ios-internal-main-release.cjs
+          node scripts/check-ios-internal-main-release.cjs
+          node scripts/check-ios-appstore-build-number.cjs
+          node scripts/check-app-review-readiness-failclosed.cjs
+      - name: Confirm job did not use secrets or upload
+        run: echo "No signing secrets, Firebase credentials, iPhone app upload or deployment in this CI."

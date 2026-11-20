@@ -150,9 +150,8 @@ async function main() {
     // ONLY local emulator fixture is now irreversibly deleted.
     const result = await invoke(call(demoUid, { confirmation: "ELIMINA" }));
     assert.equal(result.deleted, true);
-    await denied(auth.getUser(demoUid), "auth/user-not-found").catch(async () => {
-      await assert.rejects(auth.getUser(demoUid), e => e.code === "auth/user-not-found");
-    });
+    await assert.rejects(auth.getUser(demoUid),
+      error => error.code === "auth/user-not-found");
     assert.equal((await auth.getUser(otherUid)).uid, otherUid);
     assert.equal((await db.doc("platformUsers/" + demoUid).get()).exists, false);
     assert.equal((await db.doc("platformUsers/" + otherUid).get()).exists, true);

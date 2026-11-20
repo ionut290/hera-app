@@ -1,0 +1,45 @@
+name: Audit Apple full-access demo readiness (read-only)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/audit-app-review-full-access.cjs"
+      - "docs/APP_REVIEW_FULL_ACCESS_PLAN_2026-11-20.md"
+      - ".github/workflows/check-app-review-full-access-readiness.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review-readiness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Audit existing feature sources and review-access blockers (no Firebase credentials)
+        run: |
+          set -euo pipefail
+          node --check scripts/audit-app-review-full-access.cjs
+          node scripts/audit-app-review-full-access.cjs > "$RUNNER_TEMP/full-access-readiness.json"
+          node - "$RUNNER_TEMP/full-access-readiness.json" <<'NODE'
+          const assert=require("node:assert/strict");
+          const fs=require("node:fs");
+          const report=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));
+          assert.ok(["BLOCKED","READY"].includes(report.status));
+          assert.ok(report.coverage.length>=8);
+          assert.ok(report.coverage.every(x=>x.sourcePresent));
+          if(report.status==="READY") assert.equal(report.blockers.length,0);
+          else assert.ok(report.blockers.length>0);
+          console.log("App Review full-access assessment:",report.status);
+          for(const issue of report.blockers) console.log("BLOCKER:",issue);
+          NODE
+      - name: Confirm no ordinary iOS reviewer assets are accidentally included
+        run: |
+          set -euo pipefail
+          node scripts/prepare-capacitor-web.js
+          test ! -e www/apple-review-demo-deletion-ui.js
+          node scripts/check-appstore-2519-clean.js

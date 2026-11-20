@@ -13,6 +13,22 @@ if(process.env.GOOGLE_APPLICATION_CREDENTIALS) throw Error("No service account c
 const admin=require("../functions/node_modules/firebase-admin");
 admin.initializeApp({projectId:project});
 const db=admin.firestore();
+// This workflow intentionally uses only Firestore Emulator; mock live Auth
+// records here, while the separate Auth+Firestore Emulator test verifies the
+// same guard against the actual local Firebase Auth SDK.
+const liveUsers = new Map();
+const scopedAdmin = {
+  firestore: admin.firestore,
+  auth() { return { async getUser(uid) {
+    const user = liveUsers.get(uid);
+    if (!user) {
+      const error = new Error("No synthetic Auth user");
+      error.code = "auth/user-not-found";
+      throw error;
+    }
+    return user;
+  } }; }
+};
 class HttpsError extends Error { constructor(code,message){super(message);this.code=code;} }
 const exportsForTest={};
 // Compile in the same JS realm as the real Firestore Admin SDK: the SDK
@@ -24,7 +40,7 @@ const loadHandlers=vm.runInThisContext(
   {filename:"functions/account-deletion-request.js"}
 );
 loadHandlers(exportsForTest, function(name){
-  if(name==="firebase-admin")return admin;
+  if(name==="firebase-admin")return scopedAdmin;
   if(name==="firebase-functions/v2/https")return {
     HttpsError,onCall(opts,fn){assert.equal(opts.region,"europe-west1");return fn;}
   };
@@ -38,6 +54,8 @@ const auth=(uid,age=0)=>({uid,token:{auth_time:now-age}});
 const request=(uid,age=0)=>({auth:auth(uid,age),data:{confirmation:"RICHIEDO ELIMINAZIONE"}});
 const rejects=(p,code)=>assert.rejects(p,e=>e instanceof HttpsError&&e.code===code);
 (async()=>{
+  liveUsers.set(firstUid,{uid:firstUid,disabled:false});
+  liveUsers.set(secondUid,{uid:secondUid,disabled:false});
   const profile={synthetic:true,tag:"preserve"}, privateDoc={ownerUserId:firstUid,synthetic:true};
   await db.doc("platformUsers/"+firstUid).set(profile);
   await db.doc("privateDocuments/"+firstUid).set(privateDoc);
@@ -47,6 +65,14 @@ const rejects=(p,code)=>assert.rejects(p,e=>e instanceof HttpsError&&e.code===co
   await rejects(ask({auth:auth(firstUid),data:{confirmation:"RICHIEDO ELIMINAZIONE",uid:secondUid}}),"invalid-argument");
   await rejects(read({auth:auth(firstUid),data:{uid:secondUid}}),"invalid-argument");
   assert.equal((await read({auth:auth(firstUid),data:{}})).requested,false);
+  const ghostUid="synthetic-"+process.pid+"-ghost";
+  await rejects(ask(request(ghostUid)),"unauthenticated");
+  await rejects(read({auth:auth(ghostUid),data:{}}),"unauthenticated");
+  liveUsers.get(firstUid).disabled=true;
+  await rejects(ask(request(firstUid)),"unauthenticated");
+  await rejects(read({auth:auth(firstUid),data:{}}),"unauthenticated");
+  assert.equal((await db.collection("accountDeletionRequests").get()).size,0);
+  liveUsers.get(firstUid).disabled=false;
   const first=await ask(request(firstUid));
   assert.equal(first.status,"pending");
   assert.equal(first.alreadyExists,false);

@@ -49,10 +49,31 @@ exports.requestOwnVargaAccountDeletion = onCall({
       const snapshot = await tx.get(ref);
       if (snapshot.exists) {
         // Never reset a completed, rejected or in-review request to pending.
-        const status = snapshot.data()?.status;
+        const previous = snapshot.data() || {};
+        const status = previous.status;
         if (!REVIEW_STATUSES.has(status)) {
           throw new HttpsError("failed-precondition",
             "Richiesta esistente in stato non riconosciuto. Contatta l'assistenza.");
+        }
+        if (status === "rejected") {
+          // Rejection must not permanently prevent the account owner from
+          // asking again. Preserve any previous reviewer notes/disposition
+          // instead of erasing the document, and audit each renewed request.
+          // A fresh Firebase Auth sign-in was already required above.
+          const count = previous.reopenCount === undefined ? 0 : previous.reopenCount;
+          if (!Number.isSafeInteger(count) || count < 0 || count >= 10000) {
+            throw new HttpsError("failed-precondition",
+              "Cronologia richieste non valida. Contatta l'assistenza.");
+          }
+          const now = admin.firestore.FieldValue.serverTimestamp();
+          tx.update(ref, {
+            status: "pending",
+            submittedAt: now,
+            reopenedAt: now,
+            reopenCount: count + 1,
+            reviewBeforeErasureRequired: true
+          });
+          return { requested: true, status: "pending", alreadyExists: true, reopened: true };
         }
         return { requested: true, status, alreadyExists: true };
       }

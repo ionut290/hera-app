@@ -44,6 +44,11 @@ const admin = {
           if (records.has(ref.uid)) throw Error("Duplicate create");
           records.set(ref.uid, value);
           updates.push(ref.uid);
+        },
+        update(ref, patch) {
+          if (!records.has(ref.uid)) throw Error("Missing document to update");
+          records.set(ref.uid, { ...records.get(ref.uid), ...patch });
+          updates.push(ref.uid);
         }
       });
     }
@@ -118,6 +123,28 @@ async function rejectsCode(promise, code) {
   records.get("worker-one").status = "completed";
   assert.equal((await request(valid("worker-one"))).status, "completed");
   assert.equal(updates.length, 1);
+
+  // A rejected request must be appealable in-app by the same authenticated
+  // account without erasing the previous review information. One retry
+  // creates one new review cycle; fast consecutive taps remain idempotent.
+  records.get("worker-one").status = "rejected";
+  records.get("worker-one").reviewerNote = "Synthetic previous disposition";
+  const reopened = await request(valid("worker-one"));
+  assert.equal(reopened.status, "pending");
+  assert.equal(reopened.alreadyExists, true);
+  assert.equal(reopened.reopened, true);
+  assert.equal(records.get("worker-one").reopenCount, 1);
+  assert.equal(records.get("worker-one").reopenedAt, "<synthetic-server-time>");
+  assert.equal(records.get("worker-one").reviewerNote, "Synthetic previous disposition");
+  assert.equal(updates.length, 2);
+  const noDuplicate = await request(valid("worker-one"));
+  assert.equal(noDuplicate.status, "pending");
+  assert.equal(noDuplicate.reopened, undefined);
+  assert.equal(updates.length, 2);
+  records.get("worker-one").status = "rejected";
+  records.get("worker-one").reopenCount = "corrupt";
+  await rejectsCode(request(valid("worker-one")), "failed-precondition");
+  assert.equal(updates.length, 2);
   records.get("worker-one").status = "bad-state";
   await rejectsCode(request(valid("worker-one")), "failed-precondition");
   assert.equal(records.size, 1);

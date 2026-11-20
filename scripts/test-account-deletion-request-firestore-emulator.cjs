@@ -63,6 +63,22 @@ const rejects=(p,code)=>assert.rejects(p,e=>e instanceof HttpsError&&e.code===co
   await db.doc("accountDeletionRequests/"+firstUid).update({status:"in_review"});
   assert.equal((await ask(request(firstUid))).status,"in_review");
   assert.equal((await read({auth:auth(firstUid),data:{}})).status,"in_review");
+  // A real Firestore transaction can reopen a rejected request, keeping
+  // earlier review metadata. No other user, profile or private data is touched.
+  await db.doc("accountDeletionRequests/"+firstUid).update({
+    status:"rejected", reviewerNote:"Synthetic reviewer decision"
+  });
+  const reopened=await ask(request(firstUid));
+  assert.equal(reopened.status,"pending");
+  assert.equal(reopened.reopened,true);
+  assert.equal(reopened.alreadyExists,true);
+  const after=(await db.doc("accountDeletionRequests/"+firstUid).get()).data();
+  assert.equal(after.status,"pending");
+  assert.equal(after.reopenCount,1);
+  assert.equal(after.reviewerNote,"Synthetic reviewer decision");
+  assert.equal(typeof after.reopenedAt.toDate,"function");
+  assert.equal((await ask(request(firstUid))).reopened,undefined);
+  assert.equal((await read({auth:auth(firstUid),data:{}})).status,"pending");
   assert.equal((await ask(request(secondUid))).status,"pending");
   assert.equal((await read({auth:auth(secondUid),data:{}})).status,"pending");
   assert.equal((await db.collection("accountDeletionRequests").get()).size,2);
@@ -71,5 +87,5 @@ const rejects=(p,code)=>assert.rejects(p,e=>e instanceof HttpsError&&e.code===co
   for(const collection of ["accountDeletionRequests","platformUsers","privateDocuments"])
     for(const uid of [firstUid,secondUid]) await db.doc(collection+"/"+uid).delete();
   await admin.app().delete();
-  console.log("PASS: real local Firestore transactions, UID isolation, server timestamps, duplicate requests and preserved synthetic data");
+  console.log("PASS: real local Firestore transactions, UID isolation, server timestamps, duplicate requests, rejection retry and preserved synthetic data");
 })().catch(e=>{console.error(e);process.exitCode=1;admin.app().delete().catch(()=>{});});

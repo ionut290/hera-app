@@ -474,6 +474,21 @@
     </div>
   </section>
 
+  <dialog id="auth-password-reset-dialog" class="biometric-dialog auth-password-reset-dialog" aria-labelledby="auth-password-reset-heading">
+    <form id="auth-password-reset-form">
+      <h2 id="auth-password-reset-heading">Recupera la password</h2>
+      <p>Inserisci l'email con cui accedi a VARGA CANTIERI. Riceverai un link per scegliere una nuova password, senza chiedere aiuto all'amministratore.</p>
+      <label for="auth-password-reset-email">Indirizzo email</label>
+      <input id="auth-password-reset-email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="email@azienda.it" required>
+      <p class="muted">Usi Google o Apple? Torna al login e scegli «Accedi con Google» o «Accedi con Apple»: non serve creare una password per questi accessi.</p>
+      <p id="auth-password-reset-feedback" class="muted" role="status" aria-live="polite"></p>
+      <div class="actions-row">
+        <button id="auth-password-reset-close" type="button" class="btn">Torna al login</button>
+        <button id="auth-password-reset-submit" type="submit" class="btn btn-primary">Invia link di recupero</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="registration-dialog" class="biometric-dialog registration-dialog">
     <form id="registration-form">
       <h2>Crea nuovo account</h2>
@@ -753,7 +768,7 @@
   <script src="auth-login-fix.js?v=20261120-ios-native-google1"></script>
   <script src="varga-session-transfer.js?v=20260920-sso1"></script>
   <script src="approval-access.js?v=20260828-authfix"></script>
-  <script src="first-login-password.js?v=20260726b"></script>
+  <script src="first-login-password.js?v=20261120-selfservice1"></script>
   <script src="password-recovery-code.js?v=20260906b"></script>
   <script src="login-retry-fix.js?v=20260906-recovery-code1"></script>
   <script src="account-privacy-controls.js?v=20261120-deletion-request-sla1"></script>

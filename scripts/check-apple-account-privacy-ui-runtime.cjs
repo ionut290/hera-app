@@ -15,7 +15,7 @@ assert.match(staged,/reviewBeforeErasureRequired:\s*true/);
 assert.match(source,/window\.__VARGA_ACCOUNT_DELETION_REQUEST_ENABLED === true/);
 
 function harness({platform="ios",request=false,sla=undefined,immediate=false,
-                  user=true,plugin=true,response="pending",defer=false}={}){
+                  user=true,plugin=true,response="pending",reasonCode=undefined,defer=false}={}){
   const elements=[],alerts=[],calls=[];
   let release;
   class Element {
@@ -66,7 +66,7 @@ function harness({platform="ios",request=false,sla=undefined,immediate=false,
             await new Promise(resolve=>{release=resolve;});
           }
           return {data:name==="getOwnVargaAccountDeletionStatus"
-            ?{requested:true,status:response}
+            ?{requested:true,status:response,...(reasonCode===undefined?{}:{reasonCode})}
             :{requested:true,status:response,alreadyExists:false}};
         };
       }};
@@ -162,6 +162,26 @@ function harness({platform="ios",request=false,sla=undefined,immediate=false,
   const already=harness({request:true,sla:30,response:"completed"});
   await already.get("varga-deletion-request-profile").click();
   assert.match(already.alerts.at(-1),/nessuna nuova cancellazione/i);
+
+  const reason=harness({
+    request:true,sla:30,response:"rejected",reasonCode:"retention_review_required"
+  });
+  await reason.get("varga-deletion-request-profile-status").click();
+  assert.match(reason.alerts.at(-1),/obblighi di conservazione/);
+  assert.match(reason.alerts.at(-1),/ripresentarla/);
+  assert.match(reason.alerts.at(-1),/senza cancellazione/);
+
+  const opaque=harness({
+    request:true,sla:30,response:"rejected",
+    reasonCode:"Sensitive private reviewer note - NEVER show"
+  });
+  await opaque.get("varga-deletion-request-profile-status").click();
+  assert.match(opaque.alerts.at(-1),/motivazione non è disponibile/);
+  assert.equal(opaque.alerts.at(-1).includes("Sensitive private reviewer note"),false);
+
+  const noReason=harness({request:true,sla:30,response:"rejected"});
+  await noReason.get("varga-deletion-request-profile-status").click();
+  assert.match(noReason.alerts.at(-1),/motivazione non è disponibile/);
 
   const demo=harness({request:true,sla:30,immediate:true});
   assert.equal(demo.all("[data-request-varga-deletion]").length,0);

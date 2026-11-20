@@ -94,6 +94,15 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.reviewed_sha }}
 
+      - name: Verify exact reviewed source AGAIN before any deploy secrets
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
+          test "$REVIEWED_SHA" = "$GITHUB_SHA"
+          test "$GITHUB_ACTOR" = "ionut290"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -140,8 +149,14 @@ jobs:
             echo "Missing secret FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B"
             exit 1
           fi
+          umask 077
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
           chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+          python3 - "$RUNNER_TEMP/firebase-service-account.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding="utf-8") as f: obj=json.load(f)
+          assert obj.get("project_id")=="hera-app-6cd2b","Wrong Firebase project: refuse deploy"
+          PY
 
       # Important: never deploy Firestore Security Rules from the solo owner
       # workflow. Rule changes can expand access to employee/company data.
@@ -156,7 +171,6 @@ jobs:
           --only functions:approveUserAccess,functions:processAdminPasswordPrivateRequest,functions:setPasswordRecoveryCode,functions:getPasswordRecoveryCodeStatus,functions:startPasswordRecoveryWithCode,functions:completePasswordRecoveryWithCode,functions:notifyAndroidChatMessage,functions:notifyAndroidHoursInserted,functions:notifyAndroidSquadraAssignment,functions:syncCalendarAbsenceSquadraAlerts,functions:syncSharedCalendarFromOreReports,functions:syncSharedCalendarFromOreApprovalRequests,functions:syncSharedCalendarFromImpianti,functions:syncSharedCalendarFromLavorazioni,functions:getAdministrativeCalendarMonth,functions:syncSharedRegistriesFromPersonale,functions:syncSharedRegistriesFromMezzi,functions:syncSharedSquadreFromHistory,functions:syncSharedSquadreFromCurrent,functions:rebuildAllSharedStaticViews,functions:syncImpiantoChangeIndex,functions:recordClientErrorGroup,functions:getErrorCenterSummary,functions:getErrorCenterDashboard,functions:markErrorCenterSeen,functions:updateErrorCenterStatus,functions:resetErrorCenter,functions:getErrorEmailUsage,functions:uploadWhazzupPdfToDrive,functions:cleanupExpiredWhazzupPdfs,functions:rebuildVargaGestionaleSnapshot,functions:getVargaGestionaleSnapshotManifest,functions:getVargaGestionaleSnapshotChunk,functions:createVargaCantieriTransferToken,functions:createAppleReviewAccount
           --project hera-app-6cd2b
           --non-interactive
-          --force
 
       - name: Confirm IAM permissions are NOT modified by the workflow
         run: |
@@ -164,3 +178,7 @@ jobs:
           echo "This solo workflow only deploys the exact reviewed functions allowlist."
           echo "It does not grant public invoker roles or widen IAM permissions."
           echo "The protected deletion request and account erasure workflows remain separate."
+
+      - name: Remove temporary Firebase credential (always)
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-service-account.json"

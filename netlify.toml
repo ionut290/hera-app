@@ -1,6 +1,6 @@
 [build]
-  command = "node scripts/stamp-pwa-build-version.js"
-  publish = "."
+  command = "node scripts/stamp-pwa-build-version.js && node scripts/prepare-capacitor-web.js && node scripts/prepare-netlify-web.cjs && node scripts/check-netlify-public-build.cjs"
+  publish = "www"
   functions = "netlify/functions"
 
 [[redirects]]

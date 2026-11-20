@@ -1,0 +1,31 @@
+name: Test Apple login and account privacy UI (synthetic, NO DEPLOY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "account-privacy-controls.js"
+      - "functions/account-deletion-request.js"
+      - "scripts/check-apple-account-privacy-ui-runtime.cjs"
+      - ".github/workflows/check-apple-account-privacy-ui.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  privacy-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test synthetic Apple authentication and deletion request UI
+        run: |
+          set -euo pipefail
+          node --check account-privacy-controls.js
+          node --check scripts/check-apple-account-privacy-ui-runtime.cjs
+          node scripts/check-apple-account-privacy-ui-runtime.cjs
+      - name: Confirm no deployment or real-user access
+        run: echo "Synthetic DOM, Firebase and Apple plugin only. No Firebase, App Store, login, actual deletion, credentials or production data used."

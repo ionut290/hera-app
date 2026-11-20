@@ -1,0 +1,52 @@
+name: Verify Apple Storage isolation (emulators only)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "storage.rules"
+      - "firestore.rules"
+      - "scripts/test-app-review-storage-emulator.cjs"
+      - ".github/workflows/check-apple-review-storage-isolation.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  storage-isolation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CI: "true"
+      GOOGLE_CLOUD_PROJECT: demo-apple-storage-isolation
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install local rules-unit-testing dependencies
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --no-audit --no-fund @firebase/rules-unit-testing@4.0.1
+      - name: Require emulator-only code; never use production credentials
+        run: |
+          set -euo pipefail
+          node --check scripts/test-app-review-storage-emulator.cjs
+          grep -Fq 'FIREBASE_STORAGE_EMULATOR_HOST' scripts/test-app-review-storage-emulator.cjs
+          grep -Fq 'FIRESTORE_EMULATOR_HOST' scripts/test-app-review-storage-emulator.cjs
+          grep -Fq 'demo-apple-storage-isolation' scripts/test-app-review-storage-emulator.cjs
+          if grep -E 'hera-app-6cd2b|GOOGLE_APPLICATION_CREDENTIALS|firebase-admin|https?://' scripts/test-app-review-storage-emulator.cjs; then
+            echo "::error::Production access forbidden in synthetic Storage test"
+            exit 1
+          fi
+      - name: Verify actual storage rules with fake file bytes only
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14.23.0 emulators:exec --only firestore,storage \
+            --project demo-apple-storage-isolation \
+            'node scripts/test-app-review-storage-emulator.cjs'

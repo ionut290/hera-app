@@ -48,5 +48,10 @@ jobs:
             echo "::error::Staged deletion request unexpectedly exported in production functions main"
             exit 1
           fi
-          grep -Fq -- '!functions/account-deletion-request.js' .github/workflows/deploy-firebase-functions.yml
+          # Routine Firebase releases are now entirely MANUAL and guarded.
+          # They must never export or deploy the staged deletion-request callables.
+          grep -Fq 'node scripts/check-solo-owner-release-policy.cjs --verify' .github/workflows/deploy-firebase-functions.yml
+          ! grep -Eq '^  push:' .github/workflows/deploy-firebase-functions.yml
+          ! grep -Eq -- '--only .*functions:requestOwnVargaAccountDeletion' .github/workflows/deploy-firebase-functions.yml
+          ! grep -Eq -- '--only .*functions:getOwnVargaAccountDeletionStatus' .github/workflows/deploy-firebase-functions.yml
           echo "PASS: request callable is staged only; no data accessed and no Firebase deployed."

@@ -17,13 +17,15 @@
 
 **Questa variante con dati reali è subordinata all'autorizzazione pertinente e ai test di sicurezza**. Non inviare ad Apple un account privilegiato che mostra informazioni riservate senza autorizzazione. Apple chiede accesso funzionale completo, non accesso indiscriminato ai dati di dipendenti/clienti.
 
-## Verifica comunicazioni Apple e numerazione build — 20 novembre 2026
+## Verifica comunicazioni Apple e numerazione build — aggiornato 20 novembre 2026
 
-L'ultimo avviso Apple verificato tramite email (19 novembre 2026) conferma che **VARGA CANTIERI 1.0 (20011)** è stata consegnata correttamente ed è disponibile su **TestFlight**. Non equivale ad App Review approvata o pubblicazione. Un altro messaggio Apple per la stessa build segnala **ITMS-90725**, un avviso (non un blocco della consegna 20011) perché l'app è stata compilata con **iOS SDK 26.5**. Apple indica che **da aprile 2027** le nuove consegne richiederanno **iOS SDK 27 o successivo / Xcode 27 o successivo**.
+Il **20 novembre 2026** Apple ha confermato via email **VARGA CANTIERI 1.0 (20015)** pronta su **TestFlight interno**. L'utente ha riferito sul suo iPhone che funzionano login Google e Apple, e che entrambe le sessioni persistono alla riapertura. Questi esiti **non** attestano App Review, cancellazione account o accesso completo alle funzioni da parte del revisore.
 
-Il workflow manuale `ios-appstore-candidate.yml` usa pertanto `20012` soltanto come **minimo proposto successivo alla 20011 confermata** e verifica in entrambi gli stadi che il numero immesso sia strettamente maggiore di 20011. **Controllare sempre il numero più alto direttamente in App Store Connect prima di avviare il workflow**, perché una build più recente potrebbe essere stata caricata senza essere citata qui. Dal 1º aprile 2027 l'upload rifiuta un SDK precedente a 27: la configurazione del runner dovrà essere aggiornata quando Xcode 27 sarà disponibile.
+Per la stessa build 20015 Apple ha inviato l'avviso **ITMS-90725** relativo all'SDK iOS 26.5: non ha impedito la disponibilità TestFlight, ma **da aprile 2027** servirà iOS SDK 27 o superiore per nuove consegne.
 
-I test offline `check-ios-appstore-release-safety.yml` rifiutano 10004, 20010 e 20011 e verificano che resti il gate `node scripts/audit-app-review-full-access.cjs --require-ready`. **La modifica non esegue né autorizza un upload**: account reviewer, cancellazione ordinaria, collaudo iPhone e privacy rimangono aperti.
+Il workflow manuale `ios-appstore-candidate.yml` imposta il prossimo **numero proposto** a `20016` e rifiuta tutte le build **≤ 20015** in Linux e macOS. Questo è un **limite storico minimo**, non una verifica live di App Store Connect: controllare sempre il numero più alto in App Store Connect prima di autorizzare l'upload. Il gate `node scripts/audit-app-review-full-access.cjs --require-ready` rimane bloccante; il workflow NON è un'autorizzazione a pubblicare.
+
+I test offline `check-ios-appstore-release-safety.yml` impediscono l'accettazione di build già utilizzate (20011–20015), verificano il gate App Review e conservano la protezione iOS 27. Nessuna firma, upload o modifica Firebase è prodotta da questo aggiornamento.
 
 ## Requisito Apple
 
@@ -35,7 +37,7 @@ App Review Guideline 2.1: i revisori devono poter usare tutte le principali funz
 2. `storage.rules` proibisce al reviewer l'accesso agli allegati ordinari.
 3. `scripts/prepare-capacitor-web.js` esclude intenzionalmente i file `apple-review-*` dai bundle nativi e `check-appstore-2519-clean.js` impedisce logiche esclusive al revisore: **non rimuovere** queste protezioni.
 4. `deleteOwnVargaAccount` attualmente è un canary **solo demo**, verificato nel backend ma non pronto per la cancellazione generalizzata degli account dei lavoratori.
-5. Il vecchio account `sqadrahera+varga-demo@gmail.com` è stato **eliminato** nel test reale GitHub #44620065125; non esiste più come account Auth. NON indicare le vecchie credenziali ad Apple.
+5. **Verifica Firebase Auth del 20 novembre 2026:** l'account demo consentito dalla whitelist del canary **ESISTE ma risulta DISABILITATO**. Il riferimento al test storico GitHub #44620065125 non descrive più lo stato attuale. Non è un login attivo da consegnare ad Apple; non riabilitare senza audit di isolamento, approvazioni e collaudo.
 6. Per il momento manca prova di un test di tutte le funzioni su iPhone fisico con dati fittizi.
 
 ## Architettura consigliata

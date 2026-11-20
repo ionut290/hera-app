@@ -87,9 +87,10 @@ function audit() {
     found.add(name);
   }
 
-  assert.match(privacy, /Log tecnici:<\/strong>\s*90 giorni/i);
-  assert.match(privacy, /Foto e allegati operativi:<\/strong>\s*24 mesi/i);
-  assert.match(privacy, /documentazione amministrativo-contabile:<\/strong>\s*10 anni/i);
+  assert.match(privacy, /Profili\/account: fino alla disattivazione, poi fino a 12 mesi/i);
+  assert.match(privacy, /Log tecnici:\s*90 giorni/i);
+  assert.match(privacy, /Foto e allegati operativi:\s*24 mesi/i);
+  assert.match(privacy, /documentazione amministrativo-contabile:\s*10 anni/i);
   assert.ok(retention.includes("const MAX_PER_COLLECTION = 10000;"),
     "Read-only retention audit cap unexpectedly changed");
   for (const name of ["activityLogs", "notificationEmailQueue", "gpsUpdateRequests",
@@ -114,6 +115,7 @@ function audit() {
       ({collection, codeBehavior})),
     protectedMetadataAuditCategories: protectedAuditCategories,
     policyTextDurations: {
+      accountProfiles: "up to 12 months after deactivation (conditional)",
       technicalLogs: "90 days (conditional)",
       operationalAttachments: "24 months from work closure (conditional)",
       administrativeAccounting: "up to 10 years when justified"

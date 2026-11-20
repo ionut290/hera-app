@@ -439,7 +439,17 @@ service cloud.firestore {
     }
 
     match /platformUsers/{userId} {
-      allow read: if isAdmin() || isSelf(userId);
+      // App Review can read ONLY its own server-created reviewer profile.
+      // Never permit reviewer writes, queries over profiles, or access to
+      // a normal employee profile, even if its UID matches the reviewer token.
+      // Both flags are provisioned by the admin-only review callable.
+      allow read: if isAdmin() || isSelf(userId)
+        || (isAppleReviewAccount()
+          && request.auth.uid == userId
+          && resource.data.get("role", "") == "apple_review"
+          && resource.data.get("reviewer", false) == true
+          && resource.data.get("isAdmin", false) == false
+          && resource.data.get("admin", false) == false);
       allow create: if isAdmin() || (validPendingProfileCreate(userId) && createsNoInlinePosition() && createsNoPermissionFields() && createsNoBanFields());
       allow update: if isAdmin() || (isSelf(userId) && !isBannedUser() && updatesNoInlinePosition() && updatesNoPermissionFields() && updatesNoBanFields() && validSelfProfileUpdate());
       allow delete: if isAdmin();

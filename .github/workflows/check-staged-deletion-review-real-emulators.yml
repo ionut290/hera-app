@@ -1,0 +1,61 @@
+name: Test staged privacy request + reviewer with Auth and Firestore Emulators (NO DEPLOY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "functions/account-deletion-review-staged.js"
+      - "functions/account-deletion-request.js"
+      - "scripts/test-staged-deletion-review-auth-firestore-emulators.cjs"
+      - ".github/workflows/check-staged-deletion-review-real-emulators.yml"
+      - "firebase.json"
+      - "firebase.privacy-review-emulators.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review-emulators:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-deletion-review-e2e
+      GOOGLE_CLOUD_PROJECT: demo-deletion-review-e2e
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install Firebase Admin SDK in functions directory
+        run: |
+          set -euo pipefail
+          (cd functions && npm ci --no-audit --no-fund)
+      - name: Fail closed on production credentials or remote endpoints
+        run: |
+          set -euo pipefail
+          node --check scripts/test-staged-deletion-review-auth-firestore-emulators.cjs
+          node --check functions/account-deletion-review-staged.js
+          if env | grep -q '^GOOGLE_APPLICATION_CREDENTIALS='; then
+            echo "::error::Cloud service-account credentials forbidden"
+            exit 1
+          fi
+          grep -Fq 'FIREBASE_AUTH_EMULATOR_HOST' scripts/test-staged-deletion-review-auth-firestore-emulators.cjs
+          grep -Fq 'FIRESTORE_EMULATOR_HOST' scripts/test-staged-deletion-review-auth-firestore-emulators.cjs
+          grep -Fq 'demo-deletion-review-e2e' scripts/test-staged-deletion-review-auth-firestore-emulators.cjs
+          if grep -Eq 'hera-app-6cd2b|https?://' scripts/test-staged-deletion-review-auth-firestore-emulators.cjs; then
+            echo "::error::Production Firebase project or remote endpoint detected"
+            exit 1
+          fi
+      - name: Test ACTUAL callable bodies with real local Auth and Firestore
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14.23.0 emulators:exec --config firebase.privacy-review-emulators.json --only auth,firestore \
+            --project demo-deletion-review-e2e \
+            'node scripts/test-staged-deletion-review-auth-firestore-emulators.cjs'
+      - name: Explain non-release scope
+        run: echo "Synthetic users and real local emulators only. No deployed functions, credentials, privilege assignment or production-data deletion."

@@ -9,6 +9,8 @@ on:
       - "functions/**"
       # Account deletion is manually deployed with protected reviewer approval only.
       - "!functions/account-deletion.js"
+      # Separate protected deployment and privacy review are required.
+      - "!functions/account-deletion-request.js"
       - "firestore.rules"
       - "firestore.indexes.json"
       - "firebase.json"

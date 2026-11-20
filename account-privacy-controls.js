@@ -7,7 +7,10 @@
   // Fail closed until the deletion backend and privacy release are actually live.
   // This does NOT gate Sign in with Apple; only the destructive account-deletion UI.
   const deletionEnabled = window.__VARGA_ACCOUNT_DELETION_ENABLED === true;
+  // Only enable after the callable and fulfillment process are authorized and deployed.
+  const requestEnabled = window.__VARGA_ACCOUNT_DELETION_REQUEST_ENABLED === true && !deletionEnabled;
   let deleting = false;
+  let requestingDeletion = false;
   let signingIn = false;
 
   function nativePlatform() {
@@ -175,6 +178,38 @@
     }
   }
 
+  // Request initiation is NON-DESTRUCTIVE and separate from immediate deletion.
+  // Never show this UI until the reviewed callable exists in production.
+  async function requestDeletion() {
+    if (requestingDeletion) return;
+    let user;
+    try { user = auth().currentUser; } catch (error) { alert(errorText(error)); return; }
+    if (!user) { alert("Per richiedere la cancellazione devi prima accedere."); return; }
+    if (!window.confirm("Richiedere l'eliminazione del tuo account VARGA CANTIERI? Alcuni dati aziendali possono essere conservati quando necessario.")) return;
+    if (window.prompt("Per confermare scrivi RICHIEDO (tutto maiuscolo):") !== "RICHIEDO") return;
+    requestingDeletion = true;
+    const buttons = document.querySelectorAll("[data-request-varga-deletion]");
+    buttons.forEach((button) => { button.disabled = true; });
+    try {
+      const callable = firebase.app().functions(REGION).httpsCallable("requestOwnVargaAccountDeletion");
+      const result = await callable({ confirmation: "RICHIEDO ELIMINAZIONE" });
+      if (result?.data?.requested !== true ||
+          !["pending", "in_review", "completed", "rejected"].includes(result?.data?.status)) {
+        throw new Error("Il server non ha confermato la richiesta.");
+      }
+      if (result.data.status === "pending" || result.data.status === "in_review") {
+        alert("Richiesta di cancellazione registrata. La verifica viene gestita normalmente entro 30 giorni; riceverai conferma quando l'eliminazione sarà completata. L'account NON è ancora eliminato.");
+      } else {
+        alert("Esiste già una richiesta con stato " + result.data.status + ". Contatta l'assistenza per i dettagli: nessuna nuova cancellazione è stata eseguita.");
+      }
+    } catch (error) {
+      alert("La richiesta non è stata confermata dal server. " + errorText(error));
+    } finally {
+      requestingDeletion = false;
+      buttons.forEach((button) => { button.disabled = false; });
+    }
+  }
+
   function mount() {
     const gateGoogle = document.getElementById("auth-gate-login-btn");
     if (gateGoogle && !document.getElementById("auth-apple-login-btn") && nativePlatform() === "ios") {
@@ -182,6 +217,28 @@
       apple.setAttribute("aria-label", "Accedi con Apple");
       gateGoogle.insertAdjacentElement("afterend", apple);
       apple.addEventListener("click", signInWithApple);
+    }
+
+    if (requestEnabled) {
+      // User-initiated request available to authenticated normal, pending and
+      // newly registered accounts once the backend is actually operational.
+      const profileNode = document.getElementById("user-details-panel");
+      const menuNode = document.querySelector("#side-menu .side-menu-body .menu-section:nth-child(2)");
+      const pendingNode = document.getElementById("access-approval-logout");
+      const gateNode = document.getElementById("auth-apple-login-btn") || gateGoogle;
+      for (const [parent, id, after] of [
+        [profileNode, "varga-deletion-request-profile", null],
+        [menuNode, "varga-deletion-request-menu", null],
+        [pendingNode?.parentElement, "varga-deletion-request-pending", pendingNode],
+        [gateNode?.parentElement, "varga-deletion-request-gate", gateNode]
+      ]) {
+        if (!parent || document.getElementById(id)) continue;
+        const button = makeButton(id, "Richiedi cancellazione account", "btn");
+        button.dataset.requestVargaDeletion = "1";
+        button.addEventListener("click", requestDeletion);
+        if (after) after.insertAdjacentElement("afterend", button);
+        else parent.appendChild(button);
+      }
     }
 
     if (!deletionEnabled) return;

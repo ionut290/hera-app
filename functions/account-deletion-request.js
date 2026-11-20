@@ -9,6 +9,13 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const MAX_AUTH_AGE_SECONDS = 600;
 const COLLECTION = "accountDeletionRequests";
 const REVIEW_STATUSES = new Set(["pending", "in_review", "completed", "rejected"]);
+// Only these fixed, reviewed codes may be disclosed to the account owner.
+// Never return free-text operator notes, business data or arbitrary fields.
+const SAFE_REJECTION_REASONS = new Set([
+  "identity_not_verified",
+  "retention_review_required",
+  "request_needs_clarification"
+]);
 
 function identity(request, requireFresh) {
   const uid = request?.auth?.uid;
@@ -113,7 +120,14 @@ exports.getOwnVargaAccountDeletionStatus = onCall({
     if (!REVIEW_STATUSES.has(status)) {
       throw new HttpsError("failed-precondition", "Stato richiesta non riconosciuto.");
     }
-    return { requested: true, status };
+    const response = { requested: true, status };
+    if (status === "rejected") {
+      const reason = snapshot.data()?.rejectionReasonCode;
+      if (SAFE_REJECTION_REASONS.has(reason)) {
+        response.reasonCode = reason;
+      }
+    }
+    return response;
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     console.error("Account deletion request status failed", { code: error?.code || "unknown" });

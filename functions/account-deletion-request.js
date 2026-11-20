@@ -34,6 +34,26 @@ function identity(request, requireFresh) {
   return uid;
 }
 
+// Firebase verifies callable tokens, but a signed token can remain usable for a
+// short period after the user is disabled or deleted. Never accept a request
+// or expose its status unless the same UID still has an active Auth record.
+// This remains a STAGED, NON-DESTRUCTIVE service; it never revokes tokens.
+async function requireActiveAccount(uid) {
+  let user;
+  try {
+    user = await admin.auth().getUser(uid);
+  } catch (error) {
+    if (error?.code === "auth/user-not-found") {
+      throw new HttpsError("unauthenticated", "Sessione non valida. Accedi nuovamente.");
+    }
+    console.error("Deletion request Auth verification failed", { code: error?.code || "unknown" });
+    throw new HttpsError("internal", "Verifica dell'account non disponibile. Riprova.");
+  }
+  if (!user || user.disabled) {
+    throw new HttpsError("unauthenticated", "Sessione non valida. Accedi nuovamente.");
+  }
+}
+
 exports.requestOwnVargaAccountDeletion = onCall({
   region: "europe-west1",
   invoker: "public", // Firebase bearer token is mandatory inside the handler
@@ -47,6 +67,7 @@ exports.requestOwnVargaAccountDeletion = onCall({
       data.confirmation !== "RICHIEDO ELIMINAZIONE") {
     throw new HttpsError("invalid-argument", "Conferma esplicita mancante o richiesta non valida.");
   }
+  await requireActiveAccount(uid);
 
   // The path is ALWAYS derived from verified Auth UID. No user-supplied UID,
   // address, business identifier, file path, or private employee information.
@@ -113,6 +134,7 @@ exports.getOwnVargaAccountDeletionStatus = onCall({
       Array.isArray(request.data) || Object.keys(request.data).length !== 0)) {
     throw new HttpsError("invalid-argument", "Richiesta non valida.");
   }
+  await requireActiveAccount(uid);
   try {
     const snapshot = await admin.firestore().collection(COLLECTION).doc(uid).get();
     if (!snapshot.exists) return { requested: false };

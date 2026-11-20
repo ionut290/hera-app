@@ -58,6 +58,14 @@ Fino a quando la procedura web con revoca, recupero da errori e test reali non s
 
 Questa misura **non costituisce completamento del requisito App Store**, né autorizza la cancellazione di utenti reali: l'opzione resta disabilitata per tutti gli utenti ordinari e il backend rimane solo-demo. Si tratta di una protezione temporanea, da sostituire con un flusso web testato e coerente con il servizio di assistenza. Riferimento tecnico: [Firebase Auth Apple sul Web](https://firebase.google.com/docs/auth/web/apple), sezione revoca token.
 
+## Aggiornamenti sicuri del controllo privacy nell'app installata
+
+Il service worker della PWA usava la cache `stale-while-revalidate` anche per `account-privacy-controls.js`: una pagina poteva quindi eseguire temporaneamente una vecchia versione dei controlli di cancellazione/revoca Apple dopo un aggiornamento. Ora questo file specifico è **network-first**, come gli altri script critici di autenticazione, con ripiego sulla *stessa versione* già in cache soltanto senza rete. La referenza in `index.html` ha un nuovo parametro di revisione per non riutilizzare il vecchio script nel browser/PWA.
+
+Il controllo `scripts/check-account-privacy-sw-cache.cjs` usa il **vero codice del service worker** in una VM senza rete, Firebase o identità reali. Verifica: nuova versione ricevuta online anche se in cache ce n'è una precedente, fallback offline sulla versione disponibile e nessuna sostituzione con un altro file/versione.
+
+**Limite:** il service worker intenzionalmente non forza `skipWaiting()` o il reload delle pagine con dati operativi in modifica. L'attivazione di un worker aggiornato può richiedere la procedura di aggiornamento manuale già prevista. Anche in presenza di cache obsoleta la Cloud Function server resta limitata agli account demo; questo test non sblocca il rilascio generale.
+
 ## Fase 3: rilascio generale e App Store
 
 Solo dopo l'inventario GDPR, titolarità con le aziende, backup/export, politica di minimizzazione e collaudo end-to-end documentati, proporre una **nuova PR di promozione** che rimuova il blocco demo, con revisione e test separati. Usare il workflow `deploy-account-deletion-protected.yml` con signoff legale vero, poi abilitare il pulsante per gli utenti reali in una nuova build. Non auto-approvare i gate, non cancellare account di dipendenti e non inviare una revisione App Store che dichiari completata la cancellazione quando ancora non lo è.

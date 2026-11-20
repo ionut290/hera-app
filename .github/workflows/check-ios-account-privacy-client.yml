@@ -6,6 +6,8 @@ on:
       - index.html
       - capacitor.config.json
       - scripts/check-account-privacy-client-runtime.js
+      - scripts/check-account-privacy-sw-cache.cjs
+      - sw.js
       - scripts/prepare-capacitor-web.js
       - scripts/install-ios-apple-signin.rb
       - .github/workflows/ios-private-testflight.yml
@@ -30,6 +32,8 @@ jobs:
           node --check scripts/check-account-privacy-client-runtime.js
           node --check scripts/prepare-capacitor-web.js
           node scripts/check-account-privacy-client-runtime.js
+          node --check scripts/check-account-privacy-sw-cache.cjs
+          node scripts/check-account-privacy-sw-cache.cjs
           node -e "const cfg=require('./capacitor.config.json');if(!cfg.plugins.FirebaseAuthentication.providers.includes('apple.com'))throw Error('Apple provider missing')"
           test -s scripts/install-ios-apple-signin.rb
           ruby -c scripts/install-ios-apple-signin.rb

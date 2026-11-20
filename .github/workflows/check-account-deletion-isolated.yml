@@ -64,5 +64,9 @@ jobs:
               echo "Missing demo-only canary gate: $gate"; exit 1;
             }
           done
-          grep -Fq '"!functions/account-deletion.js"' .github/workflows/deploy-firebase-functions.yml
-          echo "Deletion remains excluded from routine deploy"
+          # No push-triggered Firebase deploy and no destructive callable
+          # included in the explicit solo-owner manual function allowlist.
+          grep -Fq 'node scripts/check-solo-owner-release-policy.cjs --verify' .github/workflows/deploy-firebase-functions.yml
+          ! grep -Eq '^  push:' .github/workflows/deploy-firebase-functions.yml
+          ! grep -Eq -- '--only .*functions:deleteOwnVargaAccount' .github/workflows/deploy-firebase-functions.yml
+          echo "Deletion remains excluded from the guarded solo-owner manual deploy"

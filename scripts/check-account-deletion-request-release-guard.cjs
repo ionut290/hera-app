@@ -27,7 +27,10 @@ assert.equal(deployment[0].trim().replace(/\\$/, "").trim(),
   "--only functions:requestOwnVargaAccountDeletion,functions:getOwnVargaAccountDeletionStatus");
 assert.doesNotMatch(source,/--only firestore|--only hosting|functions:deleteOwnVargaAccount|APPROVE_ACCOUNT_DELETION_ONLY/);
 assert.doesNotMatch(main,/require\(["']\.\/account-deletion-request["']\)/);
-assert.match(regular,/!functions\/account-deletion-request\.js/);
+assert.match(regular, /^on:\n  workflow_dispatch:/m);
+assert.doesNotMatch(regular, /^  push:/m);
+assert.match(regular, /node scripts\/check-solo-owner-release-policy\.cjs --verify/);
+assert.doesNotMatch(regular, /--only functions:requestOwnVargaAccountDeletion/);
 assert.doesNotMatch(source,/__VARGA_ACCOUNT_DELETION_REQUEST_ENABLED\s*=\s*true/);
 // The transient functions/main.js MUST export only the two reviewed callables.
 // Never dynamically Object.assign ALL exports from an evolving module.

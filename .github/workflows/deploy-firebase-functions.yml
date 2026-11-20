@@ -1,21 +1,31 @@
 name: Deploy Firebase Functions
 
+# SOLO OWNER: no push-triggered production changes. Manual PREVIEW is
+# read-only; deployment requires the exact main SHA and separate explicit
+# confirmation. Privacy/deletion and Firestore rules remain separately gated.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "functions/**"
-      # Account deletion is manually deployed with protected reviewer approval only.
-      - "!functions/account-deletion.js"
-      # Separate protected deployment and privacy review are required.
-      - "!functions/account-deletion-request.js"
-      - "firestore.rules"
-      - "firestore.indexes.json"
-      - "firebase.json"
-      - ".firebaserc"
-      # Workflow configuration changes do not by themselves redeploy production.
+    inputs:
+      mode:
+        description: "PREVIEW_ONLY (default) or manual functions release"
+        type: choice
+        required: true
+        default: PREVIEW_ONLY
+        options:
+          - PREVIEW_ONLY
+          - DEPLOY_ORDINARY_ONLY
+      reviewed_sha:
+        description: "Exact 40-character main SHA reviewed before running"
+        type: string
+        required: true
+      confirmation:
+        description: "Choose confirmation ONLY for ordinary function deployment"
+        type: choice
+        required: true
+        default: DO_NOT_DEPLOY
+        options:
+          - DO_NOT_DEPLOY
+          - CONFIRM_ORDINARY_FIREBASE_DEPLOY
 
 permissions:
   contents: read
@@ -25,13 +35,73 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  guard:
+    name: Solo-owner policy / read-only release preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact main commit without persistent credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.reviewed_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Require owner, clean SHA, manual main, new deployment confirmation
+        env:
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+          INPUT_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node scripts/check-solo-owner-release-policy.cjs --verify
+      - name: Run non-destructive security and release checks
+        run: |
+          set -euo pipefail
+          node scripts/check-solo-owner-release-policy.cjs --self-test
+          node scripts/check-independent-firebase-deploy-review.cjs
+          node scripts/check-account-deletion-request-staged.cjs
+          node scripts/check-account-privacy-client-runtime.js
+          node scripts/check-app-review-readiness-failclosed.cjs
+          node scripts/audit-asc-reviewer-account-readonly.cjs --self-test
+          npm ci --no-audit --no-fund
+          npm run check:security-privacy
+          npm run check:auth-stability
+      - name: Report preview vs authorized ordinary functions deployment
+        env:
+          INPUT_MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          if [[ "$INPUT_MODE" == "PREVIEW_ONLY" ]]; then
+            echo "### SOLO PREVIEW: no Firebase deploy, secrets or account changes" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Ordinary functions: policy checks passed; no erasure or rules deploy" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Apple App Review remains blocked until independent privacy evidence and iPhone tests." >> "$GITHUB_STEP_SUMMARY"
+
   deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    needs: guard
+    if: ${{ needs.guard.result == 'success' && inputs.mode == 'DEPLOY_ORDINARY_ONLY' && inputs.confirmation == 'CONFIRM_ORDINARY_FIREBASE_DEPLOY' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
 
     steps:
-      - name: Checkout repository
+      - name: Checkout approved commit without persisted credentials
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.reviewed_sha }}
+
+      - name: Verify exact reviewed source AGAIN before any deploy secrets
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
+          test "$REVIEWED_SHA" = "$GITHUB_SHA"
+          test "$GITHUB_ACTOR" = "ionut290"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,7 +110,7 @@ jobs:
 
       - name: Install function dependencies
         working-directory: functions
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Validate Firebase functions
         run: node -e "require('./functions/main.js'); console.log('Functions loaded successfully')"
@@ -68,7 +138,7 @@ jobs:
           NODE
 
       - name: Install Firebase CLI
-        run: npm install --global firebase-tools
+        run: npm install --global firebase-tools@14.23.0
 
       - name: Write Firebase service account
         shell: bash
@@ -79,18 +149,19 @@ jobs:
             echo "Missing secret FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B"
             exit 1
           fi
+          umask 077
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
           chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+          python3 - "$RUNNER_TEMP/firebase-service-account.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding="utf-8") as f: obj=json.load(f)
+          assert obj.get("project_id")=="hera-app-6cd2b","Wrong Firebase project: refuse deploy"
+          PY
 
-      - name: Deploy Firestore rules and controlled-query indexes
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
-        run: >-
-          firebase deploy
-          --only firestore:rules,firestore:indexes
-          --project hera-app-6cd2b
-          --non-interactive
-          --force
+      # Important: never deploy Firestore Security Rules from the solo owner
+      # workflow. Rule changes can expand access to employee/company data.
+      # They require a separate privacy/rules review and controlled release.
+
 
       - name: Deploy approved Cloud Functions
         env:
@@ -100,102 +171,14 @@ jobs:
           --only functions:approveUserAccess,functions:processAdminPasswordPrivateRequest,functions:setPasswordRecoveryCode,functions:getPasswordRecoveryCodeStatus,functions:startPasswordRecoveryWithCode,functions:completePasswordRecoveryWithCode,functions:notifyAndroidChatMessage,functions:notifyAndroidHoursInserted,functions:notifyAndroidSquadraAssignment,functions:syncCalendarAbsenceSquadraAlerts,functions:syncSharedCalendarFromOreReports,functions:syncSharedCalendarFromOreApprovalRequests,functions:syncSharedCalendarFromImpianti,functions:syncSharedCalendarFromLavorazioni,functions:getAdministrativeCalendarMonth,functions:syncSharedRegistriesFromPersonale,functions:syncSharedRegistriesFromMezzi,functions:syncSharedSquadreFromHistory,functions:syncSharedSquadreFromCurrent,functions:rebuildAllSharedStaticViews,functions:syncImpiantoChangeIndex,functions:recordClientErrorGroup,functions:getErrorCenterSummary,functions:getErrorCenterDashboard,functions:markErrorCenterSeen,functions:updateErrorCenterStatus,functions:resetErrorCenter,functions:getErrorEmailUsage,functions:uploadWhazzupPdfToDrive,functions:cleanupExpiredWhazzupPdfs,functions:rebuildVargaGestionaleSnapshot,functions:getVargaGestionaleSnapshotManifest,functions:getVargaGestionaleSnapshotChunk,functions:createVargaCantieriTransferToken,functions:createAppleReviewAccount
           --project hera-app-6cd2b
           --non-interactive
-          --force
 
-      - name: Grant and verify Error Center callable transport
-        shell: bash
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+      - name: Confirm IAM permissions are NOT modified by the workflow
         run: |
-          node <<'NODE'
-          const { GoogleAuth } = require("./functions/node_modules/google-auth-library");
+          set -euo pipefail
+          echo "This solo workflow only deploys the exact reviewed functions allowlist."
+          echo "It does not grant public invoker roles or widen IAM permissions."
+          echo "The protected deletion request and account erasure workflows remain separate."
 
-          const projectId = "hera-app-6cd2b";
-          const region = "europe-west1";
-          const functionNames = [
-            "approveUserAccess",
-            "setPasswordRecoveryCode",
-            "getPasswordRecoveryCodeStatus",
-            "startPasswordRecoveryWithCode",
-            "completePasswordRecoveryWithCode",
-            "recordClientErrorGroup",
-            "getErrorCenterSummary",
-            "getErrorCenterDashboard",
-            "markErrorCenterSeen",
-            "updateErrorCenterStatus",
-            "resetErrorCenter"
-          ];
-
-          async function main() {
-            const auth = new GoogleAuth({
-              keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-              scopes: ["https://www.googleapis.com/auth/cloud-platform"]
-            });
-            const client = await auth.getClient();
-
-            for (const functionName of functionNames) {
-              const resource =
-                `https://cloudfunctions.googleapis.com/v1/projects/${projectId}/locations/${region}/functions/${functionName}`;
-              const currentResponse = await client.request({
-                method: "GET",
-                url: `${resource}:getIamPolicy`
-              });
-              const currentPolicy = currentResponse.data || {};
-              const bindings = Array.isArray(currentPolicy.bindings)
-                ? currentPolicy.bindings.map((binding) => ({
-                    ...binding,
-                    members: Array.isArray(binding.members) ? [...binding.members] : []
-                  }))
-                : [];
-              let invokerBinding = bindings.find(
-                (binding) =>
-                  binding.role === "roles/cloudfunctions.invoker" &&
-                  !binding.condition
-              );
-
-              if (!invokerBinding) {
-                invokerBinding = {
-                  role: "roles/cloudfunctions.invoker",
-                  members: []
-                };
-                bindings.push(invokerBinding);
-              }
-              if (!invokerBinding.members.includes("allUsers")) {
-                invokerBinding.members.push("allUsers");
-              }
-
-              await client.request({
-                method: "POST",
-                url: `${resource}:setIamPolicy`,
-                data: {
-                  policy: {
-                    ...currentPolicy,
-                    bindings
-                  }
-                }
-              });
-
-              const verificationResponse = await client.request({
-                method: "GET",
-                url: `${resource}:getIamPolicy`
-              });
-              const publicInvoker = (verificationResponse.data.bindings || []).some(
-                (binding) =>
-                  binding.role === "roles/cloudfunctions.invoker" &&
-                  !binding.condition &&
-                  (binding.members || []).includes("allUsers")
-              );
-              if (!publicInvoker) {
-                throw new Error(
-                  `Public callable transport was not applied to ${functionName}`
-                );
-              }
-              console.log(`Verified public callable transport: ${functionName}`);
-            }
-          }
-
-          main().catch((error) => {
-            console.error(error);
-            process.exit(1);
-          });
-          NODE
+      - name: Remove temporary Firebase credential (always)
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-service-account.json"

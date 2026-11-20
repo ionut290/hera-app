@@ -74,6 +74,11 @@ for (const functionName of [
   "getPasswordRecoveryCodeStatus",
   "startPasswordRecoveryWithCode",
   "completePasswordRecoveryWithCode"
-]) assert.ok(workflow.includes(`functions:${functionName}`) && workflow.includes(`"${functionName}"`), `Deploy mancante: ${functionName}`);
+]) assert.ok(workflow.includes(`functions:${functionName}`), `Callable non presente nel deploy manuale: ${functionName}`);
+assert.match(workflow, /workflow_dispatch:/, "Il deploy richiede un lancio manuale");
+assert.match(workflow, /node scripts\/check-solo-owner-release-policy\.cjs --verify/,
+  "Il deploy richiede il controllo proprietario e SHA");
+assert.doesNotMatch(workflow, /:setIamPolicy|method:\s*["']POST["']/,
+  "Il deploy password non può ampliare i permessi IAM");
 
 console.log("Secure shared password recovery code checks passed.");

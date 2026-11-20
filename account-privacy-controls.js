@@ -92,6 +92,10 @@
     // Lock immediately, including preflight and Apple revocation. A second tap
     // must not start a concurrent deletion or revoke the same Apple code twice.
     deleting = true;
+    // This flag distinguishes an already-revoked Apple grant from a confirmed
+    // account deletion. If Firebase cleanup later fails, the user needs a
+    // specific recovery message rather than a misleading generic retry.
+    let appleAuthorizationRevoked = false;
     // Preflight first: do not revoke Apple access if the server already knows
     // that personal files cannot be safely removed.
     let callable;
@@ -128,6 +132,7 @@
           const credential = appleProvider.credential({ idToken, rawNonce });
           await user.reauthenticateWithCredential(credential);
           await plugin.revokeAccessToken({ token: code });
+          appleAuthorizationRevoked = true;
         } catch (error) {
           alert("Verifica Apple non riuscita: " + errorText(error) +
             "\nL'account non è stato eliminato.");
@@ -147,9 +152,11 @@
       window.location.reload();
     } catch (error) {
       console.warn("[varga-privacy] Account deletion:", error?.code || "failed");
-      const message = String(error?.code || "").includes("failed-precondition")
-        ? "Per sicurezza esci e accedi nuovamente, poi ripeti l'eliminazione. " + errorText(error)
-        : "La cancellazione non è stata confermata dal server. " + errorText(error);
+      const message = appleAuthorizationRevoked
+        ? "L’autorizzazione Apple è stata revocata, ma la cancellazione dell’account NON è stata confermata dal server. Non considerare l’account eliminato: contatta l’assistenza per completare la procedura in sicurezza. " + errorText(error)
+        : String(error?.code || "").includes("failed-precondition")
+          ? "Per sicurezza esci e accedi nuovamente, poi ripeti l'eliminazione. " + errorText(error)
+          : "La cancellazione non è stata confermata dal server. " + errorText(error);
       alert(message);
     } finally {
       deleting = false;

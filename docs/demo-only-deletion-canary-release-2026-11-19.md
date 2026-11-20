@@ -39,6 +39,17 @@ Prima di una futura valutazione del rilascio generale, il canary applica anche d
 
 I test `scripts/check-account-privacy-runtime.js` verificano con stub e identità **sintetiche** la mancata cancellazione di Auth, Storage, Firestore e comunicazioni condivise in questi casi. Il controllo non equivale alla prova su iPhone e **non abilita account ordinari**: il blocco demo-only, il workflow protetto e la revisione privacy rimangono obbligatori.
 
+## Recupero da revoca Apple completata ma cancellazione backend non riuscita
+
+Il flusso iOS richiede una nuova credenziale Apple, verifica lo stesso utente Firebase e revoca il codice di autorizzazione **prima** di inviare la cancellazione effettiva al server, come richiesto dal flusso di revoca Apple/Firebase. I due passi non sono una transazione atomica.
+
+La versione client ora distingue:
+- **Revoca Apple non riuscita:** il server non viene chiamato per cancellare e non si dichiara l'account eliminato.
+- **Revoca Apple riuscita, ma risposta Firebase fallita o `deleted !== true`:** l'app avvisa chiaramente che l'autorizzazione Apple è stata revocata ma l'account NON è stato confermato come cancellato, non esegue il logout automatico e indica di contattare l'assistenza. Non dichiarare l'account eliminato né assumere che un nuovo accesso Apple sia immediatamente disponibile.
+- **Solo `deleted === true`:** conferma della cancellazione e logout.
+
+I test `scripts/check-account-privacy-client-runtime.js` simulano questi casi **senza provider Apple, Firebase o dati reali**. Il server rimane limitato alla demo e la funzione non è distribuita per account ordinari. Per il rilascio generale va definita anche una procedura di supporto e riconciliazione delle revoche parziali e verificato su un vero iPhone il comportamento di Apple Sign In.
+
 ## Fase 3: rilascio generale e App Store
 
 Solo dopo l'inventario GDPR, titolarità con le aziende, backup/export, politica di minimizzazione e collaudo end-to-end documentati, proporre una **nuova PR di promozione** che rimuova il blocco demo, con revisione e test separati. Usare il workflow `deploy-account-deletion-protected.yml` con signoff legale vero, poi abilitare il pulsante per gli utenti reali in una nuova build. Non auto-approvare i gate, non cancellare account di dipendenti e non inviare una revisione App Store che dichiari completata la cancellazione quando ancora non lo è.

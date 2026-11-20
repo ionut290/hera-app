@@ -12,8 +12,10 @@ const routineDeploy = fs.readFileSync(".github/workflows/deploy-firebase-functio
 
 assert.doesNotMatch(entrypoint, /require\(["']\.\/account-deletion-request["']\)/,
   "Staged function must NOT be exposed before release approval");
-assert.match(routineDeploy, /!functions\/account-deletion-request\.js/,
-  "Staged request handler must be excluded from automatic production deploy");
+assert.match(routineDeploy, /^on:\n  workflow_dispatch:/m);
+assert.doesNotMatch(routineDeploy, /^  push:/m,
+  "Automatic Firebase deploy must be disabled");
+assert.match(routineDeploy, /node scripts\/check-solo-owner-release-policy\.cjs --verify/);
 assert.doesNotMatch(routineDeploy, /functions:requestOwnVargaAccountDeletion/,
   "Staged request must not be in the normal production deploy allowlist");
 

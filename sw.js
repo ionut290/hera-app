@@ -135,6 +135,10 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/critical-write-safety-bridge.js",
   "/update-app-feature.js",
   "/firebase-config.js",
+  // Account privacy/delete controls must not remain stale on a connected device.
+  // Only the exact same-origin static script is network-first; all sensitive
+  // Firebase operations continue to bypass the service worker as before.
+  "/account-privacy-controls.js",
   "/notification-session-enhancements.js",
   "/auth-login-fix.js",
   "/password-recovery-code.js",

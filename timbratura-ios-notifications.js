@@ -10,7 +10,9 @@
   const DAYS = [0, 1, 2, 3, 4, 5, 6];
   const APP_STORE = "https://apps.apple.com/it/app/easy-box/id1612276209";
   const SHORTCUT = "shortcuts://run-shortcut?name=Apri%20Easy-Box";
-  let listenerReady = false, pending = null, busy = false;
+  let listenerReady = false, pending = null;
+  // Serialize native changes: a fast second Save must NEVER be silently dropped.
+  let lastSync = Promise.resolve();
 
   const isNativeIOS = () => {
     const c = window.Capacitor;
@@ -77,17 +79,29 @@
     return listenerReady;
   }
 
-  async function sync(config, options = {}) {
+  // A config snapshot is queued in order. This prevents overlapping native
+  // cancel/schedule operations from dropping a later Save or Disable.
+  function sync(config, options = {}) {
+    const snapshot = config ? { ...config,
+      days: Array.isArray(config.days) ? [...config.days] : config.days } : config;
+    const queued = lastSync.catch(() => {}).then(() => applySync(snapshot, options));
+    lastSync = queued;
+    return queued;
+  }
+
+  async function applySync(config, options) {
     if (!isNativeIOS()) return { supported: false, reason: "Solo nell'app iPhone installata." };
     const plugin = getPlugin();
     if (!plugin) return { supported: false, reason: "Aggiorna Varga Cantieri: notifiche iPhone non incluse in questa versione." };
-    if (busy) return { supported: true, busy: true };
-    busy = true;
     try {
       await init();
-      // Cancel ONLY our own stable IDs: never cancel reminders of other features.
-      await plugin.cancel({ notifications: allIDs().map(id => ({ id })) });
-      if (!config?.iosScheduled) return { supported: true, scheduled: 0 };
+      if (!config?.iosScheduled) {
+        // A deliberate Disable always removes our IDs, never other features.
+        await plugin.cancel({ notifications: allIDs().map(id => ({ id })) });
+        return { supported: true, scheduled: 0 };
+      }
+      // Do NOT erase previously scheduled reminders when notifications are
+      // currently denied, a user has not consented, or times are invalid.
       let authorization = await plugin.checkPermissions();
       if (authorization?.display !== "granted" && options.prompt) {
         authorization = await plugin.requestPermissions();
@@ -96,14 +110,17 @@
         return { supported: true, scheduled: 0, permissionDenied: true };
       }
       const notifications = makeNotifications(config);
-      if (!notifications.length) return { supported: true, scheduled: 0 };
+      if (!notifications.length) {
+        return { supported: true, scheduled: 0,
+          error: "Nessun orario settimanale valido: controlla giorni e orari." };
+      }
+      // Only now replace our own fixed IDs with the authorized schedule.
+      await plugin.cancel({ notifications: allIDs().map(id => ({ id })) });
       await plugin.schedule({ notifications });
       return { supported: true, scheduled: notifications.length };
     } catch (error) {
       console.warn("Pianificazione avvisi iPhone non riuscita", error);
       return { supported: true, scheduled: 0, error: String(error?.message || error) };
-    } finally {
-      busy = false;
     }
   }
 

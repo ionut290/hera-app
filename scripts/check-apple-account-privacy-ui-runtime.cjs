@@ -97,6 +97,8 @@ function harness({platform="ios",request=false,sla=undefined,immediate=false,
     prompt:()=>"RICHIEDO",
     location:{reload(){throw Error("Unexpected destructive reload");}}
   };
+  // The production guard explicitly checks window.firebase before using Firebase Auth.
+  window.firebase=firebase;
   vm.runInNewContext(source,{window,document,firebase,alert:t=>alerts.push(String(t)),
     console:{warn(){}},Promise,Date,Math,Number,Object,Array,Set,String},
     {filename:"account-privacy-controls.js"});

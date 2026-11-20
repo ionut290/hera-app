@@ -1,0 +1,29 @@
+name: Check Android emulator smoke guard (offline)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/test-android-emulator.yml"
+      - ".github/workflows/check-android-emulator-smoke.yml"
+      - "scripts/android-emulator-smoke.sh"
+      - "scripts/check-android-emulator-smoke-config.cjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate strict Android emulator smoke script and mock failures
+        run: |
+          set -euo pipefail
+          bash -n scripts/android-emulator-smoke.sh
+          node --check scripts/check-android-emulator-smoke-config.cjs
+          node scripts/check-android-emulator-smoke-config.cjs

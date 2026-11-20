@@ -84,16 +84,10 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: |
-            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-            adb shell am force-stop it.vargacantieri.hera
-            adb shell monkey -p it.vargacantieri.hera -c android.intent.category.LAUNCHER 1
-            sleep 12
-            adb shell dumpsys window windows | grep -q "it.vargacantieri.hera"
-            adb shell uiautomator dump /sdcard/window.xml
-            adb pull /sdcard/window.xml window.xml
-            adb exec-out screencap -p > android-emulator.png
-            ! grep -Eqi "has stopped|keeps stopping|isn't responding" window.xml
+          # Emulator 37+ removed support for the older indirect SwiftShader mode.
+          # Do not alter app code or bypass the UI assertion.
+          emulator-options: -no-window -gpu software -no-snapshot -noaudio -no-boot-anim
+          script: bash scripts/android-emulator-smoke.sh
       - name: Upload emulator evidence
         if: always()
         uses: actions/upload-artifact@v4

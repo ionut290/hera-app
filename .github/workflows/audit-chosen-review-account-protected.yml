@@ -52,7 +52,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
           node --check scripts/audit-chosen-review-account-readonly.cjs
           node scripts/audit-chosen-review-account-readonly.cjs --self-test
-          if grep -E '\.(updateUser|createUser|deleteUser|setCustomUserClaims|update|set|delete|create)\s*\(' scripts/audit-chosen-review-account-readonly.cjs | grep -vF 'finally { await app.delete(); }'; then
+          if grep -E '\.(updateUser|createUser|deleteUser|setCustomUserClaims|update|set|delete|create)\s*\(' scripts/audit-chosen-review-account-readonly.cjs | grep -vF 'crypto.createHash("sha256").update(' | grep -vF 'finally { await app.delete(); }'; then
             echo "::error::Account mutation in read-only audit";exit 1
           fi
       - name: Install Firebase Admin SDK

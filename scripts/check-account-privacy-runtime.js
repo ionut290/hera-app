@@ -140,7 +140,10 @@ function setup(options = {}) {
     auth: () => ({
       getUser: async (uid) => {
         if (!users.has(uid)) throw new Error("not found");
-        return { uid, email: uid === "worker-1" ? "sqadrahera+varga-demo@gmail.com" : "worker2@example.test",
+        return {
+          uid: options.mismatchedAuthUid ? "another-synthetic-user" : uid,
+          disabled: options.disabledAuthUser === true,
+          email: uid === "worker-1" ? "sqadrahera+varga-demo@gmail.com" : "worker2@example.test",
           customClaims: uid === "worker-1" && !options.missingServerDemoClaim
             ? { appReviewDemo: true, apple_review: true } : {} };
       },
@@ -234,6 +237,39 @@ async function rejectedCode(promise, expected) {
   assert.deepEqual(state.removedUsers, [], "server-side claims are required");
   assert.deepEqual(state.removed, [], "no removal when server claims absent");
 
+  // A demo claim or old signed token alone is never enough. The CURRENT
+  // Firebase Auth user must be enabled and have the exact verified UID.
+  // Reject even read-only preflight before touching business data.
+  for (const [flag, label] of [
+    ["disabledAuthUser", "disabled account"],
+    ["mismatchedAuthUid", "mismatched Auth UID"]
+  ]) {
+    for (const data of [
+      { confirmation: "ELIMINA", mode: "preflight" },
+      { confirmation: "ELIMINA" }
+    ]) {
+      state = setup({ [flag]: true });
+      await rejectedCode(state.handler({ auth: goodAuth, data }), "permission-denied");
+      assert.deepEqual(state.removedUsers, [], label + " deleted user");
+      assert.deepEqual(state.removedFiles, [], label + " deleted files");
+      assert.deepEqual(state.removed, [], label + " removed Firestore");
+      assert.deepEqual(state.updated, [], label + " modified shared records");
+    }
+  }
+
+  // An unexpected user ID, storage path or action must be rejected, not
+  // merely ignored, even when the demo account is authorized.
+  for (const field of ["uid", "email", "storagePath", "action", "admin"]) {
+    state = setup();
+    await rejectedCode(state.handler({
+      auth: goodAuth,
+      data: { confirmation: "ELIMINA", [field]: "another-user" }
+    }), "invalid-argument");
+    assert.deepEqual(state.removedUsers, []);
+    assert.deepEqual(state.removedFiles, []);
+    assert.deepEqual(state.removed, []);
+    assert.deepEqual(state.updated, []);
+  }
   state = setup();
   const ready = await state.handler({ auth: goodAuth, data: { confirmation: "ELIMINA", mode: "preflight" } });
   assert.equal(ready.ready, true);
@@ -246,7 +282,7 @@ async function rejectedCode(promise, expected) {
   state = setup();
   const result = await state.handler({
     auth: goodAuth,
-    data: { confirmation: "ELIMINA", uid: "worker-2" }
+    data: { confirmation: "ELIMINA" }
   });
   assert.equal(result.deleted, true);
   assert.deepEqual(state.removedUsers, ["worker-1"]);

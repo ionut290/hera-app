@@ -202,8 +202,15 @@ exports.deleteOwnVargaAccount = onCall({
   if (!validUserId(uid)) {
     throw new HttpsError("unauthenticated", "Accedi per eliminare il tuo account.");
   }
-  if (request.data?.confirmation !== "ELIMINA") {
-    throw new HttpsError("invalid-argument", "Conferma esplicita mancante.");
+  // Accept only the documented confirmation and optional preflight mode.
+  // A caller cannot pass an arbitrary target UID, path or future action.
+  const payload = request.data;
+  const keys = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? Object.keys(payload) : [];
+  if (!payload || keys.length < 1 || keys.length > 2 ||
+      keys.some(key => key !== "confirmation" && key !== "mode") ||
+      payload.confirmation !== "ELIMINA") {
+    throw new HttpsError("invalid-argument", "Richiesta di cancellazione non valida.");
   }
   // Unknown modes must NEVER fall through to irreversible deletion.
   // Omitted mode explicitly performs deletion; preflight is read-only.
@@ -232,7 +239,8 @@ exports.deleteOwnVargaAccount = onCall({
     // record must also be the exact approved disposable identity.
     const demoEmail = String(ownAuthRecord.email || "").trim().toLowerCase();
     const demoEmailHash = createHash("sha256").update(demoEmail).digest("hex");
-    if (demoEmailHash !== APPROVED_DEMO_EMAIL_SHA256 ||
+    if (ownAuthRecord.uid !== uid || ownAuthRecord.disabled === true ||
+        demoEmailHash !== APPROVED_DEMO_EMAIL_SHA256 ||
         ownAuthRecord.customClaims?.appReviewDemo !== true ||
         ownAuthRecord.customClaims?.apple_review !== true) {
       throw new HttpsError("permission-denied",

@@ -39,7 +39,7 @@ try{
   const appStoreWorkflow=fs.readFileSync(".github/workflows/ios-appstore-candidate.yml","utf8");
   for(const [name,workflow] of [["TestFlight",privateWorkflow],["App Store",appStoreWorkflow]]){
     assert.match(workflow,/ruby -c scripts\/install-ios-google-signin\.rb/);
-    assert.match(workflow,/npx cap add ios\n[\s\S]*?ruby scripts\/install-ios-google-signin\.rb\n\s*npx cap sync ios/);
+    assert.match(workflow,/npx cap add ios\n[\s\S]*?ruby scripts\/install-ios-google-signin\.rb\n[\s\S]*?\(cd ios\/App && pod update GTMSessionFetcher\/Core\)\n\s*npx cap sync ios/);
     assert.match(workflow,/python3 scripts\/configure-ios-firebase\.py/);
     console.log("PASS: "+name+" includes Google native pod and config before signing.");
   }

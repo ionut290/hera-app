@@ -8,6 +8,7 @@ on:
       - "scripts/test-staged-deletion-review-auth-firestore-emulators.cjs"
       - ".github/workflows/check-staged-deletion-review-real-emulators.yml"
       - "firebase.json"
+      - "firebase.privacy-review-emulators.json"
   workflow_dispatch:
 permissions:
   contents: read
@@ -53,7 +54,7 @@ jobs:
       - name: Test ACTUAL callable bodies with real local Auth and Firestore
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@14.23.0 emulators:exec --only auth,firestore \
+          npx --yes firebase-tools@14.23.0 emulators:exec --config firebase.privacy-review-emulators.json --only auth,firestore \
             --project demo-deletion-review-e2e \
             'node scripts/test-staged-deletion-review-auth-firestore-emulators.cjs'
       - name: Explain non-release scope

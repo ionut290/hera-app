@@ -1,0 +1,41 @@
+name: Check Google login iOS native + Web + Android (synthetic, no deploy)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "auth-login-fix.js"
+      - "index.html"
+      - "sw.js"
+      - "capacitor.config.json"
+      - "scripts/install-ios-google-signin.rb"
+      - "scripts/check-google-login-platform-runtime.cjs"
+      - "scripts/check-ios-google-podfile.cjs"
+      - "scripts/check-auth-login.js"
+      - "package.json"
+      - ".github/workflows/ios-private-testflight.yml"
+      - ".github/workflows/ios-appstore-candidate.yml"
+      - ".github/workflows/check-ios-google-signin.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  google-login:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate Google login + native CocoaPods safely
+        run: |
+          set -euo pipefail
+          node --check auth-login-fix.js
+          node --check scripts/check-google-login-platform-runtime.cjs
+          node --check scripts/check-ios-google-podfile.cjs
+          ruby -c scripts/install-ios-google-signin.rb
+          npm run check:auth-login
+      - name: Explain testing limitations
+        run: echo "Tests use synthetic Firebase/Google credentials and temp Podfile only. No user login, Apple upload or Firebase changes. iPhone TestFlight login must be confirmed separately."

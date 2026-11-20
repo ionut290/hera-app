@@ -506,6 +506,16 @@
     );
   }
 
+  function isNativeIOS() {
+    return Boolean(
+      window.Capacitor &&
+      typeof window.Capacitor.isNativePlatform === "function" &&
+      window.Capacitor.isNativePlatform() &&
+      typeof window.Capacitor.getPlatform === "function" &&
+      window.Capacitor.getPlatform() === "ios"
+    );
+  }
+
   function configurePlatformLoginOptions() {
     const nativeAndroid = isNativeAndroid();
     const webGoogleEnabled = !nativeAndroid;
@@ -541,14 +551,16 @@
     if (code === "auth/popup-closed-by-user") return "Accesso Google annullato.";
     if (code === "12501" || code === "16" || code === "auth/cancelled-popup-request") return "Accesso Google annullato.";
     if (code === "10" || code.includes("DEVELOPER_ERROR")) return "Login Google Android non configurato correttamente. Verifica SHA-1 e google-services.json.";
-    if (code === "auth/popup-blocked" || code === "auth/cancelled-popup-request") return "Il browser ha bloccato la finestra Google. Consenti i popup per Varga Cantieri e riprova.";
+    if (code === "auth/popup-blocked") return "Il browser ha bloccato la finestra Google. Consenti i popup per Varga Cantieri e riprova.";
+    if (code === "auth/unauthorized-domain") return "Dominio non autorizzato in Firebase Authentication: aggiungi il dominio del sito ai domini autorizzati.";
     return String(error && error.message ? error.message : "Accesso Google non riuscito.");
   }
 
   async function signInWithNativeGoogle() {
     if (isNativeAndroid()) throw new Error("Nell'app Android è disponibile solo l'accesso con email e password.");
     const nativeAuth = getNativeFirebaseAuthentication();
-    if (!nativeAuth || typeof nativeAuth.signInWithGoogle !== "function") throw new Error("Plugin Firebase Authentication non disponibile nell'app Android.");
+    if (!isNativeIOS()) throw new Error("L'accesso Google nativo richiede l'app iPhone.");
+    if (!nativeAuth || typeof nativeAuth.signInWithGoogle !== "function") throw new Error("Plugin Google non disponibile nell'app iPhone: aggiorna VARGA CANTIERI.");
     const result = await nativeAuth.signInWithGoogle({ skipNativeAuth: true });
     const idToken = result && result.credential && result.credential.idToken;
     if (!idToken) throw new Error("Google non ha restituito un token di accesso valido.");
@@ -561,7 +573,7 @@
   queueMicrotask(() => {
     window.loginWithGoogle = function loginWithGoogleFixed() {
       if (isNativeAndroid()) return Promise.reject(new Error("Nell'app Android è disponibile solo l'accesso con email e password."));
-      return signInWithWebGoogle();
+      return isNativeIOS() ? signInWithNativeGoogle() : signInWithWebGoogle();
     };
   });
 
@@ -597,7 +609,10 @@
     const previousText = button.textContent;
     button.textContent = "Accesso Google...";
     try {
-      await signInWithWebGoogle();
+      // WKWebView cannot reliably complete Firebase's browser popup flow.
+      // Use the installed iOS Firebase Authentication Google provider and
+      // pass its ID token to the same Firebase JS Auth instance as the app.
+      await (isNativeIOS() ? signInWithNativeGoogle() : signInWithWebGoogle());
     } catch (error) {
       console.error("Login Google fallito:", error);
       alert(formatError(error));

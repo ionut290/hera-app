@@ -152,6 +152,7 @@ jobs:
           ruby -c scripts/install-ios-native-geofence.rb
           node --check scripts/fetch-ios-appstore-profile.js
           ruby -c scripts/install-ios-apple-signin.rb
+          ruby -c scripts/install-ios-google-signin.rb
           ruby -c scripts/configure-ios-distribution-signing.rb
           npm run android:aab:prepare
           test -s www/index.html
@@ -164,6 +165,9 @@ jobs:
           npm install --no-save --package-lock=false --no-audit --no-fund @capacitor/core@7.6.10 @capacitor/ios@7.6.10
           node -e "const c=require('@capacitor/core/package.json').version,i=require('@capacitor/ios/package.json').version;if(c!==i)throw Error('Capacitor mismatch');"
           npx cap add ios
+          # Google provider must be included BEFORE CocoaPods sync; plist URL
+          # schemes are added by configure-ios-firebase.py after private config.
+          ruby scripts/install-ios-google-signin.rb
           npx cap sync ios
           python3 scripts/mark-ios-native-safe-area.py
           ruby scripts/install-ios-native-geofence.rb

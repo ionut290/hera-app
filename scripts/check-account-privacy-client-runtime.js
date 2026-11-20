@@ -155,6 +155,7 @@ function harness(options = {}) {
   const window = {
     __VARGA_ACCOUNT_DELETION_ENABLED: options.deletionEnabled !== false,
     __VARGA_ACCOUNT_DELETION_REQUEST_ENABLED: options.requestEnabled === true,
+    __VARGA_ACCOUNT_DELETION_REQUEST_SLA_DAYS: options.requestSlaDays,
     firebase,
     Capacitor: {
       isNativePlatform: () => options.platform !== "web",
@@ -202,9 +203,18 @@ function deferred() {
   assert.equal(h.elements.has("varga-account-delete-menu"), false, "Deletion hidden until backend release");
   assert.equal(h.elements.has("varga-account-delete-profile"), false, "Profile deletion hidden until backend release");
   // Request intake is opt-in only; no ghost UI before backend deployment.
+  // An unapproved, absent, malformed or out-of-range SLA must hide the request/status UI.
+  for (const invalidDays of [undefined, null, 0, -1, 1.5, 91, "14", Infinity]) {
+    const blocked = harness({ platform: "ios", deletionEnabled: false,
+      requestEnabled: true, requestSlaDays: invalidDays });
+    assert.equal(blocked.elements.has("varga-deletion-request-menu"), false,
+      "SLA invalid: " + String(invalidDays));
+    assert.equal(blocked.elements.has("varga-deletion-request-menu-status"), false);
+    assert.equal(blocked.controls.requested, 0);
+  }
   h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: false });
   assert.equal(h.elements.has("varga-deletion-request-menu"), false);
-  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true, requestSlaDays: 14,
     typedConfirmation: "RICHIEDO" });
   assert.ok(h.elements.has("varga-deletion-request-menu"));
   assert.equal(h.elements.has("varga-account-delete-menu"), false);
@@ -213,31 +223,33 @@ function deferred() {
   assert.equal(h.controls.deleted, false);
   assert.equal(h.controls.signedOut, false);
   assert.ok(h.alerts.some(text => text.includes("NON è ancora eliminato")));
+  assert.ok(h.alerts.some(text => text.includes("entro 14 giorni")),
+    "A signed-off SLA must be used rather than assuming a 30-day promise");
   assert.deepEqual(JSON.parse(JSON.stringify(h.calls.filter(x => x[0] === "requestCallable").map(x => x[1]))),
     [{ confirmation: "RICHIEDO ELIMINAZIONE" }]);
-  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true, requestSlaDays: 14,
     typedConfirmation: "RICHIEDO", requestFn: async () => { throw new Error("Synthetic backend offline"); } });
   await h.elements.get("varga-deletion-request-menu").click();
   assert.equal(h.controls.requested, 1);
   assert.equal(h.controls.deleted, false);
   assert.ok(h.alerts.some(text => text.includes("non è stata confermata dal server")));
-  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true, requestSlaDays: 14,
     typedConfirmation: "RICHIEDO", requestFn: async () => ({data:{requested:true,status:"in_review",alreadyExists:true}}) });
   await h.elements.get("varga-deletion-request-menu").click();
   assert.ok(h.alerts.some(text => text.includes("NON è ancora eliminato")));
-  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true, requestSlaDays: 14,
     typedConfirmation: "RICHIEDO", requestFn: async () => ({data:{requested:true,status:"completed",alreadyExists:true}}) });
   await h.elements.get("varga-deletion-request-menu").click();
   assert.ok(h.alerts.some(text => text.includes("nessuna nuova cancellazione")));
-  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true, requestSlaDays: 14,
     typedConfirmation: "NO" });
   await h.elements.get("varga-deletion-request-menu").click();
   assert.equal(h.controls.requested, 0);
-  h = harness({ platform: "ios", deletionEnabled: true, requestEnabled: true });
+  h = harness({ platform: "ios", deletionEnabled: true, requestEnabled: true, requestSlaDays: 14 });
   assert.equal(h.elements.has("varga-deletion-request-menu"), false);
 
   // A status check uses the verified caller, never creates another request.
-  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true });
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true, requestSlaDays: 14 });
   assert.ok(h.elements.has("varga-deletion-request-menu-status"));
   await h.elements.get("varga-deletion-request-menu-status").click();
   assert.equal(h.controls.statusChecked, 1);
@@ -253,7 +265,7 @@ function deferred() {
     ["completed", "Conserva la conferma ufficiale"],
     ["rejected", "chiusa senza cancellazione"]
   ]) {
-    h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+    h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true, requestSlaDays: 14,
       statusFn: async () => ({data:{requested:true,status:state}}) });
     await h.elements.get("varga-deletion-request-menu-status").click();
     assert.ok(h.alerts.some(x => x.includes(expected)), state + " status message missing");
@@ -262,20 +274,20 @@ function deferred() {
     assert.equal(h.controls.signedOut, false);
   }
   for (const data of [null, {}, {requested:true,status:"unknown"}]) {
-    h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+    h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true, requestSlaDays: 14,
       statusFn: async () => ({data}) });
     await h.elements.get("varga-deletion-request-menu-status").click();
     assert.ok(h.alerts.some(x => x.includes("Impossibile verificare lo stato")));
     assert.equal(h.controls.deleted, false);
   }
-  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true, requestSlaDays: 14,
     noUser: true });
   await h.elements.get("varga-deletion-request-menu-status").click();
   assert.equal(h.controls.statusChecked, 0);
   assert.ok(h.alerts.some(x => x.includes("Accedi per verificare")));
 
   const pendingStatusResponse = deferred();
-  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true, requestSlaDays: 14,
     statusFn: () => pendingStatusResponse.promise });
   const firstStatus = h.elements.get("varga-deletion-request-menu-status").click();
   const secondStatus = h.elements.get("varga-deletion-request-menu-status").click();
@@ -288,7 +300,7 @@ function deferred() {
 
   h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: false });
   assert.equal(h.elements.has("varga-deletion-request-menu-status"), false);
-  h = harness({ platform: "ios", deletionEnabled: true, requestEnabled: true });
+  h = harness({ platform: "ios", deletionEnabled: true, requestEnabled: true, requestSlaDays: 14 });
   assert.equal(h.elements.has("varga-deletion-request-menu-status"), false);
 
   h = harness({ platform: "ios" });

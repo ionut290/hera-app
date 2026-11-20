@@ -243,7 +243,18 @@
         } else if (state.status === "completed") {
           alert("La richiesta risulta completata. Conserva la conferma ufficiale e contatta l'assistenza per eventuali chiarimenti.");
         } else if (state.status === "rejected") {
-          alert("La richiesta risulta chiusa senza cancellazione. Contatta l'assistenza per conoscere la motivazione.");
+          // Display only a server-approved reason code. Never print operator
+          // notes or arbitrary backend text that could disclose personal data.
+          const explanations = {
+            identity_not_verified: "Non è stato possibile verificare l'identità del richiedente.",
+            retention_review_required: "Occorre verificare gli obblighi di conservazione applicabili.",
+            request_needs_clarification: "Servono ulteriori chiarimenti per esaminare la richiesta."
+          };
+          const reason = Object.prototype.hasOwnProperty.call(explanations, state.reasonCode)
+            ? explanations[state.reasonCode]
+            : "La motivazione non è disponibile nell'app.";
+          alert("La richiesta è stata chiusa senza cancellazione. " + reason +
+            " Se desideri ripresentarla, accedi nuovamente e usa 'Richiedi cancellazione account'. Per chiarimenti contatta l'assistenza.");
         } else {
           throw new Error("Stato richiesta non riconosciuto.");
         }

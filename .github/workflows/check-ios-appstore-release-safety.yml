@@ -1,0 +1,33 @@
+name: Check iOS App Store build floor (offline, no upload)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios-appstore-candidate.yml"
+      - ".github/workflows/check-ios-appstore-release-safety.yml"
+      - "scripts/check-ios-appstore-build-number.sh"
+      - "scripts/check-ios-appstore-build-number.cjs"
+      - "docs/APP_REVIEW_FULL_ACCESS_PLAN_2026-11-20.md"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify both upload stages enforce the latest confirmed build floor
+        run: |
+          set -euo pipefail
+          bash -n scripts/check-ios-appstore-build-number.sh
+          node --check scripts/check-ios-appstore-build-number.cjs
+          node scripts/check-ios-appstore-build-number.cjs
+      - name: Verify no deployment credentials or App Store request in this check
+        run: |
+          set -euo pipefail
+          test ! -e ios/App/App/GoogleService-Info.plist
+          grep -Fq 'node scripts/audit-app-review-full-access.cjs --require-ready' .github/workflows/ios-appstore-candidate.yml
+          echo "No Apple upload, no signing and no Firebase access."

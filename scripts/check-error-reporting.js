@@ -91,12 +91,12 @@ assert.doesNotMatch(centerBackend, /actionType:\s*["']ERROR_CENTER["']/);
 assert.doesNotMatch(centerBackend, /onSnapshot\s*\(/);
 assert.doesNotMatch(centerBackend, /setInterval\s*\(/);
 
-// Il deploy deve applicare e rileggere la policy IAM senza rimuovere gli altri binding.
-assert.match(deployWorkflow, /Grant and verify Error Center callable transport/);
-assert.ok(deployWorkflow.includes("roles/cloudfunctions.invoker"));
-assert.match(deployWorkflow, /allUsers/);
-assert.match(deployWorkflow, /:getIamPolicy/);
-assert.match(deployWorkflow, /:setIamPolicy/);
+// A solo-owner deployment must NEVER grant invoker to allUsers or mutate IAM.
+// Confirm the error center functions remain in the explicit manual allowlist.
+assert.match(deployWorkflow, /^on:\n  workflow_dispatch:/m);
+assert.doesNotMatch(deployWorkflow, /^  push:/m);
+assert.match(deployWorkflow, /DEPLOY_ORDINARY_ONLY/);
+assert.doesNotMatch(deployWorkflow, /:setIamPolicy|method:\s*["']POST["']/);
 for (const callableName of [
   "recordClientErrorGroup",
   "getErrorCenterSummary",
@@ -105,8 +105,8 @@ for (const callableName of [
   "updateErrorCenterStatus"
 ]) {
   assert.ok(
-    deployWorkflow.includes(`"${callableName}"`),
-    `${callableName} deve ricevere il binding invoker durante il deploy`
+    deployWorkflow.includes(`functions:${callableName}`),
+    `${callableName} must remain in the exact manual-functions allowlist`
   );
 }
 

@@ -30,18 +30,59 @@ function randomPassword() {
   }
   return chars.join("");
 }
+// Creating a review credential is a privileged operation. A signed ID
+// token can remain usable briefly after the administrator has been disabled
+// or their email/privileges changed. Always re-check the live Auth record,
+// and demand a recently authenticated administrator (never a review user).
 async function assertAdmin(auth) {
-  if (!auth || auth.token?.apple_review === true || auth.token?.email_verified !== true) {
+  const uid = auth?.uid;
+  const tokenEmail = cleanEmail(auth?.token?.email);
+  if (typeof uid !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(uid) ||
+      auth?.token?.apple_review === true ||
+      auth?.token?.email_verified !== true || !tokenEmail) {
     throw new HttpsError("permission-denied", "Account amministratore verificato richiesto.");
   }
-  const email = cleanEmail(auth.token?.email);
-  if (!email) throw new HttpsError("permission-denied", "Account amministratore richiesto.");
+  const authTime = Number(auth.token?.auth_time);
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isFinite(authTime) || authTime > now + 60 ||
+      now - authTime > 600) {
+    throw new HttpsError("failed-precondition",
+      "Accedi nuovamente come amministratore prima di creare un account di revisione.");
+  }
 
-  if (email === ADMIN_EMAIL) return;
-  const snap = await admin.firestore().collection("appConfig").doc("adminUsers").get();
+  let live;
+  try {
+    live = await admin.auth().getUser(uid);
+  } catch (error) {
+    // An old token for a disabled/deleted identity is never a grant.
+    if (error?.code !== "auth/user-not-found") {
+      console.error("Apple review admin verification unavailable", {
+        code: error?.code || "unknown"
+      });
+    }
+    throw new HttpsError("permission-denied", "Amministratore non autorizzato.");
+  }
+  if (!live || live.uid !== uid || live.disabled === true ||
+      live.emailVerified !== true ||
+      cleanEmail(live.email) !== tokenEmail ||
+      live.customClaims?.apple_review === true) {
+    throw new HttpsError("permission-denied", "Amministratore non autorizzato.");
+  }
+
+  // The configured admin email list is checked AFTER the live Auth record.
+  if (tokenEmail === ADMIN_EMAIL) return;
+  let snap;
+  try {
+    snap = await admin.firestore().collection("appConfig").doc("adminUsers").get();
+  } catch (error) {
+    console.error("Apple review admin allowlist unavailable", {
+      code: error?.code || "unknown"
+    });
+    throw new HttpsError("permission-denied", "Verifica amministratore non disponibile.");
+  }
   const approved = snap.exists && Array.isArray(snap.data()?.emails)
     ? snap.data().emails.map(cleanEmail) : [];
-  if (!approved.includes(email)) {
+  if (!approved.includes(tokenEmail)) {
     throw new HttpsError("permission-denied", "Solo un amministratore può creare l'account Apple.");
   }
 }

@@ -66,7 +66,24 @@ const rejects=(p,code)=>assert.rejects(p,e=>e instanceof HttpsError&&e.code===co
   // A real Firestore transaction can reopen a rejected request, keeping
   // earlier review metadata. No other user, profile or private data is touched.
   await db.doc("accountDeletionRequests/"+firstUid).update({
-    status:"rejected", reviewerNote:"Synthetic reviewer decision"
+    status:"rejected", reviewerNote:"Synthetic private reviewer decision",
+    rejectionReasonCode:"retention_review_required"
+  });
+  const rejected=await read({auth:auth(firstUid),data:{}});
+  assert.deepEqual(rejected,{
+    requested:true,status:"rejected",reasonCode:"retention_review_required"
+  });
+  assert.equal(JSON.stringify(rejected).includes("private"),false);
+  assert.equal((await read({auth:auth(secondUid),data:{}})).requested,false);
+  // An unrecognized reason is never copied to the caller.
+  await db.doc("accountDeletionRequests/"+firstUid).update({
+    rejectionReasonCode:"Sensitive free text: do not expose"
+  });
+  assert.deepEqual(await read({auth:auth(firstUid),data:{}}),{
+    requested:true,status:"rejected"
+  });
+  await db.doc("accountDeletionRequests/"+firstUid).update({
+    rejectionReasonCode:"retention_review_required"
   });
   const reopened=await ask(request(firstUid));
   assert.equal(reopened.status,"pending");
@@ -75,7 +92,8 @@ const rejects=(p,code)=>assert.rejects(p,e=>e instanceof HttpsError&&e.code===co
   const after=(await db.doc("accountDeletionRequests/"+firstUid).get()).data();
   assert.equal(after.status,"pending");
   assert.equal(after.reopenCount,1);
-  assert.equal(after.reviewerNote,"Synthetic reviewer decision");
+  assert.equal(after.reviewerNote,"Synthetic private reviewer decision");
+  assert.equal(after.rejectionReasonCode,"retention_review_required");
   assert.equal(typeof after.reopenedAt.toDate,"function");
   assert.equal((await ask(request(firstUid))).reopened,undefined);
   assert.equal((await read({auth:auth(firstUid),data:{}})).status,"pending");

@@ -101,7 +101,7 @@ const rejects=(promise,code)=>assert.rejects(promise,e=>e instanceof HttpsError&
 
   const data=await queue(caller({}));
   assert.equal(data.requests.length,2);
-  assert.deepEqual(data.requests.map(x=>x.uid),["worker-1","worker-2"]);
+  assert.deepEqual(Array.from(data.requests,x=>x.uid),["worker-1","worker-2"]);
   assert.equal(data.requests[0].reopened,true);
   assert.equal(data.requests[1].reopened,false);
   assert.deepEqual(Object.keys(data.requests[0]).sort(),["reopened","status","uid"].sort());
@@ -130,7 +130,7 @@ const rejects=(promise,code)=>assert.rejects(promise,e=>e instanceof HttpsError&
   assert.equal(writes.length,2);
   assert.equal(records.get("worker-1").rejectionReasonCode,"retention_review_required");
   assert.equal(records.get("worker-1").sensitiveBusiness,"PRESERVE");
-  assert.deepEqual(data.requests.map(x=>x.status),["pending","in_review"],
+  assert.deepEqual(Array.from(data.requests,x=>x.status),["pending","in_review"],
     "Earlier queue snapshot should remain immutable");
   assert.equal(records.get("worker-2").status,"in_review");
   assert.equal(records.get("worker-3").status,"completed");

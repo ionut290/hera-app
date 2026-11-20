@@ -33,3 +33,17 @@ Questa procedura **non** abilita la cancellazione degli account aziendali, non m
 - Se la protezione indipendente è impossibile con un solo amministratore, i workflow sensibili rimangono bloccati. L'eventuale alternativa futura richiede una valutazione specifica di rischio, ruoli privacy, meccanismi di doppia conferma, audit e recupero: non abbassare il livello di sicurezza tramite questo workflow.
 
 Riferimenti: issue [#1609](https://github.com/ionut290/hera-app/issues/1609), [#1666](https://github.com/ionut290/hera-app/issues/1666), [#1672](https://github.com/ionut290/hera-app/issues/1672).
+
+
+## Nuovo percorso TestFlight interno dell'app iPhone (non pubblico)
+
+Il workflow `.github/workflows/ios-internal-testflight-main.yml` consente di preparare una build firmata del codice `main` per il **TestFlight interno**, anche quando l'audit per App Review pubblica rimane `BLOCKED`.
+
+1. Verificare la build numericamente più recente su App Store Connect. Al 20/11/2026 è `1.0 (20015)`; il prossimo valore *proposto*, se ancora libero, è `20016`.
+2. Verificare i controlli CI del commit `main` e assicurarsi che nessun dato/utente reale sia esposto. Non sostituire il workflow pubblico o eliminare il suo gate.
+3. Da GitHub Actions > **Varga Cantieri internal TestFlight from reviewed main**, scegliere branch `main`, opzione `UPLOAD_INTERNAL_TESTFLIGHT_ONLY`, numero build non usato e SHA esatto del commit `main`.
+4. Il workflow verifica due volte l'identità `ionut290`, il primo tentativo e il SHA. Richiede configurazione Apple privata nel preesistente environment `ios-internal-testflight`; genera l'app con login Apple e Google, crea un archivio firmato e carica su **App Store Connect per TestFlight**, non in App Review.
+5. Dopo l'elaborazione Apple, installare la build su iPhone e controllare login Google/Apple, persistenza, menù, revoca Apple e cancellazione account *soltanto su utenza demo isolata autorizzata*. Se le funzioni privacy sono ancora disattivate, registrarlo come test NON superato, senza effettuare cancellazioni reali.
+6. La build TestFlight non equivale a pubblicazione; `ios-appstore-candidate.yml` rimane separato e blocca l'upload pubblico tramite `audit-app-review-full-access.cjs --require-ready`.
+
+**Nessuna funzione Firebase o regola Firestore viene distribuita dal workflow TestFlight.** I servizi backend restano quelli già approvati; il codice del client può essere più recente di Firebase produzione. Nessun accesso aziendale nuovo, nessun account o permesso modificato dalla sola compilazione. La capacità di inviare alla revisione Apple dipende ancora dalle prove privacy e reviewer.

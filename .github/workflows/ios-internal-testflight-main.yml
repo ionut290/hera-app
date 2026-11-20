@@ -1,0 +1,385 @@
+name: Varga Cantieri internal TestFlight from reviewed main (manual upload only)
+
+# Internal TestFlight upload ONLY. NOT a public App Store submission.
+# This uses the signed archive path for App Store Connect transport, but
+# NEVER assigns a public App Store version, submits for review or releases.
+# Manual owner confirmation + exact SHA are mandatory, with Apple signing
+# credentials isolated to the existing ios-internal-testflight environment.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Explicit authorization: INTERNAL TestFlight ONLY, no App Review or public release"
+        type: choice
+        required: true
+        default: DO_NOT_UPLOAD
+        options:
+          - DO_NOT_UPLOAD
+          - UPLOAD_INTERNAL_TESTFLIGHT_ONLY
+      build_number:
+        description: "New CFBundleVersion above confirmed TestFlight build 1.0 (20015); verify live ASC first"
+        type: string
+        required: true
+        default: "20016"
+      reviewed_commit_sha:
+        description: "Exact 40-character reviewed commit SHA shown in GitHub"
+        required: true
+        type: string
+
+concurrency:
+  group: varga-ios-internal-main-candidate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Preflight on Linux (no Apple secrets or upload)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_INTERNAL_TESTFLIGHT_ONLY' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout release readiness assessment (no credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate manual input before allocating a macOS runner
+        shell: bash
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_commit_sha }}
+          ACTUAL_SHA: ${{ github.sha }}
+          IOS_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != "ionut290/hera-app" ||
+                "$GITHUB_REF" != "refs/heads/main" ||
+                "$GITHUB_ACTOR" != "ionut290" ||
+                "$GITHUB_TRIGGERING_ACTOR" != "ionut290" ||
+                "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
+            echo "::error::Only the owner may start a new internal TestFlight dispatch from main."
+            exit 1
+          fi
+          if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$ACTUAL_SHA" ]]; then
+            echo "::error::Reviewed SHA must match the exact main commit running this workflow."
+            exit 1
+          fi
+          bash scripts/check-ios-appstore-build-number.sh "$IOS_BUILD_NUMBER"
+          echo "Preflight OK: workflow parsed, Linux job started and manual inputs validated."
+          echo "No App Store Connect upload or iPhone app modification performed."
+
+      - name: Set up Node.js for release readiness
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Record read-only Apple review blockers without submitting for review
+        shell: bash
+        run: |
+          set -euo pipefail
+          # INTERNAL testing may proceed while public App Review is BLOCKED.
+          # Always record the truthful status; do not bypass the public
+          # candidate workflow's separate --require-ready release gate.
+          node scripts/audit-app-review-full-access.cjs > "$RUNNER_TEMP/asc-internal-readiness.json"
+          node -e 'const r=require(process.argv[1]);if(!["BLOCKED","READY"].includes(r.status)||!Array.isArray(r.blockers))throw Error("Readiness report invalid")' "$RUNNER_TEMP/asc-internal-readiness.json"
+          node scripts/check-account-privacy-client-runtime.js
+          node scripts/check-app-review-readiness-failclosed.cjs
+          echo "### Internal TestFlight only; App Store public submission remains separate." >> "$GITHUB_STEP_SUMMARY"
+          echo "Known GDPR, reviewer login and account-deletion requirements must be verified before public App Review." >> "$GITHUB_STEP_SUMMARY"
+
+  upload-internal-testflight:
+    name: Sign and upload INTERNAL TestFlight candidate (NO submission)
+    needs: preflight
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_INTERNAL_TESTFLIGHT_ONLY' }}
+    runs-on: macos-26
+    timeout-minutes: 90
+    # Existing protected environment holds validated Apple signing credentials.
+    # Keep the same reviewer gate; no new secret copies are needed.
+    environment: ios-internal-testflight
+
+    env:
+      IOS_BUILD_NUMBER: ${{ inputs.build_number }}
+      IOS_FIREBASE_CONFIG_BASE64: ${{ secrets.IOS_FIREBASE_CONFIG_BASE64 }}
+      IOS_APPLE_TEAM_ID: ${{ secrets.IOS_APPLE_TEAM_ID }}
+      IOS_APPSTORE_KEY_ID: ${{ secrets.IOS_APPSTORE_KEY_ID }}
+      IOS_APPSTORE_ISSUER_ID: ${{ secrets.IOS_APPSTORE_ISSUER_ID }}
+      IOS_APPSTORE_PRIVATE_KEY_BASE64: ${{ secrets.IOS_APPSTORE_PRIVATE_KEY_BASE64 }}
+      IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+      IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+
+    steps:
+      - name: Checkout reviewed commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Require explicit source and signing prerequisites
+        shell: bash
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_commit_sha }}
+          ACTUAL_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Re-check inside upload job: GitHub can rerun individual jobs
+          # without rerunning the first preflight. Never reuse approval.
+          if [[ "$GITHUB_REPOSITORY" != "ionut290/hera-app" ||
+                "$GITHUB_REF" != "refs/heads/main" ||
+                "$GITHUB_ACTOR" != "ionut290" ||
+                "$GITHUB_TRIGGERING_ACTOR" != "ionut290" ||
+                "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
+            echo "::error::A new owner-authorized manual internal upload is required."
+            exit 1
+          fi
+          if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$ACTUAL_SHA" ]]; then
+            echo "::error::The exact reviewed SHA must match this workflow checkout. No upload performed."
+            exit 1
+          fi
+          for key in IOS_FIREBASE_CONFIG_BASE64 IOS_APPLE_TEAM_ID IOS_APPSTORE_KEY_ID IOS_APPSTORE_ISSUER_ID IOS_APPSTORE_PRIVATE_KEY_BASE64 IOS_DISTRIBUTION_CERTIFICATE_BASE64 IOS_DISTRIBUTION_CERTIFICATE_PASSWORD; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "::error::Missing required private GitHub Actions secret: $key"
+              exit 1
+            fi
+          done
+          [[ "$IOS_APPLE_TEAM_ID" =~ ^[A-Za-z0-9]{10}$ ]] || { echo "::error::Invalid Apple Team ID"; exit 1; }
+          [[ "$IOS_APPSTORE_KEY_ID" =~ ^[A-Za-z0-9]{10}$ ]] || { echo "::error::Invalid App Store Connect Key ID"; exit 1; }
+          XCODE_MAJOR="$(xcodebuild -version | awk '/^Xcode / { print $2 }' | cut -d. -f1)"
+          SDK_MAJOR="$(xcrun --sdk iphoneos --show-sdk-version | cut -d. -f1)"
+          [[ -n "$XCODE_MAJOR" && "$XCODE_MAJOR" -ge 26 && -n "$SDK_MAJOR" && "$SDK_MAJOR" -ge 26 ]] ||
+            { echo "::error::Xcode 26 / iOS 26 SDK or later required"; exit 1; }
+          # ITMS-90725: Apple notified on 19 Nov 2026 that iOS 27 SDK
+          # becomes mandatory beginning April 2027. Prevent a stale runner
+          # from uploading after that month rather than claiming compliance.
+          if [[ "$(date -u +%Y%m)" -ge 202704 && "$SDK_MAJOR" -lt 27 ]]; then
+            echo "::error::Starting April 2027, Apple requires the iOS 27 SDK or newer. Upgrade the macOS/Xcode runner before uploading."
+            exit 1
+          fi
+          bash scripts/check-ios-appstore-build-number.sh "$IOS_BUILD_NUMBER"
+          echo "Reviewed commit, requested build number and supported Xcode verified; no upload yet."
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install and verify protected application flows
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run check:fatto-whazzup-immutable
+          npm run check:fatto-isolation
+          npm run check:auth-stability
+          npm run check:auth-login
+          npm run check:security-privacy
+          npm run check:syntax
+          bash -n scripts/smoke-ios-simulator.sh
+          python3 -m py_compile scripts/configure-ios-plist.py scripts/configure-ios-firebase.py
+          ruby -c scripts/register-ios-firebase-plist.rb
+          ruby -c scripts/install-ios-native-geofence.rb
+          node --check scripts/fetch-ios-appstore-profile.js
+          ruby -c scripts/install-ios-apple-signin.rb
+          ruby -c scripts/install-ios-google-signin.rb
+          ruby -c scripts/configure-ios-distribution-signing.rb
+          npm run android:aab:prepare
+          test -s www/index.html
+          test -s www/icons/varga-cantieri-512.png
+
+      - name: Generate native iOS with safe patched Capacitor
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --no-audit --no-fund @capacitor/core@7.6.10 @capacitor/ios@7.6.10
+          node -e "const c=require('@capacitor/core/package.json').version,i=require('@capacitor/ios/package.json').version;if(c!==i)throw Error('Capacitor mismatch');"
+          npx cap add ios
+          # Google provider must be included BEFORE CocoaPods sync; plist URL
+          # schemes are added by configure-ios-firebase.py after private config.
+          ruby scripts/install-ios-google-signin.rb
+          # The first 'cap add ios' pins GTMSessionFetcher/Core 4.x in its
+          # temporary Podfile.lock. GoogleSignIn 7.1 requires ~> 3.3 while
+          # FirebaseAuth allows >=3.4,<5: targeted update resolves 3.x.
+          # Never remove repository locks or update unrelated production deps.
+          (cd ios/App && pod update GTMSessionFetcher/Core)
+          npx cap sync ios
+          python3 scripts/mark-ios-native-safe-area.py
+          ruby scripts/install-ios-native-geofence.rb
+          ruby scripts/install-ios-apple-signin.rb
+          test -s ios/App/App/App.entitlements
+          python3 scripts/configure-ios-plist.py
+          swift scripts/prepare-ios-app-icon.swift icons/varga-cantieri-512.png ios/App/App/Assets.xcassets/AppIcon.appiconset
+
+      - name: Inject real registered Firebase Apple configuration (never publish artifact)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$IOS_FIREBASE_CONFIG_BASE64" | base64 --decode > ios/App/App/GoogleService-Info.plist
+          python3 scripts/configure-ios-firebase.py
+          ruby scripts/register-ios-firebase-plist.rb
+          test -s ios/App/App/GoogleService-Info.plist
+
+      - name: Install and validate App Store distribution assets in temporary keychain
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          CERT_PATH="$RUNNER_TEMP/varga-distribution.p12"
+          PROFILE_PATH="$RUNNER_TEMP/varga-appstore.mobileprovision"
+          PROFILE_PLIST="$RUNNER_TEMP/varga-appstore-profile.plist"
+          KEYCHAIN_PATH="$RUNNER_TEMP/varga-apple-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          printf '%s' "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          node scripts/fetch-ios-appstore-profile.js "$PROFILE_PATH"
+          openssl pkcs12 -in "$CERT_PATH" -clcerts -nokeys -passin env:IOS_DISTRIBUTION_CERTIFICATE_PASSWORD -out "$RUNNER_TEMP/varga-leaf.pem"
+          openssl x509 -in "$RUNNER_TEMP/varga-leaf.pem" -outform DER -out "$RUNNER_TEMP/varga-leaf.der"
+          openssl x509 -in "$RUNNER_TEMP/varga-leaf.pem" -noout -subject | grep -F 'Apple Distribution:' >/dev/null ||
+            { echo "::error::The p12 must contain an Apple Distribution certificate."; exit 1; }
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+          python3 - "$PROFILE_PLIST" "$RUNNER_TEMP/varga-leaf.der" <<'PY'
+          import datetime, os, plistlib, re, sys
+          from pathlib import Path
+          profile = plistlib.loads(Path(sys.argv[1]).read_bytes())
+          certificate = Path(sys.argv[2]).read_bytes()
+          team = os.environ["IOS_APPLE_TEAM_ID"]
+          expected_app = team + ".it.vargacantieri.hera"
+          actual_app = profile.get("Entitlements", {}).get("application-identifier")
+          if actual_app != expected_app:
+              raise SystemExit("App Store profile App ID does not match the approved bundle/team")
+          apple_signin = profile.get("Entitlements", {}).get("com.apple.developer.applesignin", [])
+          if "Default" not in apple_signin:
+              raise SystemExit("Provisioning profile lacks Sign in with Apple; update App ID and regenerate App Store profile")
+          if team not in profile.get("TeamIdentifier", []):
+              raise SystemExit("App Store profile has the wrong Apple team")
+          if profile.get("Entitlements", {}).get("get-task-allow", True):
+              raise SystemExit("A DEVELOPMENT profile was supplied, not an App Store distribution profile")
+          if "ProvisionedDevices" in profile or profile.get("ProvisionsAllDevices"):
+              raise SystemExit("Expected an App Store distribution profile, not development/ad-hoc/enterprise")
+          expires = profile.get("ExpirationDate")
+          if not expires or expires <= datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None):
+              raise SystemExit("App Store distribution profile is expired")
+          if certificate not in profile.get("DeveloperCertificates", []):
+              raise SystemExit("App Store profile is not signed with the provided Apple Distribution certificate")
+          name, uuid = profile.get("Name", ""), profile.get("UUID", "")
+          if not name or "\n" in name or "\r" in name or not re.fullmatch(r"[0-9A-Fa-f-]{36}", uuid):
+              raise SystemExit("Invalid App Store profile name or UUID")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write("IOS_PROFILE_NAME=" + name + "\n")
+              env.write("IOS_PROFILE_UUID=" + uuid + "\n")
+          print("App Store Connect provisioning profile, team and certificate match.")
+          PY
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$IOS_DISTRIBUTION_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F 'Apple Distribution:' >/dev/null ||
+            { echo "::error::Apple Distribution private key/certificate not usable in keychain."; exit 1; }
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c "Print :UUID" "$PROFILE_PLIST")"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          echo "IOS_SIGNING_KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "App Store certificate and profile installed only on the temporary macOS runner."
+
+      - name: Configure ONLY App Release for manual distribution signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby scripts/configure-ios-distribution-signing.rb
+          ruby -r xcodeproj -e 'p=Xcodeproj::Project.open("ios/App/Pods/Pods.xcodeproj"); abort "Unexpected Distribution signing in Pods" if p.targets.any?{|t| t.build_configurations.any?{|c| c.build_settings["CODE_SIGN_IDENTITY[sdk=iphoneos*]"]=="Apple Distribution"}}'
+          echo "Release distribution identity scoped to App; Pods untouched."
+
+      - name: Prepare temporary App Store Connect API authentication
+        id: apple_auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          KEY_DIR="$RUNNER_TEMP/varga-apple-api"
+          mkdir -p "$KEY_DIR"
+          KEY_PATH="$KEY_DIR/AuthKey_$IOS_APPSTORE_KEY_ID.p8"
+          printf '%s' "$IOS_APPSTORE_PRIVATE_KEY_BASE64" | base64 --decode > "$KEY_PATH"
+          grep -q 'BEGIN PRIVATE KEY' "$KEY_PATH" || { echo "::error::Invalid Apple API key format"; exit 1; }
+          chmod 600 "$KEY_PATH"
+          echo "key_path=$KEY_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Archive signed iPhone app on GitHub macOS
+        shell: bash
+        env:
+          APPLE_API_KEY_PATH: ${{ steps.apple_auth.outputs.key_path }}
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/VargaCantieri.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$APPLE_API_KEY_PATH" \
+            -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
+            MARKETING_VERSION=1.0 \
+            CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
+            archive > "$RUNNER_TEMP/ios-private-archive.log" 2>&1 ||
+            { tail -n 80 "$RUNNER_TEMP/ios-private-archive.log"; exit 1; }
+          test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | grep -Fx '15.0' ||
+            { echo "::error::Signed iOS archive must require iOS 15.0 or later."; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
+            grep -Fx "$IOS_BUILD_NUMBER"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
+            grep -Fx 'it.vargacantieri.hera'
+          test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/GoogleService-Info.plist"
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app"
+          echo "iOS Release archive signed and verified; no artifact exposed publicly."
+
+      - name: Upload INTERNAL TestFlight build to App Store Connect (NOT App Review)
+        shell: bash
+        env:
+          APPLE_API_KEY_PATH: ${{ steps.apple_auth.outputs.key_path }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, plistlib
+          from pathlib import Path
+          options = {
+              "method": "app-store-connect",
+              "destination": "upload",
+              "signingStyle": "manual",
+              "signingCertificate": "Apple Distribution",
+              "provisioningProfiles": {"it.vargacantieri.hera": os.environ["IOS_PROFILE_NAME"]},
+              "teamID": os.environ["IOS_APPLE_TEAM_ID"],
+              "uploadSymbols": True,
+          }
+          with Path(os.environ["RUNNER_TEMP"], "varga-internal-testflight-options.plist").open("wb") as f:
+              plistlib.dump(options, f)
+          PY
+          test -s "$RUNNER_TEMP/varga-internal-testflight-options.plist"
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/VargaCantieri.xcarchive" \
+            -exportPath "$RUNNER_TEMP/varga-internal-testflight-upload" \
+            -exportOptionsPlist "$RUNNER_TEMP/varga-internal-testflight-options.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$APPLE_API_KEY_PATH" \
+            -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
+            > "$RUNNER_TEMP/ios-internal-testflight-upload.log" 2>&1 ||
+            { tail -n 80 "$RUNNER_TEMP/ios-internal-testflight-upload.log"; exit 1; }
+          echo "Signed INTERNAL TestFlight build uploaded to App Store Connect only."
+          echo "NOT submitted to App Review. NOT released to customers. Process for INTERNAL testers only."
+
+      - name: Remove temporary Apple signing material and Firebase configuration
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -n "$IOS_PROFILE_UUID" ]]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$IOS_PROFILE_UUID.mobileprovision"
+          fi
+          if [[ -n "$IOS_SIGNING_KEYCHAIN_PATH" && -f "$IOS_SIGNING_KEYCHAIN_PATH" ]]; then
+            security delete-keychain "$IOS_SIGNING_KEYCHAIN_PATH"
+          fi
+          rm -rf "$RUNNER_TEMP/varga-apple-api"
+          rm -f "$RUNNER_TEMP"/varga-*.p12 "$RUNNER_TEMP"/varga-*.mobileprovision
+          rm -f "$RUNNER_TEMP"/varga-leaf.pem "$RUNNER_TEMP"/varga-leaf.der "$RUNNER_TEMP"/varga-appstore-profile.plist
+          rm -f ios/App/App/GoogleService-Info.plist

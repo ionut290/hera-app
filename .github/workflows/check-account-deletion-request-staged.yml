@@ -10,6 +10,8 @@ on:
       - "scripts/check-account-privacy-sw-cache.cjs"
       - ".github/workflows/check-account-deletion-request-staged.yml"
       - ".github/workflows/deploy-firebase-functions.yml"
+      - ".github/workflows/deploy-account-deletion-request-protected.yml"
+      - "scripts/check-account-deletion-request-release-guard.cjs"
       - "index.html"
   workflow_dispatch:
 permissions:
@@ -29,6 +31,7 @@ jobs:
           node --check account-privacy-controls.js
           node --check scripts/check-account-deletion-request-staged.cjs
           node scripts/check-account-deletion-request-staged.cjs
+          node scripts/check-account-deletion-request-release-guard.cjs
           node scripts/check-account-privacy-client-runtime.js
           node scripts/check-account-privacy-sw-cache.cjs
       - name: Assert no accidental production release

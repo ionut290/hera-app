@@ -1,0 +1,57 @@
+name: Resolve iOS native Google CocoaPods offline app build (NO DEPLOY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios-private-testflight.yml"
+      - ".github/workflows/ios-appstore-candidate.yml"
+      - ".github/workflows/check-ios-google-cocoapods.yml"
+      - "scripts/install-ios-google-signin.rb"
+      - "scripts/check-ios-google-podfile.cjs"
+      - "capacitor.config.json"
+      - "package.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  resolve-native-google-deps:
+    name: Resolve native GoogleSignIn & GTMSessionFetcher (no signing)
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Check Google login contracts
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run check:auth-login
+          ruby -c scripts/install-ios-google-signin.rb
+      - name: Prepare temporary unsigned Capacitor project
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --no-audit --no-fund @capacitor/core@7.6.10 @capacitor/ios@7.6.10
+          node scripts/prepare-capacitor-web.js
+          npx cap add ios
+          ruby scripts/install-ios-google-signin.rb
+      - name: Resolve native Google CocoaPods without Apple secrets
+        run: |
+          set -euo pipefail
+          (cd ios/App && pod update GTMSessionFetcher/Core)
+          npx cap sync ios
+          ruby - <<'RUBY'
+          lock=File.read("ios/App/Podfile.lock")
+          abort "Missing native GoogleSignIn pod" unless lock.match?(/GoogleSignIn \(7\.1\.0\)/)
+          abort "GTMSessionFetcher is not a compatible 3.x release" unless
+            lock.match?(/GTMSessionFetcher\/Core \(3\.[4-9]\./)
+          abort "Missing CapacitorFirebaseAuthentication Google subspec" unless
+            lock.include?("CapacitorFirebaseAuthentication/Google")
+          puts "PASS: iOS native GoogleSignIn 7.1 + GTMSessionFetcher Core 3.x resolved without secrets"
+          RUBY
+      - name: No app upload
+        run: echo "Only temporary CocoaPods resolution; no Firebase account, signing, TestFlight or App Store distribution."

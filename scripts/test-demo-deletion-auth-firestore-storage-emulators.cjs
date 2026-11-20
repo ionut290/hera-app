@@ -22,6 +22,12 @@ for (const name of ["GCLOUD_PROJECT", "GOOGLE_CLOUD_PROJECT", "FIREBASE_PROJECT"
 if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
   throw Error("Service account credentials forbidden");
 }
+// A preexisting Cloud Storage SDK override must never silently bypass the
+// Firebase Storage emulator and send a destructive request to GCS.
+if (process.env.STORAGE_EMULATOR_HOST &&
+    process.env.STORAGE_EMULATOR_HOST !== "http://" + process.env.FIREBASE_STORAGE_EMULATOR_HOST) {
+  throw Error("Non-local or mismatched STORAGE_EMULATOR_HOST forbidden");
+}
 const admin = require("../functions/node_modules/firebase-admin");
 admin.initializeApp({ projectId });
 const db = admin.firestore();

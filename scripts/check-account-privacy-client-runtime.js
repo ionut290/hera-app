@@ -118,8 +118,9 @@ function harness(options = {}) {
     },
     async revokeAccessToken({ token }) {
       assert.equal(token, "synthetic-authorization-code");
-      revoked++;
       calls.push(["revoke"]);
+      if (options.revokeFails) throw Error("Synthetic Apple revocation failure");
+      revoked++;
     },
     async signOut() { calls.push(["nativeSignOut"]); }
   };
@@ -243,6 +244,44 @@ function deferred() {
   assert.equal(h.controls.deleted, false);
   await clickDelete(h);
   assert.equal(h.controls.checked, 2, "revocation failure must release deletion lock");
+
+  // If Apple revocation fails, deletion must not run at all.
+  h = harness({ appleUser: true, revokeFails: true });
+  await clickDelete(h);
+  assert.equal(h.controls.revoked, 0);
+  assert.equal(h.controls.deleted, false);
+  assert.equal(h.controls.signedOut, false);
+  assert.ok(h.alerts.some((x) => x.includes("Verifica Apple non riuscita")));
+
+  // If Apple revocation succeeds BUT the Firebase deletion callable fails,
+  // the account must NOT be described as deleted. Show the precise partial
+  // failure because repeating Apple authorization might not be straightforward.
+  h = harness({
+    appleUser: true,
+    deleteFn: async () => { throw Error("Synthetic Firebase cleanup error"); }
+  });
+  await clickDelete(h);
+  assert.equal(h.controls.checked, 1);
+  assert.equal(h.controls.revoked, 1);
+  assert.equal(h.controls.deleted, true, "Deletion callable must be attempted");
+  assert.equal(h.controls.signedOut, false);
+  assert.equal(h.controls.reloaded, false);
+  assert.ok(h.alerts.some((x) =>
+    x.includes("Apple è stata revocata") &&
+    x.includes("NON è stata confermata dal server") &&
+    x.includes("contatta l’assistenza")
+  ), "Specific warning must identify Apple revocation / unconfirmed Firebase deletion");
+  assert.ok(!h.alerts.some((x) => x.startsWith("Account eliminato.")));
+
+  h = harness({
+    appleUser: true,
+    deleteFn: async () => ({ data: { deleted: false } })
+  });
+  await clickDelete(h);
+  assert.equal(h.controls.revoked, 1);
+  assert.equal(h.controls.signedOut, false);
+  assert.ok(h.alerts.some((x) => x.includes("NON è stata confermata dal server")));
+  assert.ok(!h.alerts.some((x) => x.startsWith("Account eliminato.")));
 
   // Even a server failure must not display a false positive.
   h = harness({ deleteFn: async () => { throw Error("Temporary server failure"); } });

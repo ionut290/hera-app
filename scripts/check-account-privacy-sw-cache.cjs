@@ -14,7 +14,7 @@ const privacyScript = fs.readFileSync(path.join(root, "account-privacy-controls.
 
 const matches = [...index.matchAll(/<script\s+src="account-privacy-controls\.js\?v=([^"]+)"><\/script>/g)];
 assert.equal(matches.length, 1, "Require exactly one versioned privacy client script");
-assert.equal(matches[0][1], "20261120-deletion-request-staged1",
+assert.equal(matches[0][1], "20261120-deletion-request-status1",
   "Update the privacy script revision when its revocation logic changes");
 assert.match(privacyScript, /appleLinked && nativePlatform\(\) !== "ios"/,
   "Fail-closed Apple revocation protection must remain in the shipped script");
@@ -88,7 +88,7 @@ async function perform(url) {
   return promise;
 }
 (async () => {
-  const url = "https://pwa.invalid/account-privacy-controls.js?v=20261120-deletion-request-staged1";
+  const url = "https://pwa.invalid/account-privacy-controls.js?v=20261120-deletion-request-status1";
   assert.equal((await perform(url)).revision, "online-v1");
   assert.equal(cached.get(url).revision, "online-v1");
 

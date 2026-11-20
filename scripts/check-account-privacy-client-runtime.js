@@ -23,6 +23,7 @@ function harness(options = {}) {
   let checked = 0;
   let signedIn = 0;
   let requested = 0;
+  let statusChecked = 0;
 
   class Element {
     constructor(id = "") {
@@ -56,8 +57,18 @@ function harness(options = {}) {
     readyState: "complete",
     getElementById: (id) => elements.get(id) || null,
     querySelector: (selector) => selector.includes("side-menu") ? menu : null,
-    querySelectorAll: (selector) => selector === "[data-delete-varga-account]"
-      ? [...elements.values()].filter((el) => el.dataset.deleteVargaAccount) : [],
+    querySelectorAll: (selector) => {
+      if (selector === "[data-delete-varga-account]") {
+        return [...elements.values()].filter((el) => el.dataset.deleteVargaAccount);
+      }
+      if (selector === "[data-check-varga-deletion-status]") {
+        return [...elements.values()].filter((el) => el.dataset.checkVargaDeletionStatus);
+      }
+      if (selector === "[data-request-varga-deletion]") {
+        return [...elements.values()].filter((el) => el.dataset.requestVargaDeletion);
+      }
+      return [];
+    },
     createElement: () => new Element(),
   };
 
@@ -90,7 +101,15 @@ function harness(options = {}) {
         assert.equal(region, "europe-west1");
         return {
           httpsCallable(name) {
-            assert.ok(["deleteOwnVargaAccount", "requestOwnVargaAccountDeletion"].includes(name));
+            assert.ok(["deleteOwnVargaAccount", "requestOwnVargaAccountDeletion", "getOwnVargaAccountDeletionStatus"].includes(name));
+            if (name === "getOwnVargaAccountDeletionStatus") {
+              return async (payload) => {
+                calls.push(["statusCallable", payload]);
+                statusChecked++;
+                if (options.statusFn) return options.statusFn(payload);
+                return { data: { requested: false } };
+              };
+            }
             if (name === "requestOwnVargaAccountDeletion") {
               return async (payload) => {
                 calls.push(["requestCallable", payload]);
@@ -161,7 +180,8 @@ function harness(options = {}) {
       get appleSignIns() { return appleSignIns; },
       get revoked() { return revoked; },
       get signedIn() { return signedIn; },
-      get requested() { return requested; }
+      get requested() { return requested; },
+      get statusChecked() { return statusChecked; }
     }
   };
 }
@@ -215,6 +235,61 @@ function deferred() {
   assert.equal(h.controls.requested, 0);
   h = harness({ platform: "ios", deletionEnabled: true, requestEnabled: true });
   assert.equal(h.elements.has("varga-deletion-request-menu"), false);
+
+  // A status check uses the verified caller, never creates another request.
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true });
+  assert.ok(h.elements.has("varga-deletion-request-menu-status"));
+  await h.elements.get("varga-deletion-request-menu-status").click();
+  assert.equal(h.controls.statusChecked, 1);
+  assert.equal(h.controls.requested, 0);
+  assert.equal(h.controls.deleted, false);
+  assert.ok(h.alerts.some(x => x.includes("Nessuna richiesta")));
+  assert.deepEqual(JSON.parse(JSON.stringify(
+    h.calls.filter(x => x[0] === "statusCallable").map(x => x[1]))), [{}]);
+
+  for (const [state, expected] of [
+    ["pending", "in attesa di verifica"],
+    ["in_review", "in revisione"],
+    ["completed", "Conserva la conferma ufficiale"],
+    ["rejected", "chiusa senza cancellazione"]
+  ]) {
+    h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+      statusFn: async () => ({data:{requested:true,status:state}}) });
+    await h.elements.get("varga-deletion-request-menu-status").click();
+    assert.ok(h.alerts.some(x => x.includes(expected)), state + " status message missing");
+    assert.equal(h.controls.requested, 0);
+    assert.equal(h.controls.deleted, false);
+    assert.equal(h.controls.signedOut, false);
+  }
+  for (const data of [null, {}, {requested:true,status:"unknown"}]) {
+    h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+      statusFn: async () => ({data}) });
+    await h.elements.get("varga-deletion-request-menu-status").click();
+    assert.ok(h.alerts.some(x => x.includes("Impossibile verificare lo stato")));
+    assert.equal(h.controls.deleted, false);
+  }
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+    noUser: true });
+  await h.elements.get("varga-deletion-request-menu-status").click();
+  assert.equal(h.controls.statusChecked, 0);
+  assert.ok(h.alerts.some(x => x.includes("Accedi per verificare")));
+
+  const pendingStatusResponse = deferred();
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true,
+    statusFn: () => pendingStatusResponse.promise });
+  const firstStatus = h.elements.get("varga-deletion-request-menu-status").click();
+  const secondStatus = h.elements.get("varga-deletion-request-menu-status").click();
+  assert.equal(h.controls.statusChecked, 1, "Duplicate concurrent status call");
+  assert.equal(h.elements.get("varga-deletion-request-menu-status").disabled, true);
+  pendingStatusResponse.resolve({data:{requested:true,status:"pending"}});
+  await Promise.all([firstStatus, secondStatus]);
+  assert.equal(h.elements.get("varga-deletion-request-menu-status").disabled, false);
+  assert.equal(h.controls.deleted, false);
+
+  h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: false });
+  assert.equal(h.elements.has("varga-deletion-request-menu-status"), false);
+  h = harness({ platform: "ios", deletionEnabled: true, requestEnabled: true });
+  assert.equal(h.elements.has("varga-deletion-request-menu-status"), false);
 
   h = harness({ platform: "ios" });
   assert.ok(h.elements.has("auth-apple-login-btn"), "native iOS Apple button missing");

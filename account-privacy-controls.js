@@ -11,6 +11,7 @@
   const requestEnabled = window.__VARGA_ACCOUNT_DELETION_REQUEST_ENABLED === true && !deletionEnabled;
   let deleting = false;
   let requestingDeletion = false;
+  let checkingDeletionRequestStatus = false;
   let signingIn = false;
 
   function nativePlatform() {
@@ -210,6 +211,48 @@
     }
   }
 
+  // Explicit, user-triggered status fetch. No background collection reads,
+  // employee data, or status guess from local cache. Requires signed-in UID.
+  async function checkDeletionRequestStatus() {
+    if (checkingDeletionRequestStatus) return;
+    let user;
+    try { user = auth().currentUser; } catch (error) { alert(errorText(error)); return; }
+    if (!user) {
+      alert("Accedi per verificare lo stato della tua richiesta.");
+      return;
+    }
+    checkingDeletionRequestStatus = true;
+    const buttons = document.querySelectorAll("[data-check-varga-deletion-status]");
+    buttons.forEach((button) => { button.disabled = true; });
+    try {
+      const callable = firebase.app().functions(REGION).httpsCallable("getOwnVargaAccountDeletionStatus");
+      const result = await callable({});
+      const state = result?.data;
+      if (state?.requested === false) {
+        alert("Nessuna richiesta di cancellazione registrata per il tuo account.");
+      } else if (state?.requested === true) {
+        if (state.status === "pending") {
+          alert("Richiesta ricevuta e in attesa di verifica. L'account NON è ancora eliminato.");
+        } else if (state.status === "in_review") {
+          alert("La richiesta è in revisione. L'account NON è ancora eliminato.");
+        } else if (state.status === "completed") {
+          alert("La richiesta risulta completata. Conserva la conferma ufficiale e contatta l'assistenza per eventuali chiarimenti.");
+        } else if (state.status === "rejected") {
+          alert("La richiesta risulta chiusa senza cancellazione. Contatta l'assistenza per conoscere la motivazione.");
+        } else {
+          throw new Error("Stato richiesta non riconosciuto.");
+        }
+      } else {
+        throw new Error("Risposta di stato non valida.");
+      }
+    } catch (error) {
+      alert("Impossibile verificare lo stato della richiesta. " + errorText(error));
+    } finally {
+      checkingDeletionRequestStatus = false;
+      buttons.forEach((button) => { button.disabled = false; });
+    }
+  }
+
   function mount() {
     const gateGoogle = document.getElementById("auth-gate-login-btn");
     if (gateGoogle && !document.getElementById("auth-apple-login-btn") && nativePlatform() === "ios") {
@@ -238,6 +281,14 @@
         button.addEventListener("click", requestDeletion);
         if (after) after.insertAdjacentElement("afterend", button);
         else parent.appendChild(button);
+        // The matching status control never creates or duplicates a request.
+        const statusId = id + "-status";
+        if (!document.getElementById(statusId)) {
+          const statusButton = makeButton(statusId, "Verifica stato cancellazione", "btn");
+          statusButton.dataset.checkVargaDeletionStatus = "1";
+          statusButton.addEventListener("click", checkDeletionRequestStatus);
+          button.insertAdjacentElement("afterend", statusButton);
+        }
       }
     }
 

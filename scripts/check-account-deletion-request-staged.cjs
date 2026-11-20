@@ -25,8 +25,8 @@ class HttpsError extends Error {
 const records = new Map();
 const updates = [];
 const activeUsers = new Map([
-  ["worker-one", { disabled: false }],
-  ["worker-two", { disabled: false }]
+  ["worker-one", { disabled: false, tokensValidAfterTime: new Date(0).toUTCString() }],
+  ["worker-two", { disabled: false, tokensValidAfterTime: new Date(0).toUTCString() }]
 ]);
 const admin = {
   auth() {
@@ -143,6 +143,31 @@ async function rejectsCode(promise, code) {
   assert.equal((await status({auth:auth("worker-two"),data:{}})).requested, false);
   await rejectsCode(status({auth:auth("worker-one"),data:{ uid:"worker-two" }}), "invalid-argument");
 
+  // A revoked ID token may still be cryptographically valid for some time.
+  // Neither intake nor status may accept it once live Firebase Auth has
+  // invalidated sessions, even if the user remains enabled.
+  const reviewer = activeUsers.get("worker-one");
+  const alreadySubmitted = updates.length;
+  const oldAuth = { uid: "worker-one", token: { auth_time: now - 10 } };
+  reviewer.tokensValidAfterTime = new Date((now - 5) * 1000).toUTCString();
+  await rejectsCode(request({auth:oldAuth, data:valid("worker-one").data}), "unauthenticated");
+  await rejectsCode(status({auth:oldAuth,data:{}}), "unauthenticated");
+  await rejectsCode(status({auth:{uid:"worker-one",token:{}},data:{}}), "unauthenticated");
+  await rejectsCode(status({auth:{uid:"worker-one",token:{auth_time:now+120}},data:{}}), "unauthenticated");
+  assert.equal(updates.length, alreadySubmitted);
+  // If live Auth revocation metadata is malformed or unavailable, do not
+  // return a potentially sensitive request status or create a request.
+  reviewer.tokensValidAfterTime = "invalid-auth-timestamp";
+  await rejectsCode(status({auth:auth("worker-one"),data:{}}), "internal");
+  await rejectsCode(request(valid("worker-one")), "internal");
+  assert.equal(updates.length, alreadySubmitted);
+  reviewer.tokensValidAfterTime = undefined;
+  assert.equal((await status({auth:auth("worker-one"),data:{}})).status, "pending",
+    "Firebase Auth may omit validSince until a first revocation");
+  assert.equal((await request(valid("worker-one"))).alreadyExists, true);
+  assert.equal(updates.length, alreadySubmitted);
+  reviewer.tokensValidAfterTime = new Date(0).toUTCString();
+
   records.get("worker-one").status = "in_review";
   assert.equal((await request(valid("worker-one"))).status, "in_review");
   assert.equal(updates.length, 1);
@@ -196,5 +221,5 @@ async function rejectsCode(promise, code) {
   assert.equal(newRequest.status, "pending");
   assert.equal(records.size, 2);
   assert.equal(records.get("worker-one").uid, "worker-one");
-  console.log("PASS: staged deletion request intake is authenticated, fresh, UID-isolated, idempotent, PII-minimal and non-destructive.");
+  console.log("PASS: staged deletion request intake and status reject live Auth revocations, missing timestamps, disabled users and foreign UIDs; no destructive operations.");
 })().catch(error => { console.error(error); process.exitCode=1; });

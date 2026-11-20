@@ -369,6 +369,51 @@ async function rejectedCode(promise, expected) {
   assert.ok(state.removed.includes("documents/private-1"));
   assert.equal(state.removedFiles.length, 2);
 
+  // Harden the deletion boundary against nested paths, alternate owner IDs,
+  // encoded separators, control characters and noncanonical file references.
+  // Nothing must be deleted, even in preflight, when either file or thumbnail
+  // violates the exact path structure accepted by Storage.
+  const unsafeStoragePaths = [
+    "documents/worker-2/doc3/other.pdf",
+    "documents/worker-1/doc1/../other.pdf",
+    "documents/worker-1/doc1/./file.pdf",
+    "documents/worker-1/doc1//file.pdf",
+    "documents/worker-1/doc1/sub/file.pdf",
+    "documents/worker-1/doc1/",
+    "documents/worker-1//file.pdf",
+    "documents/worker-1/doc1/file%2Fother.pdf",
+    "documents/worker-1/doc1/file?.pdf",
+    "documents/worker-1/doc1/file\\\\name.pdf",
+    "documents/worker-1/doc1/file.pdf\\u0000",
+    "documents/worker-1/doc1/" + "x".repeat(121)
+  ];
+  for (const field of ["storagePath", "thumbnailPath"]) {
+    for (const unsafe of unsafeStoragePaths) {
+      state = setup();
+      state.docs.find((x) => x.id === "private-1")[field] = unsafe;
+      await rejectedCode(state.handler({
+        auth: goodAuth, data: { confirmation: "ELIMINA", mode: "preflight" }
+      }), "failed-precondition");
+      assert.deepEqual(state.removedUsers, [], "bad " + field + " removed Auth");
+      assert.deepEqual(state.removedFiles, [], "bad " + field + " removed Storage");
+      assert.deepEqual(state.removed, [], "bad " + field + " removed Firestore");
+      assert.deepEqual(state.updated, [], "bad " + field + " updated shared documents");
+    }
+  }
+
+  // The only valid request modes are explicit preflight and an omitted mode
+  // for deletion. A typo or future client value must never delete an account.
+  for (const mode of ["delete", "preview", "", null, 123, {}]) {
+    state = setup();
+    await rejectedCode(state.handler({
+      auth: goodAuth, data: { confirmation: "ELIMINA", mode }
+    }), "invalid-argument");
+    assert.deepEqual(state.removedUsers, []);
+    assert.deepEqual(state.removedFiles, []);
+    assert.deepEqual(state.removed, []);
+    assert.deepEqual(state.updated, []);
+  }
+
   // Legacy records lacking a valid Storage path cannot be silently orphaned.
   // Fail closed; an operator must resolve the legacy attachment before deletion.
   state = setup();

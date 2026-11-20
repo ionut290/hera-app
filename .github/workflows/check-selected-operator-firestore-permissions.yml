@@ -1,0 +1,49 @@
+name: Check selected operator review access (EMULATOR ONLY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/test-selected-operator-firestore-permissions.cjs"
+      - "firestore.rules"
+      - ".github/workflows/check-selected-operator-firestore-permissions.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  operator-firestore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    env:
+      CI: "true"
+      GOOGLE_CLOUD_PROJECT: demo-operator-access-review
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install local-only Firebase dependencies (NO production credentials)
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --no-audit --no-fund @firebase/rules-unit-testing@4.0.1
+      - name: Assert no production endpoint access or account mutations
+        run: |
+          set -euo pipefail
+          node --check scripts/test-selected-operator-firestore-permissions.cjs
+          grep -Fq 'FIRESTORE_EMULATOR_HOST' scripts/test-selected-operator-firestore-permissions.cjs
+          grep -Fq 'demo-operator-access-review' scripts/test-selected-operator-firestore-permissions.cjs
+          if grep -E 'hera-app-6cd2b|GOOGLE_APPLICATION_CREDENTIALS|firebase-admin|https?://' scripts/test-selected-operator-firestore-permissions.cjs; then
+            echo "::error::Production access forbidden in synthetic emulator test"; exit 1
+          fi
+      - name: Execute real Firestore rules against synthetic account (LOCAL emulator)
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14.23.0 emulators:exec --only firestore \
+            --project demo-operator-access-review \
+            'node scripts/test-selected-operator-firestore-permissions.cjs'

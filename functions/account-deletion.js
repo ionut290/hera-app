@@ -39,10 +39,19 @@ async function referencedByRetainedDocument(db, storagePath, personalIds) {
 }
 
 function safePersonalStoragePath(path, uid) {
-  const prefix = "documents/" + uid + "/";
-  // Never delete a company/shared attachment or another user's objects.
-  return typeof path === "string" && path.startsWith(prefix)
-    && path.length > prefix.length && !path.includes("..");
+  // Match the exact 4-segment object structure used by documents.js and
+  // storage.rules. A bare owner prefix can accidentally include nested or
+  // noncanonical legacy paths; deletion must fail closed for those objects.
+  if (typeof path !== "string" || !validUserId(uid)) return false;
+  const segments = path.split("/");
+  const safeSegment = (value, limit) => typeof value === "string"
+    && value.length > 0 && value.length <= limit
+    && value !== "." && value !== ".."
+    && /^[A-Za-z0-9._-]+$/.test(value);
+  return segments.length === 4
+    && segments[0] === "documents" && segments[1] === uid
+    && safeSegment(segments[2], 256)
+    && safeSegment(segments[3], 120);
 }
 
 // Remove an account's identity from shared central notifications without
@@ -195,6 +204,11 @@ exports.deleteOwnVargaAccount = onCall({
   }
   if (request.data?.confirmation !== "ELIMINA") {
     throw new HttpsError("invalid-argument", "Conferma esplicita mancante.");
+  }
+  // Unknown modes must NEVER fall through to irreversible deletion.
+  // Omitted mode explicitly performs deletion; preflight is read-only.
+  if (request.data?.mode !== undefined && request.data.mode !== "preflight") {
+    throw new HttpsError("invalid-argument", "Modalità di cancellazione non valida.");
   }
   const authTime = Number(auth.token?.auth_time);
   const now = Math.floor(Date.now() / 1000);

@@ -86,7 +86,7 @@ jobs:
           echo "### Internal TestFlight only; App Store public submission remains separate." >> "$GITHUB_STEP_SUMMARY"
           echo "Known GDPR, reviewer login and account-deletion requirements must be verified before public App Review." >> "$GITHUB_STEP_SUMMARY"
 
-  upload-appstore-candidate:
+  upload-internal-testflight:
     name: Sign and upload INTERNAL TestFlight candidate (NO submission)
     needs: preflight
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_INTERNAL_TESTFLIGHT_ONLY' }}

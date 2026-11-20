@@ -161,6 +161,11 @@ async function rejectsCode(promise, code) {
   await rejectsCode(status({auth:auth("worker-one"),data:{}}), "internal");
   await rejectsCode(request(valid("worker-one")), "internal");
   assert.equal(updates.length, alreadySubmitted);
+  reviewer.tokensValidAfterTime = undefined;
+  assert.equal((await status({auth:auth("worker-one"),data:{}})).status, "pending",
+    "Firebase Auth may omit validSince until a first revocation");
+  assert.equal((await request(valid("worker-one"))).alreadyExists, true);
+  assert.equal(updates.length, alreadySubmitted);
   reviewer.tokensValidAfterTime = new Date(0).toUTCString();
 
   records.get("worker-one").status = "in_review";

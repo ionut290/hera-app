@@ -81,6 +81,8 @@ jobs:
           # candidate workflow's separate --require-ready release gate.
           node scripts/audit-app-review-full-access.cjs > "$RUNNER_TEMP/asc-internal-readiness.json"
           node -e 'const r=require(process.argv[1]);if(!["BLOCKED","READY"].includes(r.status)||!Array.isArray(r.blockers))throw Error("Readiness report invalid")' "$RUNNER_TEMP/asc-internal-readiness.json"
+          node scripts/check-account-privacy-client-runtime.js
+          node scripts/check-app-review-readiness-failclosed.cjs
           echo "### Internal TestFlight only; App Store public submission remains separate." >> "$GITHUB_STEP_SUMMARY"
           echo "Known GDPR, reviewer login and account-deletion requirements must be verified before public App Review." >> "$GITHUB_STEP_SUMMARY"
 
@@ -117,6 +119,16 @@ jobs:
           ACTUAL_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          # Re-check inside upload job: GitHub can rerun individual jobs
+          # without rerunning the first preflight. Never reuse approval.
+          if [[ "$GITHUB_REPOSITORY" != "ionut290/hera-app" ||
+                "$GITHUB_REF" != "refs/heads/main" ||
+                "$GITHUB_ACTOR" != "ionut290" ||
+                "$GITHUB_TRIGGERING_ACTOR" != "ionut290" ||
+                "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
+            echo "::error::A new owner-authorized manual internal upload is required."
+            exit 1
+          fi
           if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$ACTUAL_SHA" ]]; then
             echo "::error::The exact reviewed SHA must match this workflow checkout. No upload performed."
             exit 1

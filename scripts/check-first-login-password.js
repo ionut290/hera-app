@@ -9,7 +9,11 @@ for (const expected of [
   'id="auth-request-password-btn"',
   '>PASSWORD DIMENTICATA?</button>',
   'id="first-password-dialog"',
-  'src="first-login-password.js?v=20260726b"'
+  'src="first-login-password.js?v=20261120-selfservice1"',
+  'id="auth-password-reset-dialog"',
+  'id="auth-password-reset-form"',
+  'id="auth-password-reset-email"',
+  'id="auth-password-reset-feedback"'
 ]) {
   if (!html.includes(expected)) throw new Error(`Elemento mancante in index.html: ${expected}`);
 }
@@ -20,11 +24,11 @@ for (const expected of [
   "passwordChangedAt",
   "sendPasswordResetEmail(email)",
   "sendPasswordResetInstructions",
-  'auth.languageCode = "it"',
-  "getPasswordResetContinueUrl",
-  "handleCodeInApp: false",
-  "showPasswordResetReturnNotice",
-  "Password aggiornata. Inserisci email e nuova password",
+  'authInstance.languageCode = "it"',
+  "openResetDialog",
+  "closeResetDialog",
+  "auth-password-reset-submit",
+  "Se l'indirizzo è associato a un account",
   "passwordResetPending",
   "auth/network-request-failed",
   "auth/too-many-requests",

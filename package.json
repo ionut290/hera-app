@@ -80,7 +80,8 @@
     "check:platform-profile-bootstrap": "node scripts/check-platform-profile-bootstrap-reuse.js",
     "check:timbratura-ios": "node scripts/check-timbratura-ios-reminders.js && node scripts/check-timbratura-ios-sync-runtime.cjs",
     "check:ios-geofence": "node --check timbratura-ios-geofence.js && node --check timbratura-reminders.js && node scripts/check-ios-geofence.js",
-    "check:direct-easybox": "node --check timbratura-ios-notifications.js && node --check timbratura-reminders.js && node scripts/check-direct-easybox.js"
+    "check:direct-easybox": "node --check timbratura-ios-notifications.js && node --check timbratura-reminders.js && node scripts/check-direct-easybox.js",
+    "check:self-service-password-reset": "node scripts/check-first-login-password.js && node scripts/check-self-service-password-reset-runtime.cjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

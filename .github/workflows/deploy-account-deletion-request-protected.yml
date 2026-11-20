@@ -1,0 +1,162 @@
+name: Firebase account deletion request - protected manual deploy
+# Manual and protected: does not activate the client UI or erase accounts.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Explicitly deploy authenticated REQUEST/STATUS only (NOT account erasure)"
+        type: choice
+        required: true
+        default: DO_NOT_DEPLOY
+        options:
+          - DO_NOT_DEPLOY
+          - DEPLOY_REQUEST_INTAKE_ONLY
+      reviewed_sha:
+        description: "Exact reviewed main commit SHA (40 lowercase hex characters)"
+        required: true
+        type: string
+      privacy_signoff:
+        description: "Type PRIVACY_REVIEW_APPROVED only after authorized privacy/retention signoff"
+        required: true
+        type: string
+      fulfillment_signoff:
+        description: "Type FULFILLMENT_PROCESS_VERIFIED after a real staffed process is tested"
+        required: true
+        type: string
+      approval_reference:
+        description: "Reference to internal signed approval and deletion SLA (no personal data)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: varga-account-deletion-production
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Fail closed before any access to deployment secrets
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'DEPLOY_REQUEST_INTAKE_ONLY' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Require real review approvals, exact main SHA, protected environment
+        shell: bash
+        env:
+          SHA_APPROVED: ${{ inputs.reviewed_sha }}
+          PRIVACY_SIGNOFF: ${{ inputs.privacy_signoff }}
+          FULFILLMENT_SIGNOFF: ${{ inputs.fulfillment_signoff }}
+          APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "ionut290/hera-app" ]] ||
+            { echo "::error::Unexpected repository"; exit 1; }
+          [[ "$SHA_APPROVED" =~ ^[0-9a-f]{40}$ && "$SHA_APPROVED" == "$GITHUB_SHA" ]] ||
+            { echo "::error::Must use exact reviewed main HEAD SHA"; exit 1; }
+          [[ "$PRIVACY_SIGNOFF" == "PRIVACY_REVIEW_APPROVED" &&
+             "$FULFILLMENT_SIGNOFF" == "FULFILLMENT_PROCESS_VERIFIED" ]] ||
+            { echo "::error::Actual privacy approval and verified staffed deletion workflow required"; exit 1; }
+          [[ "$APPROVAL_REFERENCE" =~ ^[A-Za-z0-9:/._-]{8,200}$ ]] ||
+            { echo "::error::Provide a signed internal approval reference without PII"; exit 1; }
+          # Must exist with required reviewers; never create an unprotected environment.
+          ENV_URL="https://api.github.com/repos/$GITHUB_REPOSITORY/environments/firebase-account-deletion-production"
+          ENV_JSON="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" "$ENV_URL")" ||
+            { echo "::error::Protected environment is not accessible"; exit 1; }
+          printf '%s' "$ENV_JSON" | jq -e \
+            '.protection_rules | any(.type == "required_reviewers" and ([.reviewers[]?] | length > 0))' >/dev/null ||
+            { echo "::error::Environment must have required reviewers"; exit 1; }
+
+      - name: Checkout audited source without persisting credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run synthetic privacy guards (no Firebase)
+        run: |
+          set -euo pipefail
+          node scripts/check-account-deletion-request-staged.cjs
+          node scripts/check-account-privacy-client-runtime.js
+          node scripts/check-account-deletion-request-release-guard.cjs
+          # No release-flag flip, user deletion, Firebase mutation or Apple upload in this job.
+
+  deploy:
+    name: Deploy ONLY two non-destructive authenticated callables
+    needs: guard
+    if: ${{ needs.guard.result == 'success' }}
+    environment: firebase-account-deletion-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact approved source (no persisted credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.reviewed_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies and run privacy/source checks
+        env:
+          SHA_APPROVED: ${{ inputs.reviewed_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SHA_APPROVED"
+          node --check functions/account-deletion-request.js
+          node scripts/check-account-deletion-request-staged.cjs
+          node scripts/check-account-privacy-client-runtime.js
+          node scripts/check-account-deletion-request-release-guard.cjs
+          cd functions && npm ci --no-audit --no-fund
+      - name: Register request/status callables in runner ONLY
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs'), file = 'functions/main.js';
+          const original = fs.readFileSync(file, 'utf8');
+          const declaration = 'const errorReportingFunctions = require("./error-reporting");';
+          if (!original.includes(declaration) || original.includes('require("./account-deletion-request")')) {
+            throw Error('Unexpected production exports: refuse mutation/deployment');
+          }
+          const safe = original
+            .replace(declaration + '\n', '')
+            .replace(/^\s*errorReportingFunctions,\r?\n/m, '');
+          if (safe.includes('errorReportingFunctions')) throw Error('Unexpected function registration');
+          fs.writeFileSync(file, safe + '\n// Protected request deployment only, never committed.\n' +
+            'Object.assign(exports, require("./account-deletion-request"));\n');
+          const exported = require('./functions/main.js');
+          if (!exported.requestOwnVargaAccountDeletion || !exported.getOwnVargaAccountDeletionStatus) {
+            throw Error('Required request/status exports missing');
+          }
+          NODE
+      - name: Validate scoped Firebase service account
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-deletion-request.json"
+          python3 - "$RUNNER_TEMP/firebase-deletion-request.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding='utf-8') as f: config=json.load(f)
+          assert config.get("project_id") == "hera-app-6cd2b", "Wrong Firebase project"
+          PY
+      - name: Deploy precisely REQUEST and STATUS, never account erasure
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-deletion-request.json
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14.23.0 deploy \
+            --only functions:requestOwnVargaAccountDeletion,functions:getOwnVargaAccountDeletionStatus \
+            --project hera-app-6cd2b --non-interactive --force
+      - name: Remove scoped temporary credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-deletion-request.json"

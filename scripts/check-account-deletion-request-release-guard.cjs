@@ -21,7 +21,8 @@ assert.match(source, /persist-credentials: false/);
 assert.match(source, /project_id.*hera-app-6cd2b/);
 const deployment = source.match(/--only functions:[^\n]+/g) || [];
 assert.equal(deployment.length,1,"Exactly one function deployment allowed");
-assert.equal(deployment[0],"--only functions:requestOwnVargaAccountDeletion,functions:getOwnVargaAccountDeletionStatus");
+assert.equal(deployment[0].trim().replace(/\\$/, "").trim(),
+  "--only functions:requestOwnVargaAccountDeletion,functions:getOwnVargaAccountDeletionStatus");
 assert.doesNotMatch(source,/--only firestore|--only hosting|functions:deleteOwnVargaAccount|APPROVE_ACCOUNT_DELETION_ONLY/);
 assert.doesNotMatch(main,/require\(["']\.\/account-deletion-request["']\)/);
 assert.match(regular,/!functions\/account-deletion-request\.js/);

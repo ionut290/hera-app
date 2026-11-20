@@ -8,7 +8,12 @@
   // This does NOT gate Sign in with Apple; only the destructive account-deletion UI.
   const deletionEnabled = window.__VARGA_ACCOUNT_DELETION_ENABLED === true;
   // Only enable after the callable and fulfillment process are authorized and deployed.
-  const requestEnabled = window.__VARGA_ACCOUNT_DELETION_REQUEST_ENABLED === true && !deletionEnabled;
+  // Require the independently approved fulfillment SLA, never invent a default.
+  const requestSlaDays = window.__VARGA_ACCOUNT_DELETION_REQUEST_SLA_DAYS;
+  const validRequestSla = Number.isSafeInteger(requestSlaDays) &&
+    requestSlaDays >= 1 && requestSlaDays <= 90;
+  const requestEnabled = window.__VARGA_ACCOUNT_DELETION_REQUEST_ENABLED === true &&
+    !deletionEnabled && validRequestSla;
   let deleting = false;
   let requestingDeletion = false;
   let checkingDeletionRequestStatus = false;
@@ -186,7 +191,7 @@
     let user;
     try { user = auth().currentUser; } catch (error) { alert(errorText(error)); return; }
     if (!user) { alert("Per richiedere la cancellazione devi prima accedere."); return; }
-    if (!window.confirm("Richiedere l'eliminazione del tuo account VARGA CANTIERI? Alcuni dati aziendali possono essere conservati quando necessario.")) return;
+    if (!window.confirm("Richiedere l'eliminazione del tuo account VARGA CANTIERI? Il completamento è previsto entro " + requestSlaDays + " giorni secondo la procedura approvata. Alcuni dati aziendali possono essere conservati quando necessario.")) return;
     if (window.prompt("Per confermare scrivi RICHIEDO (tutto maiuscolo):") !== "RICHIEDO") return;
     requestingDeletion = true;
     const buttons = document.querySelectorAll("[data-request-varga-deletion]");
@@ -199,7 +204,7 @@
         throw new Error("Il server non ha confermato la richiesta.");
       }
       if (result.data.status === "pending" || result.data.status === "in_review") {
-        alert("Richiesta di cancellazione registrata. La verifica viene gestita normalmente entro 30 giorni; riceverai conferma quando l'eliminazione sarà completata. L'account NON è ancora eliminato.");
+        alert("Richiesta di cancellazione registrata. Il completamento è previsto entro " + requestSlaDays + " giorni secondo la procedura approvata; riceverai conferma quando l'eliminazione sarà completata. L'account NON è ancora eliminato.");
       } else {
         alert("Esiste già una richiesta con stato " + result.data.status + ". Contatta l'assistenza per i dettagli: nessuna nuova cancellazione è stata eseguita.");
       }

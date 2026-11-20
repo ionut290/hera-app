@@ -58,6 +58,15 @@ App Review Guideline 2.1: i revisori devono poter usare tutte le principali funz
 | Profilo e account | Opzione eliminazione facilmente trovabile e prova di eliminazione dell'account fittizio | Video iPhone e log server |
 | Ripristino | Utente diverso non influenzato dalla cancellazione del demo | Verifica server |
 
+
+## Prove locali aggiunte — 20 novembre 2026
+
+Il workflow `check-apple-functional-sandbox.yml` verifica con **Firestore Emulator locale** uno scenario interamente inventato: due commesse, tre impianti, una squadra, due operatori fittizi, un mezzo, ore, calendario, metadati di un PDF inesistente, un prezzo amministrativo e una notifica globale. Confronta accessi utente/admin/reviewer, testa scritture reversibili sui soli fixture, e controlla che `apple_review` non sblocchi accidentalmente gli archivi ordinari.
+
+- **Non esistono file Storage reali o GPS di persone**, il progetto del test è `demo-apple-functional-sandbox` e il workflow non riceve segreti.
+- Questo test è un primo collaudo dei **permessi Firestore**, non un ambiente Firebase separato pronto per revisori esterni, non un vero accesso Apple e non una prova della UI iOS.
+- L'audit per App Store resta **BLOCKED** finché non siano verificati account attivo, dati autorizzati/isolamento, cancellazione dell'account ordinario, prove sul dispositivo e video.
+
 ## Gate di rilascio
 
 - Eseguire `node scripts/audit-app-review-full-access.cjs`. Il report odierno indica **BLOCKED**; NON trasformarlo in successo fittizio.

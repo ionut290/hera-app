@@ -15,19 +15,21 @@ admin.initializeApp({projectId:project});
 const db=admin.firestore();
 class HttpsError extends Error { constructor(code,message){super(message);this.code=code;} }
 const exportsForTest={};
-const diagnosticSource=fs.readFileSync("functions/account-deletion-request.js","utf8")
-  .replace('console.error("Account deletion request intake failed", { code: error?.code || "unknown" });',
-    'console.error("Local emulator transaction failed", {code:error?.code, message:error?.message, stack:error?.stack});');
-vm.runInNewContext(diagnosticSource,{
-  exports:exportsForTest,
-  require(name){
-    if(name==="firebase-admin")return admin;
-    if(name==="firebase-functions/v2/https")return {
-      HttpsError,onCall(opts,fn){assert.equal(opts.region,"europe-west1");return fn;}
-    };
-    throw Error("Unexpected dependency");
-  },Date,Math,Number,Object,Array,Set,String,console
-},{filename:"functions/account-deletion-request.js"});
+// Compile in the same JS realm as the real Firestore Admin SDK: the SDK
+// checks that a transaction callback returns an instanceof Promise.
+// vm.runInNewContext would create a foreign-realm Promise and reject it.
+const loadHandlers=vm.runInThisContext(
+  "(function(exports, require, console) {\\n" +
+  fs.readFileSync("functions/account-deletion-request.js","utf8") + "\\n})",
+  {filename:"functions/account-deletion-request.js"}
+);
+loadHandlers(exportsForTest, function(name){
+  if(name==="firebase-admin")return admin;
+  if(name==="firebase-functions/v2/https")return {
+    HttpsError,onCall(opts,fn){assert.equal(opts.region,"europe-west1");return fn;}
+  };
+  throw Error("Unexpected dependency");
+}, console);
 assert.deepEqual(Object.keys(exportsForTest).sort(),["requestOwnVargaAccountDeletion","getOwnVargaAccountDeletionStatus"].sort());
 const ask=exportsForTest.requestOwnVargaAccountDeletion,read=exportsForTest.getOwnVargaAccountDeletionStatus;
 const firstUid="synthetic-"+process.pid+"-alice", secondUid="synthetic-"+process.pid+"-bob";

@@ -49,9 +49,9 @@ const admin = {
     }
   }), { FieldValue: { serverTimestamp: () => "<synthetic-server-time>" } })
 };
-const exports = {};
+const handlers = {};
 vm.runInNewContext(source, {
-  exports,
+  exports: handlers,
   require(name) {
     if (name === "firebase-admin") return admin;
     if (name === "firebase-functions/v2/https") {
@@ -74,8 +74,8 @@ vm.runInNewContext(source, {
   console: { error() {} }
 }, { filename: "functions/account-deletion-request.js" });
 
-const request = exports.requestOwnVargaAccountDeletion;
-const status = exports.getOwnVargaAccountDeletionStatus;
+const request = handlers.requestOwnVargaAccountDeletion;
+const status = handlers.getOwnVargaAccountDeletionStatus;
 assert.equal(typeof request, "function");
 assert.equal(typeof status, "function");
 

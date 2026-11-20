@@ -1,0 +1,37 @@
+name: Test safe solo-owner release protocol (NO DEPLOY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-firebase-functions.yml"
+      - ".github/workflows/check-solo-owner-release.yml"
+      - "scripts/check-solo-owner-release-policy.cjs"
+      - "docs/SOLO_OWNER_RELEASE_PROTOCOL_2026-11-20.md"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  policy:
+    name: Solo owner safe preview and release policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run release denial cases and workflow static safety
+        run: |
+          set -euo pipefail
+          node --check scripts/check-solo-owner-release-policy.cjs
+          node scripts/check-solo-owner-release-policy.cjs --self-test
+      - name: Verify offline CI cannot receive production keys
+        run: |
+          set -euo pipefail
+          if env | grep -Eq '^GOOGLE_APPLICATION_CREDENTIALS=|^FIREBASE_SERVICE_ACCOUNT='; then
+            echo "::error::Production credentials forbidden in the solo policy CI"
+            exit 1
+          fi
+          echo "No Firebase deploy, account mutation, rules change, or Apple upload."

@@ -128,14 +128,31 @@ async function rejectsCode(promise, code) {
   // account without erasing the previous review information. One retry
   // creates one new review cycle; fast consecutive taps remain idempotent.
   records.get("worker-one").status = "rejected";
-  records.get("worker-one").reviewerNote = "Synthetic previous disposition";
+  records.get("worker-one").reviewerNote = "Synthetic private reviewer note: NEVER return";
+  records.get("worker-one").rejectionReasonCode = "retention_review_required";
+  const rejection = await status({auth:auth("worker-one"),data:{}});
+  assert.deepEqual(JSON.parse(JSON.stringify(rejection)),{
+    requested:true,status:"rejected",reasonCode:"retention_review_required"
+  });
+  assert.equal(JSON.stringify(rejection).includes("private reviewer"),false);
+  assert.equal((await status({auth:auth("worker-two"),data:{}})).requested,false);
+  records.get("worker-one").rejectionReasonCode = "<private data not in whitelist>";
+  assert.deepEqual(JSON.parse(JSON.stringify(await status({auth:auth("worker-one"),data:{}}))),{
+    requested:true,status:"rejected"
+  });
+  records.get("worker-one").rejectionReasonCode = "retention_review_required";
   const reopened = await request(valid("worker-one"));
   assert.equal(reopened.status, "pending");
   assert.equal(reopened.alreadyExists, true);
   assert.equal(reopened.reopened, true);
   assert.equal(records.get("worker-one").reopenCount, 1);
   assert.equal(records.get("worker-one").reopenedAt, "<synthetic-server-time>");
-  assert.equal(records.get("worker-one").reviewerNote, "Synthetic previous disposition");
+  assert.equal(records.get("worker-one").reviewerNote, "Synthetic private reviewer note: NEVER return");
+  // Historical rejection metadata remains stored for audit, but is not
+  // disclosed while a renewed request is pending.
+  assert.deepEqual(JSON.parse(JSON.stringify(await status({auth:auth("worker-one"),data:{}}))),{
+    requested:true,status:"pending"
+  });
   assert.equal(updates.length, 2);
   const noDuplicate = await request(valid("worker-one"));
   assert.equal(noDuplicate.status, "pending");

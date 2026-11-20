@@ -1,0 +1,28 @@
+name: Audit Firebase Hosting public content (no deployment)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "firebase.json"
+      - "index.html"
+      - "sw.js"
+      - "delete-account.html"
+      - "scripts/check-firebase-hosting-public-safety.cjs"
+      - ".github/workflows/check-firebase-hosting-public-safety.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Assert private sources and sensitive file types cannot be uploaded by the root public directory
+        run: |
+          set -euo pipefail
+          node --check scripts/check-firebase-hosting-public-safety.cjs
+          node scripts/check-firebase-hosting-public-safety.cjs
+          echo "No Firebase deploy, no credentials, no modification of current Hosting release."

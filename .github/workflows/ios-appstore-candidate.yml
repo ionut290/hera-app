@@ -15,10 +15,10 @@ on:
           - DO_NOT_UPLOAD
           - UPLOAD_APP_STORE_CANDIDATE_ONLY
       build_number:
-        description: "New CFBundleVersion above the known TestFlight build 1.0 (10003); verify live ASC first"
+        description: "New CFBundleVersion above confirmed TestFlight build 1.0 (20011); verify live ASC first"
         type: string
         required: true
-        default: "10004"
+        default: "20012"
       reviewed_commit_sha:
         description: "Exact 40-character reviewed commit SHA shown in GitHub"
         required: true
@@ -50,10 +50,7 @@ jobs:
             echo "::error::Reviewed SHA must match the exact commit running this workflow."
             exit 1
           fi
-          if [[ ! "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,5}$ ]] || (( 10#$IOS_BUILD_NUMBER < 10004 )); then
-            echo "::error::Enter an unused numeric build number (at least 10004, newer than known build 10003)."
-            exit 1
-          fi
+          bash scripts/check-ios-appstore-build-number.sh "$IOS_BUILD_NUMBER"
           echo "Preflight OK: workflow parsed, Linux job started and manual inputs validated."
           echo "No App Store Connect upload or iPhone app modification performed."
 
@@ -122,10 +119,14 @@ jobs:
           SDK_MAJOR="$(xcrun --sdk iphoneos --show-sdk-version | cut -d. -f1)"
           [[ -n "$XCODE_MAJOR" && "$XCODE_MAJOR" -ge 26 && -n "$SDK_MAJOR" && "$SDK_MAJOR" -ge 26 ]] ||
             { echo "::error::Xcode 26 / iOS 26 SDK or later required"; exit 1; }
-          if [[ ! "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,5}$ ]] || (( 10#$IOS_BUILD_NUMBER < 10004 )); then
-            echo "::error::Enter a positive, new numeric iOS build number (at least 10004, newer than known build 10003)."
+          # ITMS-90725: Apple notified on 19 Nov 2026 that iOS 27 SDK
+          # becomes mandatory beginning April 2027. Prevent a stale runner
+          # from uploading after that month rather than claiming compliance.
+          if [[ "$(date -u +%Y%m)" -ge 202704 && "$SDK_MAJOR" -lt 27 ]]; then
+            echo "::error::Starting April 2027, Apple requires the iOS 27 SDK or newer. Upgrade the macOS/Xcode runner before uploading."
             exit 1
           fi
+          bash scripts/check-ios-appstore-build-number.sh "$IOS_BUILD_NUMBER"
           echo "Reviewed commit, requested build number and supported Xcode verified; no upload yet."
 
       - name: Set up Node.js

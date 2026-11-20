@@ -1,0 +1,34 @@
+name: Check App Store reviewer identity readiness (OFFLINE, NO DEPLOY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/audit-asc-reviewer-account-readonly.cjs"
+      - ".github/workflows/check-asc-reviewer-readiness.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reviewer-readiness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify one-account readiness contract with synthetic records ONLY
+        run: |
+          set -euo pipefail
+          node --check scripts/audit-asc-reviewer-account-readonly.cjs
+          node scripts/audit-asc-reviewer-account-readonly.cjs --self-test
+      - name: Ensure no accidental live audit in pull request
+        run: |
+          set -euo pipefail
+          if grep -q -- '--inspect' .github/workflows/check-asc-reviewer-readiness.yml; then
+            echo "::error::CI must NEVER inspect live Auth or Firestore"
+            exit 1
+          fi
+          echo "No Google credentials, live Firebase reads, writes, account operations, or deployments."

@@ -1,0 +1,33 @@
+name: Verify Apple App Review release gate stays fail closed (NO UPLOAD)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/audit-app-review-full-access.cjs"
+      - "scripts/check-app-review-readiness-failclosed.cjs"
+      - ".github/workflows/check-app-review-readiness-failclosed.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-release-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Audit actual source and intentionally BLOCK unverified App Review
+        run: |
+          set -euo pipefail
+          node --check scripts/audit-app-review-full-access.cjs
+          node --check scripts/check-app-review-readiness-failclosed.cjs
+          node scripts/check-app-review-readiness-failclosed.cjs
+      - name: Verify public candidate upload remains gated
+        run: |
+          set -euo pipefail
+          grep -Fq 'node scripts/audit-app-review-full-access.cjs --require-ready' .github/workflows/ios-appstore-candidate.yml
+          echo "No Apple upload, Firebase mutation or reviewer account access."

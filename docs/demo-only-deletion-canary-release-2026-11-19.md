@@ -50,6 +50,14 @@ La versione client ora distingue:
 
 I test `scripts/check-account-privacy-client-runtime.js` simulano questi casi **senza provider Apple, Firebase o dati reali**. Il server rimane limitato alla demo e la funzione non è distribuita per account ordinari. Per il rilascio generale va definita anche una procedura di supporto e riconciliazione delle revoche parziali e verificato su un vero iPhone il comportamento di Apple Sign In.
 
+## Collegamento Apple da browser o Android — controllo fail-closed
+
+Il login Apple tramite Firebase Web può esistere anche in un browser, ma il flusso di eliminazione di VARGA CANTIERI revoca attualmente il grant Apple soltanto tramite il plugin Capacitor **su iOS**. Il Firebase SDK per il web dispone di un'altra API, `revokeAccessToken(auth, token)`, che richiede il token OAuth Apple e la riconvalida dell'utente. Non usare il token/codice iOS indistintamente al posto del token web.
+
+Fino a quando la procedura web con revoca, recupero da errori e test reali non sarà implementata, il client **blocca la richiesta di cancellazione di account collegati ad Apple fuori dall'app iPhone**, dopo il preflight e senza richiamare la cancellazione. L'utente riceve un messaggio esplicito e può ricorrere all'assistenza. Un account non collegato ad Apple segue invece il flusso già previsto dalla piattaforma.
+
+Questa misura **non costituisce completamento del requisito App Store**, né autorizza la cancellazione di utenti reali: l'opzione resta disabilitata per tutti gli utenti ordinari e il backend rimane solo-demo. Si tratta di una protezione temporanea, da sostituire con un flusso web testato e coerente con il servizio di assistenza. Riferimento tecnico: [Firebase Auth Apple sul Web](https://firebase.google.com/docs/auth/web/apple), sezione revoca token.
+
 ## Fase 3: rilascio generale e App Store
 
 Solo dopo l'inventario GDPR, titolarità con le aziende, backup/export, politica di minimizzazione e collaudo end-to-end documentati, proporre una **nuova PR di promozione** che rimuova il blocco demo, con revisione e test separati. Usare il workflow `deploy-account-deletion-protected.yml` con signoff legale vero, poi abilitare il pulsante per gli utenti reali in una nuova build. Non auto-approvare i gate, non cancellare account di dipendenti e non inviare una revisione App Store che dichiari completata la cancellazione quando ancora non lo è.

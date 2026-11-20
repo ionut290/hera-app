@@ -24,7 +24,7 @@ Le raccolte `commesse`, `globalCommesse`, `oreReports` e `calendarEvents` non so
 
 ## Termini già pubblicati nella privacy
 
-L'informativa `privacy.html` descrive **termini programmati**, soggetti a verifiche e obblighi: log tecnici 90 giorni, foto e allegati operativi 24 mesi dalla chiusura del lavoro, e certe registrazioni amministrativo-contabili 10 anni quando necessari e giustificati. Il semplice termine stampato nell'informativa non equivale all'attivazione di TTL o procedure automatiche.
+L'informativa `privacy.html` descrive **termini programmati**, soggetti a verifiche e obblighi: profili/account fino a 12 mesi dopo la disattivazione (salvo motivo documentato), log tecnici 90 giorni, foto e allegati operativi 24 mesi dalla chiusura del lavoro, e certe registrazioni amministrativo-contabili 10 anni quando necessari e giustificati. Il semplice termine stampato nell'informativa non equivale all'attivazione di TTL o procedure automatiche.
 
 Lo script protetto `scripts/audit-retention-readiness.cjs` esamina attualmente soltanto metadati di **cinque raccolte** (`activityLogs`, `notificationEmailQueue`, `gpsUpdateRequests`, `appNotifications`, `notifications`). Restano fuori da quell'audit gli allegati e le registrazioni aziendali. Le sue classificazioni sono **candidati a revisione manuale, non ordini di cancellazione**.
 

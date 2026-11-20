@@ -168,6 +168,11 @@ jobs:
           # Google provider must be included BEFORE CocoaPods sync; plist URL
           # schemes are added by configure-ios-firebase.py after private config.
           ruby scripts/install-ios-google-signin.rb
+          # The first 'cap add ios' pins GTMSessionFetcher/Core 4.x in its
+          # temporary Podfile.lock. GoogleSignIn 7.1 requires ~> 3.3 while
+          # FirebaseAuth allows >=3.4,<5: targeted update resolves 3.x.
+          # Never remove repository locks or update unrelated production deps.
+          (cd ios/App && pod update GTMSessionFetcher/Core)
           npx cap sync ios
           python3 scripts/mark-ios-native-safe-area.py
           ruby scripts/install-ios-native-geofence.rb

@@ -17,6 +17,14 @@
 
 **Questa variante con dati reali è subordinata all'autorizzazione pertinente e ai test di sicurezza**. Non inviare ad Apple un account privilegiato che mostra informazioni riservate senza autorizzazione. Apple chiede accesso funzionale completo, non accesso indiscriminato ai dati di dipendenti/clienti.
 
+## Verifica comunicazioni Apple e numerazione build — 20 novembre 2026
+
+L'ultimo avviso Apple verificato tramite email (19 novembre 2026) conferma che **VARGA CANTIERI 1.0 (20011)** è stata consegnata correttamente ed è disponibile su **TestFlight**. Non equivale ad App Review approvata o pubblicazione. Un altro messaggio Apple per la stessa build segnala **ITMS-90725**, un avviso (non un blocco della consegna 20011) perché l'app è stata compilata con **iOS SDK 26.5**. Apple indica che **da aprile 2027** le nuove consegne richiederanno **iOS SDK 27 o successivo / Xcode 27 o successivo**.
+
+Il workflow manuale `ios-appstore-candidate.yml` usa pertanto `20012` soltanto come **minimo proposto successivo alla 20011 confermata** e verifica in entrambi gli stadi che il numero immesso sia strettamente maggiore di 20011. **Controllare sempre il numero più alto direttamente in App Store Connect prima di avviare il workflow**, perché una build più recente potrebbe essere stata caricata senza essere citata qui. Dal 1º aprile 2027 l'upload rifiuta un SDK precedente a 27: la configurazione del runner dovrà essere aggiornata quando Xcode 27 sarà disponibile.
+
+I test offline `check-ios-appstore-release-safety.yml` rifiutano 10004, 20010 e 20011 e verificano che resti il gate `node scripts/audit-app-review-full-access.cjs --require-ready`. **La modifica non esegue né autorizza un upload**: account reviewer, cancellazione ordinaria, collaudo iPhone e privacy rimangono aperti.
+
 ## Requisito Apple
 
 App Review Guideline 2.1: i revisori devono poter usare tutte le principali funzioni attraverso un **account attivo** oppure una **modalità dimostrativa completa**, con dati di test e servizi backend disponibili. Le credenziali devono funzionare durante la revisione. Documentazione: https://developer.apple.com/app-store/review/guidelines/ e https://developer.apple.com/help/app-review/before-submitting-for-review/complete-review/

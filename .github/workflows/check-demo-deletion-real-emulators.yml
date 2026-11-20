@@ -1,0 +1,62 @@
+name: Test demo-only deletion with real LOCAL Auth and Firestore (NO DEPLOY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "functions/account-deletion.js"
+      - "scripts/test-demo-deletion-real-auth-firestore-emulators.cjs"
+      - "firebase.privacy-review-emulators.json"
+      - ".github/workflows/check-demo-deletion-real-emulators.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deletion-demo-emulators:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-deletion-canary-local
+      GOOGLE_CLOUD_PROJECT: demo-deletion-canary-local
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Prepare local test dependencies only
+        run: |
+          set -euo pipefail
+          (cd functions && npm ci --no-audit --no-fund)
+      - name: Reject real cloud access and unreviewed test scripts
+        run: |
+          set -euo pipefail
+          node --check functions/account-deletion.js
+          node --check scripts/test-demo-deletion-real-auth-firestore-emulators.cjs
+          if env | grep -q '^GOOGLE_APPLICATION_CREDENTIALS='; then
+            echo "::error::Production credentials are forbidden"
+            exit 1
+          fi
+          grep -Fq 'demo-deletion-canary-local' scripts/test-demo-deletion-real-auth-firestore-emulators.cjs
+          grep -Fq 'FIREBASE_AUTH_EMULATOR_HOST' scripts/test-demo-deletion-real-auth-firestore-emulators.cjs
+          grep -Fq 'FIRESTORE_EMULATOR_HOST' scripts/test-demo-deletion-real-auth-firestore-emulators.cjs
+          if grep -Eq 'https?://' scripts/test-demo-deletion-real-auth-firestore-emulators.cjs; then
+            echo "::error::Remote service URLs are forbidden in test harness"
+            exit 1
+          fi
+          grep -Fq 'storage: () => storageSpy' scripts/test-demo-deletion-real-auth-firestore-emulators.cjs
+      - name: Execute real deletion body against disposable local Auth and Firestore
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14.23.0 emulators:exec \
+            --config firebase.privacy-review-emulators.json \
+            --only auth,firestore \
+            --project demo-deletion-canary-local \
+            'node scripts/test-demo-deletion-real-auth-firestore-emulators.cjs'
+      - name: Confirm zero production changes
+        run: echo "Local emulator identities deleted only. Storage mocked. NO CLOUD FUNCTIONS DEPLOYED."

@@ -84,7 +84,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          # Emulator 37+ deprecated swiftshader_indirect; software is supported.
+          # Emulator 37+ removed support for the older indirect SwiftShader mode.
           # Do not alter app code or bypass the UI assertion.
           emulator-options: -no-window -gpu software -no-snapshot -noaudio -no-boot-anim
           script: bash scripts/android-emulator-smoke.sh

@@ -47,8 +47,13 @@ assert.match(backend, /Idempotency-Key/, "L’email non viene duplicata durante 
 assert.match(backend, /emailError = "Invio email non riuscito/, "Un errore email non annulla lo sblocco");
 assert.doesNotMatch(backend, /\.delete\(|batch\.delete\(/, "Il flusso non cancella utenti o collegamenti");
 assert.match(entrypoint, /user-access-approval/, "Il callable è incluso nell’entrypoint Firebase");
-assert.match(workflow, /functions:approveUserAccess/, "Il workflow distribuisce il callable");
-assert.match(workflow, /"approveUserAccess"/, "Il workflow verifica il trasporto pubblico del callable");
+assert.match(workflow, /functions:approveUserAccess/, "Il callable rimane nella lista esatta del deploy");
+assert.match(workflow, /workflow_dispatch:/, "Il deploy richiede avvio manuale");
+assert.match(workflow, /DEPLOY_ORDINARY_ONLY/, "Il deploy ordinario richiede conferma esplicita");
+assert.match(workflow, /node scripts\/check-solo-owner-release-policy\.cjs --verify/,
+  "Il deploy verifica proprietario e SHA prima di leggere segreti");
+assert.doesNotMatch(workflow, /:setIamPolicy|method:\s*["']POST["']/,
+  "Il deploy ordinario NON può allargare autorizzazioni invoker IAM");
 assert.match(index, /approval-access\.js\?v=20260828-authfix/, "La pagina carica la correzione Auth più recente");
 assert.match(serviceWorker, /approval-access\.js\?v=20260828-authfix/, "La PWA precarica la correzione Auth più recente");
 

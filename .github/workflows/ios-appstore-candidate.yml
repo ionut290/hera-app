@@ -38,6 +38,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout release readiness assessment (no credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Validate manual input before allocating a macOS runner
         shell: bash
         env:
@@ -54,10 +58,6 @@ jobs:
           echo "Preflight OK: workflow parsed, Linux job started and manual inputs validated."
           echo "No App Store Connect upload or iPhone app modification performed."
 
-      - name: Checkout release readiness assessment (no credentials)
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
       - name: Set up Node.js for release readiness
         uses: actions/setup-node@v4
         with:

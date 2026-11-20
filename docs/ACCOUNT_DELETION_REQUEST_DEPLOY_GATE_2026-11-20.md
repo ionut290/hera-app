@@ -19,7 +19,7 @@ La console Firebase, verificata il 20 novembre 2026 in sola lettura, mostra `del
 - Workflow manuale, `DO_NOT_DEPLOY` predefinito, solo `main`, SHA esatto, due attestazioni e riferimento documentale.
 - Primo job senza segreti di produzione, verifica presenza di reviewer richiesti nell'environment GitHub.
 - Secondo job dietro environment protetto; Firebase service account validato per `hera-app-6cd2b`.
-- Esporta temporaneamente le due callable SOLO nel checkout del runner; `functions/main.js` su GitHub resta invariato e il normale deployment le esclude.
+- Esporta temporaneamente **soltanto due callable nominate esplicitamente** nel checkout del runner; se il modulo staged esporta un'altra funzione, il rilascio viene bloccato. `functions/main.js` su GitHub resta invariato e il normale deployment le esclude.
 - Non esegue `deleteOwnVargaAccount`, non cambia regole Firestore, non attiva pulsanti, non crea account revisore, non firma o carica build Apple.
 - Test `scripts/check-account-deletion-request-release-guard.cjs` verifica i limiti di distribuzione in modo offline.
 

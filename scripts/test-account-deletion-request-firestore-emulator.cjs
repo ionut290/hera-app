@@ -15,7 +15,10 @@ admin.initializeApp({projectId:project});
 const db=admin.firestore();
 class HttpsError extends Error { constructor(code,message){super(message);this.code=code;} }
 const exportsForTest={};
-vm.runInNewContext(fs.readFileSync("functions/account-deletion-request.js","utf8"),{
+const diagnosticSource=fs.readFileSync("functions/account-deletion-request.js","utf8")
+  .replace('console.error("Account deletion request intake failed", { code: error?.code || "unknown" });',
+    'console.error("Local emulator transaction failed", {code:error?.code, message:error?.message, stack:error?.stack});');
+vm.runInNewContext(diagnosticSource,{
   exports:exportsForTest,
   require(name){
     if(name==="firebase-admin")return admin;
@@ -23,7 +26,7 @@ vm.runInNewContext(fs.readFileSync("functions/account-deletion-request.js","utf8
       HttpsError,onCall(opts,fn){assert.equal(opts.region,"europe-west1");return fn;}
     };
     throw Error("Unexpected dependency");
-  },Date,Math,Number,Object,Array,Set,String,console:{error(){}}
+  },Date,Math,Number,Object,Array,Set,String,console
 },{filename:"functions/account-deletion-request.js"});
 assert.deepEqual(Object.keys(exportsForTest).sort(),["requestOwnVargaAccountDeletion","getOwnVargaAccountDeletionStatus"].sort());
 const ask=exportsForTest.requestOwnVargaAccountDeletion,read=exportsForTest.getOwnVargaAccountDeletionStatus;

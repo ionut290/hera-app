@@ -15,10 +15,10 @@ on:
           - DO_NOT_UPLOAD
           - UPLOAD_APP_STORE_CANDIDATE_ONLY
       build_number:
-        description: "New CFBundleVersion above confirmed TestFlight build 1.0 (20011); verify live ASC first"
+        description: "New CFBundleVersion above confirmed TestFlight build 1.0 (20015); verify live ASC first"
         type: string
         required: true
-        default: "20012"
+        default: "20016"
       reviewed_commit_sha:
         description: "Exact 40-character reviewed commit SHA shown in GitHub"
         required: true

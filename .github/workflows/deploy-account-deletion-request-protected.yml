@@ -128,10 +128,24 @@ jobs:
             .replace(declaration + '\n', '')
             .replace(/^\s*errorReportingFunctions,\r?\n/m, '');
           if (safe.includes('errorReportingFunctions')) throw Error('Unexpected function registration');
+          // Only the two reviewed, NON-DESTRUCTIVE endpoints can become exports.
+          // Fail closed if future edits add a third callable to the staged module.
+          const approvedNames = [
+            'requestOwnVargaAccountDeletion',
+            'getOwnVargaAccountDeletionStatus'
+          ];
+          const staged = require('./functions/account-deletion-request.js');
+          if (Object.keys(staged).sort().join(',') !== [...approvedNames].sort().join(',') ||
+              approvedNames.some(name => typeof staged[name] !== 'function')) {
+            throw Error('Unexpected staged callable exports: block Firebase deployment');
+          }
           fs.writeFileSync(file, safe + '\n// Protected request deployment only, never committed.\n' +
-            'Object.assign(exports, require("./account-deletion-request"));\n');
+            'const stagedAccountDeletionRequest = require("./account-deletion-request");\n' +
+            'exports.requestOwnVargaAccountDeletion = stagedAccountDeletionRequest.requestOwnVargaAccountDeletion;\n' +
+            'exports.getOwnVargaAccountDeletionStatus = stagedAccountDeletionRequest.getOwnVargaAccountDeletionStatus;\n');
           const exported = require('./functions/main.js');
-          if (!exported.requestOwnVargaAccountDeletion || !exported.getOwnVargaAccountDeletionStatus) {
+          if (typeof exported.requestOwnVargaAccountDeletion !== 'function' ||
+              typeof exported.getOwnVargaAccountDeletionStatus !== 'function') {
             throw Error('Required request/status exports missing');
           }
           NODE

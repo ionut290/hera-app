@@ -27,6 +27,18 @@ assert.doesNotMatch(source,/--only firestore|--only hosting|functions:deleteOwnV
 assert.doesNotMatch(main,/require\(["']\.\/account-deletion-request["']\)/);
 assert.match(regular,/!functions\/account-deletion-request\.js/);
 assert.doesNotMatch(source,/__VARGA_ACCOUNT_DELETION_REQUEST_ENABLED\s*=\s*true/);
+// The transient functions/main.js MUST export only the two reviewed callables.
+// Never dynamically Object.assign ALL exports from an evolving module.
+assert.match(source, /const approvedNames = \[/);
+assert.match(source, /Object\.keys\(staged\)\.sort\(\)\.join\(','\)/);
+assert.match(source, /approvedNames\.some\(name => typeof staged\[name\] !== 'function'\)/);
+assert.match(source, /exports\.requestOwnVargaAccountDeletion = stagedAccountDeletionRequest\.requestOwnVargaAccountDeletion/);
+assert.match(source, /exports\.getOwnVargaAccountDeletionStatus = stagedAccountDeletionRequest\.getOwnVargaAccountDeletionStatus/);
+assert.doesNotMatch(source, /Object\.assign\(exports, require\(["']\.\/account-deletion-request["']\)\)/);
+const stageSource = fs.readFileSync("functions/account-deletion-request.js", "utf8");
+const stagedNames = [...stageSource.matchAll(/^exports\.(\w+)\s*=\s*onCall\(/gm)].map(x => x[1]).sort();
+assert.deepEqual(stagedNames, ["getOwnVargaAccountDeletionStatus","requestOwnVargaAccountDeletion"]);
+
 const guard=source.indexOf("\n  guard:");
 const deploy=source.indexOf("\n  deploy:");
 assert.ok(guard>=0 && deploy>guard);

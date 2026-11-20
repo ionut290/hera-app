@@ -1,0 +1,30 @@
+name: Test Apple review account creator live admin gate (NO DEPLOY)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "functions/apple-review-accounts.js"
+      - "scripts/test-apple-review-creator-live-admin.cjs"
+      - ".github/workflows/check-apple-review-creator-live-admin.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review-account-admin-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Offline syntax and actual-handler security test
+        run: |
+          set -euo pipefail
+          node --check functions/apple-review-accounts.js
+          node --check scripts/test-apple-review-creator-live-admin.cjs
+          node scripts/test-apple-review-creator-live-admin.cjs
+      - name: Confirm no server or account was changed
+        run: echo "Synthetic only; no Firebase credentials, no network access, no reviewer account created in production."

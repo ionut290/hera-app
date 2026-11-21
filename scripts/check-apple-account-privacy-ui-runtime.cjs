@@ -51,7 +51,10 @@ function harness({platform="ios",request=false,sla=undefined,immediate=false,
   };
   const auth={currentUser:user?{uid:"synthetic-user",email:"synthetic@example.test",providerData:[]}:null,
     async signInWithCredential(c){calls.push({name:"apple-signin",payload:c});},
-    async signInWithPopup(){throw Error("iOS must use native plugin");}};
+    async signInWithPopup(provider){
+      assert.ok(provider instanceof firebase.auth.OAuthProvider);
+      calls.push({name:"apple-web-popup"});
+    }};
   const firebase={
     apps:[{}],
     auth:()=>auth,
@@ -122,7 +125,24 @@ function harness({platform="ios",request=false,sla=undefined,immediate=false,
   await unavailable.get("auth-apple-login-btn").click();
   assert.equal(unavailable.calls.length,0);
   assert.match(unavailable.alerts[0],/Login Apple nativo non disponibile/);
-  assert.equal(harness({platform:"web"}).get("auth-apple-login-btn"),null);
+  const web=harness({platform:"web"});
+  assert.ok(web.get("auth-apple-login-btn"),"Apple login must be discoverable on web");
+  await web.get("auth-apple-login-btn").click();
+  assert.equal(web.calls.length,1);
+  assert.equal(web.calls[0].name,"apple-web-popup");
+  assert.equal(harness({platform:"android"}).get("auth-apple-login-btn"),null,
+    "Android native remains email/password only");
+  const info=harness({platform:"web"});
+  assert.ok(info.get("varga-deletion-info-menu"),
+    "Users must see a truthful deletion status even without a backend");
+  assert.ok(info.get("varga-deletion-info-profile"));
+  assert.ok(info.get("varga-deletion-info-pending"));
+  assert.ok(info.get("varga-deletion-info-gate"));
+  await info.get("varga-deletion-info-menu").click();
+  assert.match(info.alerts[0],/non è ancora disponibile/);
+  assert.match(info.alerts[0],/Nessuna richiesta è stata inviata/);
+  assert.equal(info.calls.length,0,
+    "Information-only control must never call Firebase or delete accounts");
 
   for(const cfg of [
     {request:false,sla:30},{request:true},
@@ -134,6 +154,8 @@ function harness({platform="ios",request=false,sla=undefined,immediate=false,
   }
 
   const ready=harness({request:true,sla:30});
+  assert.equal(ready.get("varga-deletion-info-menu"),null,
+    "Informational fallback must disappear for approved request backend");
   assert.equal(ready.all("[data-request-varga-deletion]").length,4);
   assert.equal(ready.all("[data-check-varga-deletion-status]").length,4);
   assert.equal(ready.all("[data-delete-varga-account]").length,0);
@@ -184,9 +206,10 @@ function harness({platform="ios",request=false,sla=undefined,immediate=false,
   assert.match(noReason.alerts.at(-1),/motivazione non è disponibile/);
 
   const demo=harness({request:true,sla:30,immediate:true});
+  assert.equal(demo.get("varga-deletion-info-menu"),null);
   assert.equal(demo.all("[data-request-varga-deletion]").length,0);
   assert.equal(demo.all("[data-delete-varga-account]").length,4);
   assert.equal(demo.calls.length,0);
 
-  console.log("PASS: native Apple sign-in, missing-plugin denial, deletion flags and SLA gate, safe request/status, duplicate tap, signed-out and already-processed flows (synthetic only).");
+  console.log("PASS: Apple web popup and native iOS login; Android excluded; visible non-destructive privacy information; deletion flags/SLA/requests remain gated (synthetic only).");
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -130,8 +130,11 @@ function harness({platform="ios",request=false,sla=undefined,immediate=false,
   await web.get("auth-apple-login-btn").click();
   assert.equal(web.calls.length,1);
   assert.equal(web.calls[0].name,"apple-web-popup");
-  assert.equal(harness({platform:"android"}).get("auth-apple-login-btn"),null,
-    "Android native remains email/password only");
+  const android=harness({platform:"android"});
+  assert.ok(android.get("auth-apple-login-btn"),"Apple login must be discoverable on native Android");
+  await android.get("auth-apple-login-btn").click();
+  assert.equal(android.calls.length,1);
+  assert.equal(android.calls[0].name,"apple-signin");
   const info=harness({platform:"web"});
   assert.ok(info.get("varga-deletion-info-menu"),
     "Users must see a truthful deletion status even without a backend");
@@ -212,5 +215,5 @@ function harness({platform="ios",request=false,sla=undefined,immediate=false,
   assert.equal(demo.all("[data-delete-varga-account]").length,4);
   assert.equal(demo.calls.length,0);
 
-  console.log("PASS: Apple web popup and native iOS login; Android excluded; visible non-destructive privacy information; deletion flags/SLA/requests remain gated (synthetic only).");
+  console.log("PASS: Apple web popup and native iOS/Android login; visible privacy information; deletion flags/SLA/requests remain gated (synthetic only).");
 })().catch(e=>{console.error(e);process.exitCode=1;});

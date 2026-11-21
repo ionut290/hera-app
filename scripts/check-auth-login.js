@@ -63,14 +63,14 @@ if (!fixSource.includes('emailLoginButton.textContent = nativeAndroid ? "Accedi"
 }
 
 if (
-  !fixSource.includes("message.textContent = nativeAndroid")
-  || !fixSource.includes('"Accedi con la tua email e password."')
+  !fixSource.includes('if (message) message.textContent = "Accedi con Google, Apple oppure con la tua email e password."')
+  || !fixSource.includes('document.documentElement.classList.toggle("android-email-password-only", false)')
 ) {
-  throw new Error("Il messaggio login Android non richiede email e password.");
+  throw new Error("Le tre piattaforme devono offrire un messaggio login comune.");
 }
 
-if (!fixSource.includes("Nell'app Android è disponibile solo l'accesso con email e password.")) {
-  throw new Error("Il login Google non è bloccato esplicitamente su Android.");
+if (!fixSource.includes('(isNativeIOS() || isNativeAndroid()) ? signInWithNativeGoogle() : signInWithWebGoogle()')) {
+  throw new Error("Google deve usare il plugin nativo su Android e iOS, popup solo sul web.");
 }
 
 if (!fixSource.includes("installProfileAccessGuard")) {

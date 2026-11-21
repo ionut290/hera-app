@@ -106,11 +106,13 @@ function make({platform="ios",plugin=true,idToken="synthetic-id-token",nativeErr
   assert.equal(web.calls.filter(x=>Array.isArray(x)&&x[0]==="web-popup").length,2);
 
   const android=make({platform:"android"});
-  assert.equal(android.button.hidden,true);
+  assert.equal(android.button.hidden,false);
   await android.click();
-  assert.ok(android.calls.includes("focus-email"));
+  assert.equal(android.calls.filter(x=>x==="native-google").length,1);
+  assert.equal(android.calls.filter(x=>Array.isArray(x)&&x[0]==="firebase-credential").length,1);
   assert.equal(android.calls.filter(x=>Array.isArray(x)&&x[0]==="web-popup").length,0);
-  await assert.rejects(android.window.loginWithGoogle(),/solo l'accesso con email e password/);
+  await android.window.loginWithGoogle();
+  assert.equal(android.calls.filter(x=>x==="native-google").length,2);
 
   const missing=make({plugin:false});
   await missing.click();
@@ -140,5 +142,5 @@ function make({platform="ios",plugin=true,idToken="synthetic-id-token",nativeErr
   await failedDomain.click();
   assert.match(failedDomain.alerts.at(-1),/Domini|Dominio.*Firebase/);
 
-  console.log("PASS: iPhone uses Google native credential without WKWebView popup, web retains popup, Android email/password only, no silent fallback, errors and double tap safe.");
+  console.log("PASS: iOS and Android use native Google credentials, web uses popup; no WebView popup, errors and double tap safe.");
 })().catch(error=>{console.error(error);process.exitCode=1;});

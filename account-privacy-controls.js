@@ -66,10 +66,10 @@
     try {
       const currentAuth = auth();
       const provider = new firebase.auth.OAuthProvider("apple.com");
-      if (nativePlatform() === "ios") {
+      if (nativePlatform() === "ios" || nativePlatform() === "android") {
         const plugin = window.Capacitor?.Plugins?.FirebaseAuthentication;
         if (!plugin || typeof plugin.signInWithApple !== "function") {
-          throw new Error("Login Apple nativo non disponibile in questa versione dell'app.");
+          throw new Error("Login Apple nativo non disponibile in questa versione dell'app. Aggiorna VARGA CANTIERI.");
         }
         const result = await plugin.signInWithApple({ skipNativeAuth: true });
         const idToken = result?.credential?.idToken;
@@ -277,11 +277,10 @@
 
   function mount() {
     const gateGoogle = document.getElementById("auth-gate-login-btn");
-    // Apple OAuth is available through Firebase popup on the WEB and the
-    // native FirebaseAuthentication plugin on iOS. Keep native Android on its
-    // intentional email/password-only flow (no browser popup in WebView).
-    if (gateGoogle && !document.getElementById("auth-apple-login-btn") &&
-        nativePlatform() !== "android") {
+    // Apple OAuth is a web popup only on the external WEB site; Android and
+    // iOS use the Capacitor native FirebaseAuthentication plugin. Never open
+    // a Firebase browser popup inside a native WebView.
+    if (gateGoogle && !document.getElementById("auth-apple-login-btn")) {
       const apple = makeButton("auth-apple-login-btn", "Accedi con Apple", "btn");
       apple.setAttribute("aria-label", "Accedi con Apple");
       gateGoogle.insertAdjacentElement("afterend", apple);

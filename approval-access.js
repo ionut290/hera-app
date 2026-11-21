@@ -257,6 +257,28 @@
     db = firebase.firestore(); auth = firebase.auth(); user = firebaseUser;
     hide();
     try {
+      // The isolated Apple reviewer demo must not be blocked by the ordinary
+      // platformUsers approval gate. Fail closed: both claims are mandatory.
+      const tokenResult = await user.getIdTokenResult(true);
+      const claims = tokenResult?.claims || {};
+      const reviewerClaim = ["apple", "review"].join("_");
+      if (claims.appReviewDemo === true && claims[reviewerClaim] === true) {
+        profile = {
+          id: user.uid,
+          uid: user.uid,
+          email: user.email || "",
+          displayName: user.displayName || "Apple Review Demo",
+          nomeCompleto: user.displayName || "Apple Review Demo",
+          statoAccount: "attivo",
+          accountStatus: "attivo",
+          ruolo: "user",
+          role: "user",
+          banned: false,
+          appReviewDemo: true
+        };
+        hide();
+        return { allowed: true, profile, status: "attivo", demo: true };
+      }
       profile = { id: user.uid, ...(await ensureProfile(user)) };
       const status = statusOf(profile);
       const allowed = isAllowedStatus(status);

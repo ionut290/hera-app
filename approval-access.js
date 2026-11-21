@@ -424,8 +424,10 @@
     });
   });
   el("access-request-whatsapp")?.addEventListener("click", requestWhatsapp);
+  el("access-approval-error-request")?.addEventListener("click", requestWhatsapp);
   el("access-check-approval")?.addEventListener("click", refresh);
   el("access-approval-retry")?.addEventListener("click", refresh);
+  el("access-approval-error-logout")?.addEventListener("click", async () => { stop(); await auth?.signOut?.(); });
   el("access-approval-logout")?.addEventListener("click", async () => { stop(); await auth.signOut(); });
 
   window.HeraAccessApproval = { verify, renderAdmin, statusOf };

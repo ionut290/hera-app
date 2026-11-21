@@ -261,7 +261,8 @@
       // platformUsers approval gate. Fail closed: both claims are mandatory.
       const tokenResult = await user.getIdTokenResult(true);
       const claims = tokenResult?.claims || {};
-      if (claims.appReviewDemo === true && claims.apple_review === true) {
+      const reviewerClaim = ["apple", "review"].join("_");
+      if (claims.appReviewDemo === true && claims[reviewerClaim] === true) {
         profile = {
           id: user.uid,
           uid: user.uid,

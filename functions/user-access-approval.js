@@ -96,7 +96,7 @@ function buildApprovalMessage({ userName, userEmail, administratorName }) {
     `L’amministratore ${administratorName} ha accettato la tua richiesta e ora puoi accedere all’app.`,
     "",
     "COME ACCEDERE",
-    `Email / Email address: ${userEmail}`,
+    `Email: ${userEmail}`,
     "Password: usa la password che hai scelto durante la registrazione.",
     "Per la tua sicurezza, non comunicare la password ad altre persone.",
     "",

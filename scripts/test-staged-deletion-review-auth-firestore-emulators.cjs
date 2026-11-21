@@ -163,6 +163,23 @@ async function cleanup(){
     assert.equal((await db.doc("privateDocuments/"+workerUid).get()).data().ownerUserId,workerUid);
     for(const uid of users) assert.equal((await auth.getUser(uid)).uid,uid);
 
-    console.log("PASS: local Auth+Firestore emulators — claims/revocation, queue isolation, transactional concurrency, reject/reopen, no deleted users or business records");
+    // The real Auth emulator revokes refresh tokens without disabling the
+    // user or changing their privileged custom claims. A previously issued
+    // (still recent) signed token must NOT read the queue or decide a review.
+    await auth.revokeRefreshTokens(reviewerUid);
+    const revokedReviewer=await auth.getUser(reviewerUid);
+    assert.equal(revokedReviewer.disabled,false);
+    assert.equal(revokedReviewer.customClaims.privacy_deletion_reviewer,true);
+    assert.ok(revokedReviewer.tokensValidAfterTime,
+      "Auth emulator must expose the live revocation timestamp");
+    const staleReviewerToken=token({auth_time:now-30});
+    await rejects(review.listVargaAccountDeletionReviewQueue(
+      call({},staleReviewerToken)),"permission-denied");
+    await rejects(review.reviewVargaAccountDeletionRequest(
+      call({uid:otherUid,action:"start_review"},staleReviewerToken)),
+      "permission-denied");
+    assert.equal((await db.doc("accountDeletionRequests/"+otherUid).get()).data().status,"pending");
+
+    console.log("PASS: local Auth+Firestore emulators — claims, real Auth token revocation, queue isolation, transactional concurrency, reject/reopen, no deleted users or business records");
   }finally{await cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

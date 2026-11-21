@@ -22,6 +22,35 @@ function assertEdgeToEdgeBeforeSuper(source, label) {
 assertEdgeToEdgeBeforeSuper(mainActivity, "MainActivity");
 assertEdgeToEdgeBeforeSuper(cameraActivity, "Fotocamera continua");
 
+// Navigation bars overlap all buttons when an edge-to-edge Capacitor WebView
+// fills the display. The protection belongs to the native content viewport,
+// not a small set of CSS selectors. Guard all critical parts of this contract.
+for (const required of [
+  "protectWebContentFromAndroidSystemNavigation();",
+  "findViewById(android.R.id.content)",
+  "ViewCompat.setOnApplyWindowInsetsListener(contentRoot",
+  "WindowInsetsCompat.Type.navigationBars()",
+  "WindowInsetsCompat.Type.displayCutout()",
+  "windowInsets.getInsets(safeTypes)",
+  "view.setPadding(left, top, right, bottom)",
+  "new WindowInsetsCompat.Builder(windowInsets)",
+  ".setInsets(safeTypes, Insets.NONE)",
+  "ViewCompat.requestApplyInsets(contentRoot)"
+]) {
+  assert.ok(mainActivity.includes(required),
+    "Safe area Android non completa, pulsanti a rischio sotto navigazione: " + required);
+}
+assert.match(mainActivity, /initialBottom \+ safe\.bottom/,
+  "Il margine di navigazione deve sommarsi al padding originale, senza sovrascriverlo.");
+assert.match(mainActivity, /initialLeft \+ safe\.left/,
+  "Le barre laterali in landscape devono proteggere anche il bordo sinistro.");
+assert.match(mainActivity, /initialRight \+ safe\.right/,
+  "Le barre laterali in landscape devono proteggere anche il bordo destro.");
+assert.match(mainActivity, /WindowCompat\.setDecorFitsSystemWindows\(getWindow\(\), false\)/,
+  "Il listener deve ricevere gli insets completi in modalità edge-to-edge.");
+assert.doesNotMatch(mainActivity, /hide\(WindowInsetsCompat\.Type\.navigationBars\(\)\)/,
+  "La correzione non deve nascondere i pulsanti di navigazione Android.");
+
 assert.doesNotMatch(cameraActivity, /setStatusBarColor|setNavigationBarColor/, "La fotocamera usa ancora API colore deprecate.");
 for (const required of [
   "WindowCompat.getInsetsController",

@@ -23,9 +23,11 @@ Il **20 novembre 2026** Apple ha confermato via email **VARGA CANTIERI 1.0 (2001
 
 Per la stessa build 20015 Apple ha inviato l'avviso **ITMS-90725** relativo all'SDK iOS 26.5: non ha impedito la disponibilità TestFlight, ma **da aprile 2027** servirà iOS SDK 27 o superiore per nuove consegne.
 
-Il workflow manuale `ios-appstore-candidate.yml` imposta il prossimo **numero proposto** a `20016` e rifiuta tutte le build **≤ 20015** in Linux e macOS. Questo è un **limite storico minimo**, non una verifica live di App Store Connect: controllare sempre il numero più alto in App Store Connect prima di autorizzare l'upload. Il gate `node scripts/audit-app-review-full-access.cjs --require-ready` rimane bloccante; il workflow NON è un'autorizzazione a pubblicare.
+**Aggiornamento 21 novembre 2026:** Apple App Store Connect conferma che la nuova build **1.0 (20016)** è già elaborata, in stato **Testing**, nel gruppo interno `VARGA CANTIERI - TEST` (GitHub Actions [run 44814570404](https://github.com/ionut290/hera-app/actions/runs/44814570404), completato). La 20016 è quindi **già usata** e non può essere nuovamente caricata con lo stesso numero.
 
-I test offline `check-ios-appstore-release-safety.yml` impediscono l'accettazione di build già utilizzate (20011–20015), verificano il gate App Review e conservano la protezione iOS 27. Nessuna firma, upload o modifica Firebase è prodotta da questo aggiornamento.
+I workflow manuali `ios-appstore-candidate.yml` e `ios-internal-testflight-main.yml` propongono ora **20017** e rifiutano tutte le build **≤ 20016** sia nel controllo Linux sia nel job macOS. È un **limite storico minimo**, NON un controllo live di App Store Connect: verificare sempre se nel frattempo siano state caricate versioni successive prima dell'upload. L'audit pubblico `node scripts/audit-app-review-full-access.cjs --require-ready` rimane **BLOCKED** in assenza delle prove Apple/privacy e non può essere saltato.
+
+I test offline `check-ios-appstore-release-safety.yml` rifiutano i numeri già usati (20011–20016), verificano il gate App Review, assicurano anche l'upload interno contro build duplicate e conservano la protezione iOS 27. Questo aggiornamento non avvia firma, upload né modifiche Firebase.
 
 ## Requisito Apple
 

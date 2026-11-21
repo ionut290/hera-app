@@ -39,7 +39,7 @@ const rawModules = {
   "functions/error-reporting.js":1,
   "functions/password-recovery-code.js":1,
   "functions/varga-gestionale-sync.js":4,
-  "functions/user-access-approval.js":1
+  "functions/user-access-approval.js":2
 };
 for (const [path, count] of Object.entries(rawModules)) {
   const src = read(path);

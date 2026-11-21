@@ -358,7 +358,7 @@ jobs:
             archive > "$RUNNER_TEMP/ios-private-archive.log" 2>&1 ||
             { tail -n 80 "$RUNNER_TEMP/ios-private-archive.log"; exit 1; }
           test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | grep -Fx '15.0' ||
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | awk 'BEGIN { ok=0 } { if ($1+0 >= 15.0) ok=1 } END { exit(ok ? 0 : 1) }' ||
             { echo "::error::Signed iOS archive must require iOS 15.0 or later."; exit 1; }
           /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
             grep -Fx "$IOS_BUILD_NUMBER"

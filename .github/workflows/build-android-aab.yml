@@ -92,8 +92,8 @@ jobs:
         run: |
           npm run android:aab:prepare
           test -s www/update-app-feature.js
-          if ! grep -q 'native-android-runtime.js' www/index.html; then
-            echo "index.html non carica native-android-runtime.js"
+          if ! grep -q 'native-android-postlogin-loader.js' www/index.html; then
+            echo "index.html non carica native-android-postlogin-loader.js"
             exit 1
           fi
           if grep -q "Avvio di Varga Cantieri" www/index.html; then

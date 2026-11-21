@@ -96,17 +96,6 @@
   const NOTIFICATION_KEY = "hera_notifications_configured_v1";
   const nativeLocationWatchers = new Map();
   let nativeLocationWatchCounter = 0;
-  let permissionStartupUid = "";
-
-  // Never request Android runtime permissions before Firebase confirms login.
-  // This includes calls via the navigator.geolocation bridge or app resume.
-  function hasSignedInUser() {
-    try {
-      return Boolean(window.firebase?.auth?.().currentUser?.uid);
-    } catch (_) {
-      return false;
-    }
-  }
 
   function normalizeNativePosition(position) {
     if (!position || !position.coords) return position;
@@ -133,15 +122,12 @@
   }
 
   async function refreshNativeLocation() {
-    if (!Geolocation || !hasSignedInUser()) return null;
+    if (!Geolocation) return null;
     try {
       let permission = await Geolocation.checkPermissions();
-      // Authentication might change while the permission probe is pending.
-      if (!hasSignedInUser()) return null;
       if (permission.location !== "granted" && permission.coarseLocation !== "granted") {
         permission = await Geolocation.requestPermissions({ permissions: ["location", "coarseLocation"] });
       }
-      if (!hasSignedInUser()) return null;
       if (permission.location !== "granted" && permission.coarseLocation !== "granted") return null;
 
       const position = publishNativePosition(await Geolocation.getCurrentPosition({
@@ -267,7 +253,7 @@
   }
 
   async function configureNotificationsOnce() {
-    if (!PushNotifications || !hasSignedInUser()) return;
+    if (!PushNotifications) return;
     try {
       await PushNotifications.removeAllListeners();
       await PushNotifications.addListener("registration", ({ value }) => saveNativePushToken(value));
@@ -288,7 +274,6 @@
       });
 
       let permission = await PushNotifications.checkPermissions();
-      if (!hasSignedInUser()) return;
       if (permission.receive === "prompt" || permission.receive === "prompt-with-rationale") {
         permission = await PushNotifications.requestPermissions();
       }
@@ -314,7 +299,7 @@
   }
 
   async function configureBackgroundLocation() {
-    if (!HeraGeofence || !hasSignedInUser()) return false;
+    if (!HeraGeofence) return false;
     try {
       const status = await HeraGeofence.activate();
       if (status?.needsBackgroundSettings) {
@@ -353,26 +338,9 @@
   const start = () => {
     loadAndroidWhazzupPhotoOrderFix();
     persistPushTokenAfterLogin();
-    // Do not probe GPS, geofence or notification permissions on the login gate.
-    // Wait until Firebase has restored an existing session or completed sign-in.
-    try {
-      const auth = window.firebase?.auth?.();
-      if (auth && typeof auth.onAuthStateChanged === "function") {
-        auth.onAuthStateChanged((user) => {
-          if (!user?.uid) {
-            permissionStartupUid = "";
-            return;
-          }
-          if (permissionStartupUid === user.uid) return;
-          permissionStartupUid = user.uid;
-          void refreshNativeLocation();
-          void configureBackgroundLocation();
-          void configureNotificationsOnce();
-        });
-      }
-    } catch (error) {
-      console.warn("Avvio permessi Android post-login non disponibile:", error);
-    }
+    refreshNativeLocation();
+    configureBackgroundLocation();
+    configureNotificationsOnce();
   };
 
   if (document.readyState === "loading") {
@@ -382,6 +350,6 @@
   }
 
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && hasSignedInUser()) refreshNativeLocation();
+    if (document.visibilityState === "visible") refreshNativeLocation();
   });
 })();

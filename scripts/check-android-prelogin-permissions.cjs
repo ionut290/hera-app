@@ -1,26 +1,51 @@
 "use strict";
 
-// Real Android runtime must not load before Firebase has verified a user.
-// This test creates no account, no native permission request and no network traffic.
+// Run the ACTUAL protected runtime with the Android permission gate in a VM.
+// No Firebase project, real Android device, or runtime permissions are used.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
-const source = fs.readFileSync("native-android-postlogin-loader.js", "utf8");
-const original = fs.readFileSync("native-android-runtime.js", "utf8");
-const index = fs.readFileSync("index.html", "utf8");
 
-async function test(platform) {
-  const loadedScripts = [];
+(async () => {
+  const gate = fs.readFileSync("android-prelogin-permission-gate.js", "utf8");
+  const runtime = fs.readFileSync("native-android-runtime.js", "utf8");
+  const index = fs.readFileSync("index.html", "utf8");
+  assert.match(index, /<script src="android-prelogin-permission-gate\.js[^"]*"><\/script>\s*<script src="native-android-runtime\.js[^"]*"><\/script>/,
+    "Guard must load synchronously before exactly one original native runtime");
+  const calls = { gpsCheck: 0, gpsPrompt: 0, geofence: 0, pushCheck: 0, pushPrompt: 0 };
+  const listeners = {};
   const authListeners = [];
-  const domListeners = {};
   let currentUser = null;
   const document = {
-    readyState: "loading",
-    head: { appendChild(node) { loadedScripts.push(node); } },
-    addEventListener(name, listener) { (domListeners[name] ||= []).push(listener); },
-    createElement(tag) {
-      assert.equal(tag, "script");
-      return { dataset: {}, remove() {} };
+    readyState: "complete",
+    visibilityState: "visible",
+    querySelector: () => null,
+    createElement: () => ({ dataset: {} }),
+    head: { appendChild() {} },
+    addEventListener(name, listener) { (listeners[name] ||= []).push(listener); }
+  };
+  const nativePlugins = {
+    Geolocation: {
+      async checkPermissions() { calls.gpsCheck++; return { location: "prompt", coarseLocation: "prompt" }; },
+      async requestPermissions() {
+        calls.gpsPrompt++;
+        return { location: "denied", coarseLocation: "denied" };
+      },
+      async getCurrentPosition() { throw new Error("No position in this test"); }
+    },
+    HeraGeofence: {
+      async activate() { calls.geofence++; return { active: false }; }
+    },
+    PushNotifications: {
+      async removeAllListeners() {},
+      async addListener() {},
+      async createChannel() {},
+      async checkPermissions() { calls.pushCheck++; return { receive: "prompt" }; },
+      async requestPermissions() {
+        calls.pushPrompt++;
+        return { receive: "denied" };
+      },
+      async register() {}
     }
   };
   const auth = {
@@ -28,46 +53,48 @@ async function test(platform) {
     onAuthStateChanged(callback) { authListeners.push(callback); }
   };
   const window = {
+    firebase: { auth: () => auth },
     Capacitor: {
-      isNativePlatform: () => platform !== "web",
-      getPlatform: () => platform
+      isNativePlatform: () => true,
+      getPlatform: () => "android",
+      Plugins: nativePlugins
     },
-    firebase: { auth: () => auth }
+    dispatchEvent() {}
   };
-  vm.runInNewContext(source, {window,document,console: {warn() {}}}, {
-    filename: "native-android-postlogin-loader.js"
-  });
+  const context = {
+    window, document, navigator: {}, console: { warn() {} },
+    localStorage: {getItem: () => null, setItem() {}},
+    Map, Promise, Number, String, Object, Date, Reflect, Proxy, Error,
+    setTimeout, setInterval, clearInterval, CustomEvent: class {}
+  };
+  vm.runInNewContext(gate, context, {filename:"android-prelogin-permission-gate.js"});
+  vm.runInNewContext(runtime, context, {filename:"native-android-runtime.js"});
+  await new Promise(resolve => setTimeout(resolve, 20));
 
-  if (platform !== "android") {
-    assert.equal(loadedScripts.length, 1,
-      "Web/iOS must retain early WhatsApp runtime");
-    assert.match(loadedScripts[0].src, /native-android-runtime\.js/);
-    return;
-  }
-  assert.equal(loadedScripts.length, 0, "Native runtime must not load on unauthenticated Android startup");
-  for (const callback of domListeners.DOMContentLoaded || []) callback();
-  assert.equal(authListeners.length, 1, "One Firebase auth-state listener expected");
-  authListeners.forEach(callback => callback(null));
-  assert.equal(loadedScripts.length, 0, "Android sign-in gate must never load native location runtime");
+  assert.deepEqual(calls, {
+    gpsCheck: 0, gpsPrompt: 0, geofence: 0, pushCheck: 0, pushPrompt: 0
+  }, "All native GPS, background location, and notification prompts must wait for login");
+
+  // Even a feature calling the native bridge on the login screen must be denied.
+  await window.HeraNativeAndroid.refreshLocation();
+  await window.HeraNativeAndroid.configureBackgroundLocation();
+  await window.HeraNativeAndroid.configureNotifications();
+  assert.equal(calls.gpsCheck, 0);
+  assert.equal(calls.geofence, 0);
+
   currentUser = { uid: "synthetic-uid" };
-  authListeners.forEach(callback => callback(currentUser));
-  assert.equal(loadedScripts.length, 1, "Native runtime must load after authenticated Firebase UID");
-  assert.match(loadedScripts[0].src, /native-android-runtime\.js/);
-  // Pending script injection must not duplicate on auth refresh.
-  authListeners.forEach(callback => callback(currentUser));
-  assert.equal(loadedScripts.length, 1);
-  loadedScripts[0].onload();
-  authListeners.forEach(callback => callback(currentUser));
-  assert.equal(loadedScripts.length, 1);
-}
+  authListeners.forEach(fn => fn(currentUser));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.equal(calls.gpsCheck, 1, "GPS starts after Firebase login");
+  assert.equal(calls.gpsPrompt, 1, "Location prompt starts after Firebase login");
+  assert.equal(calls.geofence, 1, "Geofence starts after Firebase login");
+  assert.equal(calls.pushCheck, 1, "Push notification permission checked after login");
 
-(async () => {
-  assert.ok(index.includes("native-android-postlogin-loader.js"),
-    "index.html must load the post-login startup controller");
-  assert.ok(original.includes("refreshNativeLocation();"),
-    "Original protected runtime is retained unchanged and loads only after login");
-  await test("android");
-  await test("web");
-  await test("ios");
-  console.log("PASS: Android native permissions code only loads after authenticated Firebase UID.");
+  currentUser = null;
+  authListeners.forEach(fn => fn(null));
+  for (const cb of listeners.visibilitychange || []) cb();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(calls.gpsCheck, 1, "After logout, app resume must not obtain GPS");
+  assert.equal(calls.geofence, 1, "After logout, geofence activation must be blocked");
+  console.log("PASS: immutable Android runtime cannot prompt GPS or push before Firebase login.");
 })().catch(error => { console.error(error); process.exitCode = 1; });

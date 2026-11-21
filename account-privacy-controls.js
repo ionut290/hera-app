@@ -49,6 +49,12 @@
     if (code.includes("operation-not-allowed")) {
       return "Accedi con Apple non è ancora attivato in Firebase. Contatta l'amministratore.";
     }
+    if (code.includes("unauthorized-domain")) {
+      return "Il dominio di questa web-app non è autorizzato per Apple in Firebase Authentication. Contatta l'amministratore.";
+    }
+    if (code.includes("popup-blocked")) {
+      return "Il browser ha bloccato la finestra di accesso Apple. Consenti i popup per VARGA CANTIERI e riprova.";
+    }
     return String(error?.message || "Operazione non riuscita. Riprova.");
   }
 
@@ -271,11 +277,41 @@
 
   function mount() {
     const gateGoogle = document.getElementById("auth-gate-login-btn");
-    if (gateGoogle && !document.getElementById("auth-apple-login-btn") && nativePlatform() === "ios") {
+    // Apple OAuth is available through Firebase popup on the WEB and the
+    // native FirebaseAuthentication plugin on iOS. Keep native Android on its
+    // intentional email/password-only flow (no browser popup in WebView).
+    if (gateGoogle && !document.getElementById("auth-apple-login-btn") &&
+        nativePlatform() !== "android") {
       const apple = makeButton("auth-apple-login-btn", "Accedi con Apple", "btn");
       apple.setAttribute("aria-label", "Accedi con Apple");
       gateGoogle.insertAdjacentElement("afterend", apple);
       apple.addEventListener("click", signInWithApple);
+    }
+
+    // Keep account privacy options discoverable even while the production
+    // deletion/request backend is intentionally disabled. This is INFO ONLY:
+    // it never calls Firebase, promises a deadline, revokes Apple, signs out,
+    // or pretends a request has been submitted. Do not confuse UI visibility
+    // with completion of Apple's in-app account-deletion requirement.
+    if (!requestEnabled && !deletionEnabled) {
+      const locations = [
+        [document.getElementById("user-details-panel"), "varga-deletion-info-profile"],
+        [document.querySelector("#side-menu .side-menu-body .menu-section:nth-child(2)"), "varga-deletion-info-menu"],
+        [document.getElementById("access-approval-logout")?.parentElement, "varga-deletion-info-pending"],
+        [(document.getElementById("auth-apple-login-btn") || gateGoogle)?.parentElement,
+          "varga-deletion-info-gate"]
+      ];
+      for (const [parent, id] of locations) {
+        if (!parent || document.getElementById(id)) continue;
+        const button = makeButton(id, "Elimina account (non ancora disponibile)", "btn");
+        button.addEventListener("click", () => {
+          alert("La cancellazione dell'account non è ancora disponibile nell'app: " +
+            "la procedura privacy e il servizio protetto devono essere attivati. " +
+            "Nessuna richiesta è stata inviata e nessun account è stato eliminato. " +
+            "Per assistenza rivolgiti all'amministratore di VARGA CANTIERI.");
+        });
+        parent.appendChild(button);
+      }
     }
 
     if (requestEnabled) {

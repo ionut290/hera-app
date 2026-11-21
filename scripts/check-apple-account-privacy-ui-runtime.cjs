@@ -138,9 +138,10 @@ function harness({platform="ios",request=false,sla=undefined,immediate=false,
   assert.ok(info.get("varga-deletion-info-profile"));
   assert.ok(info.get("varga-deletion-info-pending"));
   assert.ok(info.get("varga-deletion-info-gate"));
-  await info.get("varga-deletion-info-menu").click();
-  assert.match(info.alerts[0],/non è ancora disponibile/);
-  assert.match(info.alerts[0],/Nessuna richiesta è stata inviata/);
+  assert.equal(info.get("varga-deletion-info-menu").href, "./delete-account.html",
+    "Show the published account-deletion information/help page");
+  assert.equal(info.alerts.length,0,
+    "A passive help link must not claim any account has been deleted");
   assert.equal(info.calls.length,0,
     "Information-only control must never call Firebase or delete accounts");
 

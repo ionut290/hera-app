@@ -232,6 +232,9 @@ jobs:
           grep -F '__VARGA_INTERNAL_DEMO_DELETION_ENABLED=true' www/index.html
           echo "Isolated demo deletion UI enabled for this INTERNAL TestFlight build only."
 
+          # Re-sync after the opt-in files are added so the internal iOS
+          # archive actually contains the demo-only UI.
+          npx cap sync ios
           python3 scripts/mark-ios-native-safe-area.py
           ruby scripts/install-ios-native-geofence.rb
           ruby scripts/install-ios-apple-signin.rb

@@ -204,12 +204,31 @@ exports.deleteOwnVargaAccount = onCall({
   }
   // Accept only the documented confirmation and optional preflight mode.
   // A caller cannot pass an arbitrary target UID, path or future action.
-  const payload = request.data;
+  // The iOS build uses the Firebase compat callable client. Accept the
+  // normalized v2 request.data and, defensively, the callable envelope exposed
+  // by some older compat/runtime combinations. Never accept a client-supplied
+  // target UID or any field outside this tiny allow-list.
+  let payload = request.data;
+  if ((!payload || typeof payload !== "object" || Array.isArray(payload)) &&
+      request.rawRequest?.body?.data &&
+      typeof request.rawRequest.body.data === "object" &&
+      !Array.isArray(request.rawRequest.body.data)) {
+    payload = request.rawRequest.body.data;
+  }
   const keys = payload && typeof payload === "object" && !Array.isArray(payload)
     ? Object.keys(payload) : [];
-  if (!payload || keys.length < 1 || keys.length > 2 ||
-      keys.some(key => key !== "confirmation" && key !== "mode") ||
-      payload.confirmation !== "ELIMINA") {
+  const validPayload = !!payload &&
+    keys.length >= 1 && keys.length <= 2 &&
+    keys.every(key => key === "confirmation" || key === "mode") &&
+    payload.confirmation === "ELIMINA";
+  if (!validPayload) {
+    console.warn("Demo deletion rejected: invalid callable payload", {
+      hasData: !!request.data,
+      dataType: typeof request.data,
+      keys,
+      mode: payload?.mode || null,
+      confirmationIsExpected: payload?.confirmation === "ELIMINA"
+    });
     throw new HttpsError("invalid-argument", "Richiesta di cancellazione non valida.");
   }
   // Unknown modes must NEVER fall through to irreversible deletion.

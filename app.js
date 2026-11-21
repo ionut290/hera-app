@@ -2339,7 +2339,7 @@ function setAuthenticationGateState(state, message = "") {
   if (ui.authGateMessage) {
     ui.authGateMessage.textContent = isBanned
       ? "Ti è stato negato l’accesso. Richiedi l’accesso all’amministratore."
-      : (message || "Accedi con il tuo account Google per utilizzare l'app.");
+      : (message || "Accedi con email e password oppure scegli uno dei metodi di accesso disponibili.");
   }
   if (ui.authGateLoginBtn) {
     ui.authGateLoginBtn.disabled = isChecking;

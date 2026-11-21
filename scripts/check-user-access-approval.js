@@ -19,15 +19,15 @@ assert.match(client, /APPROVING AND SENDING EMAIL/, "Il pulsante mostra lo stato
 assert.match(client, /access-approval-result-whatsapp/, "Dopo lo sblocco è disponibile l’invio WhatsApp");
 assert.match(client, /access-approval-result-email/, "Dopo lo sblocco è disponibile l’invio email manuale");
 assert.match(client, /mailto:/, "L’email manuale contiene il messaggio completo senza servizi esterni obbligatori");
-assert.match(client, /COPIA MESSAGGIO/, "Il messaggio può essere copiato come recupero manuale");
+assert.match(client, /COPY MESSAGE/, "Il messaggio può essere copiato come recupero manuale");
 assert.match(client, /firebase\.app\(\)\.functions\(REGION\)/, "Il client usa la regione Firebase corretta");
 assert.doesNotMatch(client, /const admin = auth\.currentUser/, "La gestione admin non dipende da auth non inizializzato");
 assert.match(client, /const admin = firebase\.auth\(\)\.currentUser/, "La gestione admin legge la sessione Firebase corrente");
 assert.match(client, /batch\.update\(ref, patch\)/, "Il fallback conserva lo sblocco Firestore compatibile");
 assert.match(client, /approval_\$\{uid\}_\$\{requestId\}/, "Il fallback usa un audit idempotente");
 assert.match(client, /Google Play/, "Il messaggio spiega l’installazione Android");
-assert.match(client, /Aggiungi alla schermata Home/, "Il messaggio spiega l’installazione iPhone");
-assert.match(client, /password che hai scelto durante la registrazione/, "Il messaggio indica le credenziali scelte dall’utente");
+assert.match(client, /Add to Home Screen/, "Il messaggio spiega l’installazione iPhone");
+assert.match(client, /password you chose when registering/, "Il messaggio indica le credenziali scelte dall’utente");
 
 assert.match(backend, /exports\.approveUserAccess/, "Il backend esporta approveUserAccess");
 assert.match(backend, /getAdminEmails/, "Il backend verifica l’amministratore");

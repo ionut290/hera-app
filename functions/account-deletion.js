@@ -3,17 +3,17 @@
 // Self-service, authenticated account deletion.
 // Business records shared with a company are not deleted by this action.
 const admin = require("firebase-admin");
-const { randomUUID, createHash } = require("node:crypto");
+const { randomUUID } = require("node:crypto");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
 const REGION = "europe-west1";
 // Explicit default Storage bucket: functions/index.js initializes Admin without storageBucket.
 const STORAGE_BUCKET = "hera-app-6cd2b.firebasestorage.app";
 const MAX_AUTH_AGE_SECONDS = 600;
-// DEMO-ONLY CANARY. This release MUST NOT delete any real employee/customer account.
-// A separate, reviewed release is mandatory before enabling general self-service deletion.
-const APPROVED_DEMO_EMAIL_SHA256 = "458f589f8bba0bbe8dcc14d2f4e45efc5a5c3b135c2df4530413ebfdf52fa1da";
-const DEMO_ONLY_RELEASE = true;
+// General self-service deletion. The authenticated caller may delete only
+// personal data owned by the same Firebase Auth UID. Shared business records
+// are retained and identity links are minimised below.
+const DEMO_ONLY_RELEASE = false;
 
 function validUserId(value) {
   return typeof value === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
@@ -222,7 +222,7 @@ exports.deleteOwnVargaAccount = onCall({
     keys.every(key => key === "confirmation" || key === "mode") &&
     payload.confirmation === "ELIMINA";
   if (!validPayload) {
-    console.warn("Demo deletion rejected: invalid callable payload", {
+    console.warn("Account deletion rejected: invalid callable payload", {
       hasData: !!request.data,
       dataType: typeof request.data,
       keys,
@@ -241,12 +241,12 @@ exports.deleteOwnVargaAccount = onCall({
   if (!Number.isFinite(authTime) || authTime > now + 60 || now - authTime > MAX_AUTH_AGE_SECONDS) {
     throw new HttpsError("failed-precondition", "Per sicurezza esci, accedi nuovamente e ripeti l'eliminazione.");
   }
-  // Fail closed before any database lookup or write. Both claims are minted only
-  // by the separately reviewed, protected demo-claims workflow.
-  if (!DEMO_ONLY_RELEASE ||
-      auth.token?.appReviewDemo !== true || auth.token?.apple_review !== true) {
+  // General self-service deletion is authorized by the authenticated Firebase
+  // session and scoped strictly to request.auth.uid. No demo claim or email
+  // allow-list is used, so ordinary users can complete the in-app flow.
+  if (DEMO_ONLY_RELEASE) {
     throw new HttpsError("permission-denied",
-      "Cancellazione in fase di collaudo; nessun dato del tuo account è stato modificato.");
+      "Cancellazione non ancora attivata in questo ambiente.");
   }
 
   // Deletion is scoped exclusively to request.auth.uid; client-supplied UID,
@@ -254,16 +254,11 @@ exports.deleteOwnVargaAccount = onCall({
   const db = admin.firestore();
   try {
     const ownAuthRecord = await admin.auth().getUser(uid);
-    // Never trust claims copied into a request alone: the current Admin Auth
-    // record must also be the exact approved disposable identity.
-    const demoEmail = String(ownAuthRecord.email || "").trim().toLowerCase();
-    const demoEmailHash = createHash("sha256").update(demoEmail).digest("hex");
-    if (ownAuthRecord.uid !== uid || ownAuthRecord.disabled === true ||
-        demoEmailHash !== APPROVED_DEMO_EMAIL_SHA256 ||
-        ownAuthRecord.customClaims?.appReviewDemo !== true ||
-        ownAuthRecord.customClaims?.apple_review !== true) {
+    // Never trust client claims: verify the live Auth record and keep the
+    // operation scoped to the same authenticated UID.
+    if (ownAuthRecord.uid !== uid || ownAuthRecord.disabled === true) {
       throw new HttpsError("permission-denied",
-        "Account non autorizzato al collaudo di cancellazione.");
+        "Account non autorizzato alla cancellazione.");
     }
 
     // Personal documents only. Shared/global operational documents must remain

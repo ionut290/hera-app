@@ -15,7 +15,7 @@ const serviceWorker = fs.readFileSync("sw.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
 
 assert.match(client, /httpsCallable\("approveUserAccess"\)/, "Sblocca utente usa il callable amministrativo");
-assert.match(client, /SBLOCCO E INVIO EMAIL/, "Il pulsante mostra lo stato di avanzamento");
+assert.match(client, /APPROVING AND SENDING EMAIL/, "Il pulsante mostra lo stato di avanzamento");
 assert.match(client, /access-approval-result-whatsapp/, "Dopo lo sblocco è disponibile l’invio WhatsApp");
 assert.match(client, /access-approval-result-email/, "Dopo lo sblocco è disponibile l’invio email manuale");
 assert.match(client, /mailto:/, "L’email manuale contiene il messaggio completo senza servizi esterni obbligatori");

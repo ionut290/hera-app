@@ -54,8 +54,8 @@ if (!fixSource.includes('divider.hidden = !webGoogleEnabled')) {
   throw new Error("Il separatore Google non viene ripristinato sul web.");
 }
 
-if (!fixSource.includes('Accedi con Google oppure con la tua email e password.')) {
-  throw new Error("Il login web non comunica chiaramente l’accesso Google.");
+if (!fixSource.includes('Accedi con Google, Apple oppure con la tua email e password.')) {
+  throw new Error("Il login web non comunica chiaramente l'accesso Google, Apple ed email.");
 }
 
 if (!fixSource.includes('emailLoginButton.textContent = nativeAndroid ? "Accedi" : "Entra"')) {

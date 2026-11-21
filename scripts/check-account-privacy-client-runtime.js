@@ -215,9 +215,10 @@ function deferred() {
   assert.ok(h.elements.has("varga-deletion-info-menu"), "Deletion status must be discoverable in normal menu");
   assert.ok(h.elements.has("varga-deletion-info-pending"), "Pending users must see deletion status");
   assert.ok(h.elements.has("varga-deletion-info-gate"), "New users must see deletion status at login gate");
-  await h.elements.get("varga-deletion-info-menu").click();
-  assert.ok(h.alerts.some(msg=>msg.includes("non è ancora disponibile") &&
-    msg.includes("Nessuna richiesta è stata inviata")));
+  assert.equal(h.elements.get("varga-deletion-info-menu").href, "./delete-account.html",
+    "Account-deletion information must link to the existing public support guide");
+  assert.equal(h.alerts.length, 0,
+    "Information-only link must not pretend a deletion request was sent");
   assert.equal(h.controls.checked, 0);
   assert.equal(h.controls.requested, 0);
   assert.equal(h.controls.deleted, false);

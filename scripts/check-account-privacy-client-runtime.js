@@ -344,8 +344,11 @@ function deferred() {
   assert.equal(h.controls.appleSignIns, 0, "Web must never invoke native iOS Apple plugin");
   assert.deepEqual(h.calls.filter(x=>x[0]==="webApplePopup").map(x=>x[0]), ["webApplePopup"]);
   h = harness({ platform: "android", deletionEnabled: false });
-  assert.equal(h.elements.has("auth-apple-login-btn"), false,
-    "Native Android remains email/password only");
+  assert.ok(h.elements.has("auth-apple-login-btn"), "Native Android Apple button missing");
+  await h.elements.get("auth-apple-login-btn").click();
+  assert.equal(h.controls.appleSignIns, 1, "Android must use native Apple authentication");
+  assert.equal(h.controls.signedIn, 1);
+  assert.equal(h.controls.webAppleSignIns, 0, "Android WebView must not open a popup");
   h = harness({ platform: "web", deletionEnabled: false,
     webPopupError: {code:"auth/unauthorized-domain"} });
   await h.elements.get("auth-apple-login-btn").click();

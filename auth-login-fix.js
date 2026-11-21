@@ -518,10 +518,12 @@
 
   function configurePlatformLoginOptions() {
     const nativeAndroid = isNativeAndroid();
-    const webGoogleEnabled = !nativeAndroid;
-    document.documentElement.classList.toggle("android-email-password-only", nativeAndroid);
+    // Google is provided by the native Firebase plugin on both mobile platforms,
+    // and by the Firebase OAuth popup only in the external web browser.
+    const webGoogleEnabled = true;
+    document.documentElement.classList.toggle("android-email-password-only", false);
     const message = document.getElementById("auth-gate-message");
-    if (message) message.textContent = nativeAndroid ? "Accedi con la tua email e password." : "Accedi con Google, Apple oppure con la tua email e password.";
+    if (message) message.textContent = "Accedi con Google, Apple oppure con la tua email e password.";
     const emailLoginButton = document.getElementById("auth-email-login-btn");
     if (emailLoginButton) emailLoginButton.textContent = nativeAndroid ? "Accedi" : "Entra";
     const googleLoginButton = document.getElementById("auth-gate-login-btn");
@@ -557,10 +559,9 @@
   }
 
   async function signInWithNativeGoogle() {
-    if (isNativeAndroid()) throw new Error("Nell'app Android è disponibile solo l'accesso con email e password.");
+    if (!isNativeIOS() && !isNativeAndroid()) throw new Error("L'accesso Google nativo richiede l'app per iPhone o Android.");
     const nativeAuth = getNativeFirebaseAuthentication();
-    if (!isNativeIOS()) throw new Error("L'accesso Google nativo richiede l'app iPhone.");
-    if (!nativeAuth || typeof nativeAuth.signInWithGoogle !== "function") throw new Error("Plugin Google non disponibile nell'app iPhone: aggiorna VARGA CANTIERI.");
+    if (!nativeAuth || typeof nativeAuth.signInWithGoogle !== "function") throw new Error("Plugin Google non disponibile nell'app nativa: aggiorna VARGA CANTIERI.");
     const result = await nativeAuth.signInWithGoogle({ skipNativeAuth: true });
     const idToken = result && result.credential && result.credential.idToken;
     if (!idToken) throw new Error("Google non ha restituito un token di accesso valido.");
@@ -572,8 +573,7 @@
 
   queueMicrotask(() => {
     window.loginWithGoogle = function loginWithGoogleFixed() {
-      if (isNativeAndroid()) return Promise.reject(new Error("Nell'app Android è disponibile solo l'accesso con email e password."));
-      return isNativeIOS() ? signInWithNativeGoogle() : signInWithWebGoogle();
+      return (isNativeIOS() || isNativeAndroid()) ? signInWithNativeGoogle() : signInWithWebGoogle();
     };
   });
 
@@ -591,13 +591,6 @@
     event.stopPropagation();
     event.stopImmediatePropagation();
 
-    if (isNativeAndroid()) {
-      configurePlatformLoginOptions();
-      const emailInput = document.getElementById("auth-email-input");
-      if (emailInput) emailInput.focus();
-      return;
-    }
-
     if (loginInProgress) return;
     if (!isFirebaseDefaultAppReady() || !firebase.auth || !firebase.auth.GoogleAuthProvider) {
       alert("Login Google non disponibile: configurazione Firebase non caricata.");
@@ -609,10 +602,10 @@
     const previousText = button.textContent;
     button.textContent = "Accesso Google...";
     try {
-      // WKWebView cannot reliably complete Firebase's browser popup flow.
-      // Use the installed iOS Firebase Authentication Google provider and
-      // pass its ID token to the same Firebase JS Auth instance as the app.
-      await (isNativeIOS() ? signInWithNativeGoogle() : signInWithWebGoogle());
+      // Native WKWebView must never launch Firebase's browser popup flow.
+      // Exchange the native Google ID token for the same Firebase JS Auth
+      // session used by the rest of VARGA CANTIERI on Android and iOS.
+      await ((isNativeIOS() || isNativeAndroid()) ? signInWithNativeGoogle() : signInWithWebGoogle());
     } catch (error) {
       console.error("Login Google fallito:", error);
       alert(formatError(error));

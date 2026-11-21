@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v234";
+const CACHE_NAME = "varga-cantieri-shell-v235";
 const CACHE_RESET_VERSION = "20261120-password-selfservice1";
 const APP_SHELL = [
   "./",
@@ -55,7 +55,8 @@ const APP_SHELL = [
   "./operational-import-repair.js?v=20260901-manual-plant-summary1",
   "./google-sheet-two-way-sync.js?v=20260729b",
   "./android-prelogin-permission-gate.js?v=20261121-android-login-privacy1",
-  "./native-android-runtime.js?v=20261121-postlogin-native-permissions2",
+  "./native-android-runtime.js?v=20261121-native-auth-load1",
+  "./android-native-runtime-auth-loader.js?v=20261121-android-auth-delay1",
   "./notification-center.js?v=20260830-firestore-read-fix1",
   "./today-summary-interactions.js?v=20260731-repair1",
   "./mezzi-alimentazione-fix.js?v=20260723",

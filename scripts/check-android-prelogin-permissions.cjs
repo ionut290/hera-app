@@ -9,19 +9,32 @@ const vm = require("node:vm");
 (async () => {
   const gate = fs.readFileSync("android-prelogin-permission-gate.js", "utf8");
   const runtime = fs.readFileSync("native-android-runtime.js", "utf8");
+  const loader = fs.readFileSync("android-native-runtime-auth-loader.js", "utf8");
   const index = fs.readFileSync("index.html", "utf8");
-  assert.match(index, /<script src="android-prelogin-permission-gate\.js[^"]*"><\/script>\s*<script src="native-android-runtime\.js[^"]*"><\/script>/,
-    "Guard must load synchronously before exactly one original native runtime");
+  assert.match(index, /<script src="android-prelogin-permission-gate\.js[^"]*"><\/script>\s*<script src="android-native-runtime-auth-loader\.js[^"]*"><\/script>/,
+    "The permission gate must load before the authenticated Android runtime loader");
+  assert.doesNotMatch(index, /<script src="native-android-runtime\.js[^"]*"><\/script>/,
+    "Protected native runtime must NOT execute before Firebase login");
   const calls = { gpsCheck: 0, gpsPrompt: 0, geofence: 0, pushCheck: 0, pushPrompt: 0 };
   const listeners = {};
   const authListeners = [];
   let currentUser = null;
+  let runtimeLoads = 0;
+  let reloads = 0;
+  let context;
   const document = {
     readyState: "complete",
     visibilityState: "visible",
     querySelector: () => null,
     createElement: () => ({ dataset: {} }),
-    head: { appendChild() {} },
+    head: { appendChild(script) {
+      if (!String(script.src || "").startsWith("native-android-runtime.js?v=")) {
+        throw Error("Unexpected dynamic runtime script: " + script.src);
+      }
+      runtimeLoads++;
+      vm.runInNewContext(runtime, context, {filename:"native-android-runtime.js"});
+      script.onload?.();
+    } },
     addEventListener(name, listener) { (listeners[name] ||= []).push(listener); }
   };
   const nativePlugins = {
@@ -63,9 +76,10 @@ const vm = require("node:vm");
       getPlatform: () => "android",
       Plugins: nativePlugins
     },
-    dispatchEvent() {}
+    dispatchEvent() {},
+    location: {reload() { reloads++; }}
   };
-  const context = {
+  context = {
     window, document, navigator: {}, console: { warn() {} },
     localStorage: {getItem: () => null, setItem() {}},
     Map, Promise, Number, String, Object, Date, Reflect, Proxy, Error,
@@ -73,9 +87,10 @@ const vm = require("node:vm");
   };
   vm.runInNewContext(gate, context, {filename:"android-prelogin-permission-gate.js"});
   Object.assign(nativePlugins, unwrappedPlugins); // Simulate immutable Capacitor native method proxies
-  vm.runInNewContext(runtime, context, {filename:"native-android-runtime.js"});
+  vm.runInNewContext(loader, context, {filename:"android-native-runtime-auth-loader.js"});
   await new Promise(resolve => setTimeout(resolve, 20));
 
+  assert.equal(runtimeLoads, 0, "Native runtime must remain unloaded on the Android login screen");
   assert.deepEqual(calls, {
     gpsCheck: 0, gpsPrompt: 0, geofence: 0, pushCheck: 0, pushPrompt: 0
   }, "All native GPS, background location, and notification prompts must wait for login");
@@ -92,6 +107,7 @@ const vm = require("node:vm");
 
   currentUser = { uid: "synthetic-uid" };
   authListeners.forEach(fn => fn(currentUser));
+  assert.equal(runtimeLoads, 1, "Native runtime must load once after Firebase authentication");
   await new Promise(resolve => setTimeout(resolve, 50));
   assert.equal(calls.gpsCheck, 1, "GPS starts after Firebase login");
   assert.equal(calls.gpsPrompt, 1, "Location prompt starts after Firebase login");
@@ -100,9 +116,9 @@ const vm = require("node:vm");
 
   currentUser = null;
   authListeners.forEach(fn => fn(null));
-  for (const cb of listeners.visibilitychange || []) cb();
+  assert.equal(reloads, 1, "Logout must destroy native geolocation handlers before showing login");
   await new Promise(resolve => setTimeout(resolve, 20));
-  assert.equal(calls.gpsCheck, 1, "After logout, app resume must not obtain GPS");
-  assert.equal(calls.geofence, 1, "After logout, geofence activation must be blocked");
+  assert.equal(calls.gpsCheck, 1, "No location call before the logout reload");
+  assert.equal(calls.geofence, 1, "No geofence call before the logout reload");
   console.log("PASS: immutable Android runtime cannot prompt GPS or push before Firebase login.");
 })().catch(error => { console.error(error); process.exitCode = 1; });

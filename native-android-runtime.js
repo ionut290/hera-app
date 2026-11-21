@@ -86,17 +86,6 @@
   );
   if (!nativeAndroid) return;
 
-  // Enforce authentication at the actual call sites. Capacitor.Plugins may
-  // expose immutable native proxies, so a separate wrapper cannot reliably
-  // intercept every permission request before the login gate has completed.
-  function authenticatedUid() {
-    try {
-      return String(window.firebase?.auth?.().currentUser?.uid || "");
-    } catch (_) {
-      return "";
-    }
-  }
-
   const plugin = (name) => window.Capacitor.Plugins?.[name]
     || window.Capacitor.registerPlugin?.(name)
     || null;
@@ -133,7 +122,7 @@
   }
 
   async function refreshNativeLocation() {
-    if (!authenticatedUid() || !Geolocation) return null;
+    if (!Geolocation) return null;
     try {
       let permission = await Geolocation.checkPermissions();
       if (permission.location !== "granted" && permission.coarseLocation !== "granted") {
@@ -264,7 +253,7 @@
   }
 
   async function configureNotificationsOnce() {
-    if (!authenticatedUid() || !PushNotifications) return;
+    if (!PushNotifications) return;
     try {
       await PushNotifications.removeAllListeners();
       await PushNotifications.addListener("registration", ({ value }) => saveNativePushToken(value));
@@ -310,7 +299,7 @@
   }
 
   async function configureBackgroundLocation() {
-    if (!authenticatedUid() || !HeraGeofence) return false;
+    if (!HeraGeofence) return false;
     try {
       const status = await HeraGeofence.activate();
       if (status?.needsBackgroundSettings) {
@@ -349,13 +338,9 @@
   const start = () => {
     loadAndroidWhazzupPhotoOrderFix();
     persistPushTokenAfterLogin();
-    // The existing prelogin gate runs the permission sequence on a NEW login.
-    // Only resume it here when Firebase already has an authenticated session.
-    // Never display a location/notification dialog on the login screen.
-    if (!authenticatedUid()) return;
-    void refreshNativeLocation();
-    void configureBackgroundLocation();
-    void configureNotificationsOnce();
+    refreshNativeLocation();
+    configureBackgroundLocation();
+    configureNotificationsOnce();
   };
 
   if (document.readyState === "loading") {

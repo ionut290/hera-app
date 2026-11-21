@@ -148,11 +148,13 @@ function harness(options = {}) {
       return { credential: {
         idToken: "synthetic-apple-jwt",
         nonce: "synthetic-raw-nonce",
-        authorizationCode: "synthetic-authorization-code"
+        authorizationCode: "synthetic-authorization-code",
+        accessToken: "synthetic-apple-access-token"
       } };
     },
     async revokeAccessToken({ token }) {
-      assert.equal(token, "synthetic-authorization-code");
+      assert.equal(token, options.platform === "android"
+        ? "synthetic-apple-access-token" : "synthetic-authorization-code");
       calls.push(["revoke"]);
       if (options.revokeFails) throw Error("Synthetic Apple revocation failure");
       revoked++;
@@ -357,7 +359,7 @@ function deferred() {
 
   // Do not silently delete an Apple-linked Firebase account on platforms
   // without a working Apple OAuth revocation flow.
-  for (const platform of ["web", "android"]) {
+  for (const platform of ["web"]) {
     h = harness({ platform, appleUser: true });
     await clickDelete(h);
     assert.equal(h.controls.checked, 1, "Preflight must still run first");
@@ -366,13 +368,45 @@ function deferred() {
     assert.equal(h.controls.signedOut, false);
     assert.equal(h.controls.reloaded, false);
     assert.ok(h.alerts.some((value) =>
-      value.includes("solo nell'app iPhone") &&
+      value.includes("non è ancora disponibile nel browser") &&
       value.includes("Nessun account è stato eliminato")
     ));
     // Failed attempt should release the lock and remain non-destructive.
     await clickDelete(h);
     assert.equal(h.controls.checked, 2);
     assert.equal(h.controls.deleted, false);
+  }
+
+  // Android uses the OAuth access token rather than the iOS authorization code.
+  // The flow is enabled, but still aborts for missing or unrevokable tokens.
+  h = harness({ platform: "android", appleUser: true });
+  await clickDelete(h);
+  assert.equal(h.controls.checked, 1);
+  assert.equal(h.controls.appleSignIns, 1);
+  assert.equal(h.controls.revoked, 1);
+  assert.equal(h.controls.deleted, true);
+  assert.deepEqual(h.calls.filter(c => ["reauth", "revoke"].includes(c[0])).map(c => c[0]),
+    ["reauth", "revoke"], "Android must reauth before revocation");
+
+  // Android must NOT fall back to an iOS authorization code if the OAuth
+  // access token is absent: no revocation and no account deletion.
+  h = harness({ platform: "android", appleUser: true,
+    appleResponse: () => ({ credential: {
+      idToken: "synthetic", nonce: "synthetic-raw-nonce",
+      authorizationCode: "synthetic-authorization-code"
+    } }) });
+  await clickDelete(h);
+  assert.equal(h.controls.revoked, 0);
+  assert.equal(h.controls.deleted, false);
+  assert.ok(h.alerts.some(msg => msg.includes("L'account non è stato eliminato")));
+
+  // Failed Firebase reauth or native revocation must block account deletion.
+  for (const failure of [{ reauthFails: true }, { revokeFails: true }]) {
+    h = harness({ platform: "android", appleUser: true, ...failure });
+    await clickDelete(h);
+    assert.equal(h.controls.revoked, 0);
+    assert.equal(h.controls.deleted, false);
+    assert.equal(h.controls.signedOut, false);
   }
 
   // Normal non-Apple users retain the existing deletion flow on the web.

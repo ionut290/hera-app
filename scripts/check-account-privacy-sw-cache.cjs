@@ -14,10 +14,14 @@ const privacyScript = fs.readFileSync(path.join(root, "account-privacy-controls.
 
 const matches = [...index.matchAll(/<script\s+src="account-privacy-controls\.js\?v=([^"]+)"><\/script>/g)];
 assert.equal(matches.length, 1, "Require exactly one versioned privacy client script");
-assert.equal(matches[0][1], "20261121-apple-crossplatform1",
+assert.equal(matches[0][1], "20261121-apple-android-revoke1",
   "Update the privacy script revision when its revocation logic changes");
-assert.match(privacyScript, /appleLinked && nativePlatform\(\) !== "ios"/,
-  "Fail-closed Apple revocation protection must remain in the shipped script");
+assert.match(privacyScript, /appleLinked && platform !== "ios" && platform !== "android"/,
+  "Web Apple account deletion must remain blocked until secure web revocation is implemented");
+assert.match(privacyScript, /platform === "android"[\s\S]{0,120}fresh\?\.credential\?\.accessToken/,
+  "Android revocation must use the Apple OAuth access token");
+assert.match(privacyScript, /fresh\?\.credential\?\.authorizationCode/,
+  "iOS must continue using an Apple authorization code");
 assert.match(privacyScript, /appleAuthorizationRevoked = true/,
   "Partial Apple grant revocation must be distinguishable from backend deletion");
 assert.match(source, /"\/account-privacy-controls\.js",/,
@@ -88,7 +92,7 @@ async function perform(url) {
   return promise;
 }
 (async () => {
-  const url = "https://pwa.invalid/account-privacy-controls.js?v=20261121-apple-crossplatform1";
+  const url = "https://pwa.invalid/account-privacy-controls.js?v=20261121-apple-android-revoke1";
   assert.equal((await perform(url)).revision, "online-v1");
   assert.equal(cached.get(url).revision, "online-v1");
 

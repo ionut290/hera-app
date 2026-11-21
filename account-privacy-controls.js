@@ -124,19 +124,23 @@
       return;
     }
     // Apple-linked identities require Apple OAuth token revocation before
-    // account deletion. This client currently implements that flow only via
-    // the iOS Capacitor plugin. The web and Android paths must fail CLOSED;
-    // they cannot silently remove Firebase Auth while leaving Apple's grant.
-    // The web-specific path needs a separate, tested Firebase modular
-    // revokeAccessToken implementation before being enabled.
+    // account deletion. Android's native SDK accepts an OAuth access token,
+    // while iOS uses an Apple authorization code. Keep Android FAIL CLOSED
+    // until the complete flow has been verified on a physical Android device.
+    // Web revocation is not implemented and must remain blocked.
     const appleLinked = user.providerData?.some((provider) => provider.providerId === "apple.com");
-    if (appleLinked && nativePlatform() !== "ios") {
+    const platform = nativePlatform();
+    const androidAppleRevocationVerified =
+      window.__VARGA_ANDROID_APPLE_REVOCATION_VERIFIED === true;
+    if (appleLinked && platform !== "ios" &&
+        !(platform === "android" && androidAppleRevocationVerified)) {
       alert("L'eliminazione di un account collegato ad Apple è attualmente disponibile solo nell'app iPhone con revoca Apple verificata. Nessun account è stato eliminato. Per assistenza contatta il responsabile.");
       deleting = false;
       return;
     }
-    // Request a fresh Apple code, reauthenticate the same Firebase account,
-    // then revoke through the native plugin before deleting the Firebase user.
+    // Reauthenticate the same Firebase account before revoking Apple's grant.
+    // iOS revokes a fresh authorization code; Android uses the OAuth access
+    // token from the native sign-in result. Never fall back between token types.
     if (appleLinked) {
       const plugin = window.Capacitor?.Plugins?.FirebaseAuthentication;
       if (!plugin || typeof plugin.signInWithApple !== "function" ||
@@ -151,13 +155,15 @@
           const appleProvider = new firebase.auth.OAuthProvider("apple.com");
           const idToken = fresh?.credential?.idToken;
           const rawNonce = fresh?.credential?.nonce;
-          const code = fresh?.credential?.authorizationCode;
-          if (!idToken || !rawNonce || !code || typeof plugin.revokeAccessToken !== "function") {
-            throw new Error("Impossibile ottenere le credenziali per la revoca dell'accesso Apple.");
+          const token = platform === "android"
+            ? fresh?.credential?.accessToken
+            : fresh?.credential?.authorizationCode;
+          if (!idToken || !rawNonce || !token) {
+            throw new Error("Impossibile ottenere il token Apple necessario per la revoca su questo dispositivo.");
           }
           const credential = appleProvider.credential({ idToken, rawNonce });
           await user.reauthenticateWithCredential(credential);
-          await plugin.revokeAccessToken({ token: code });
+          await plugin.revokeAccessToken({ token });
           appleAuthorizationRevoked = true;
         } catch (error) {
           alert("Verifica Apple non riuscita: " + errorText(error) +

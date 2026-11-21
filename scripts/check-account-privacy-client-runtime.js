@@ -148,11 +148,13 @@ function harness(options = {}) {
       return { credential: {
         idToken: "synthetic-apple-jwt",
         nonce: "synthetic-raw-nonce",
-        authorizationCode: "synthetic-authorization-code"
+        authorizationCode: "synthetic-authorization-code",
+        accessToken: "synthetic-apple-access-token"
       } };
     },
     async revokeAccessToken({ token }) {
-      assert.equal(token, "synthetic-authorization-code");
+      assert.equal(token, options.platform === "android"
+        ? "synthetic-apple-access-token" : "synthetic-authorization-code");
       calls.push(["revoke"]);
       if (options.revokeFails) throw Error("Synthetic Apple revocation failure");
       revoked++;
@@ -161,6 +163,7 @@ function harness(options = {}) {
   };
   const window = {
     __VARGA_ACCOUNT_DELETION_ENABLED: options.deletionEnabled !== false,
+    __VARGA_ANDROID_APPLE_REVOCATION_VERIFIED: options.androidRevocationVerified === true,
     __VARGA_ACCOUNT_DELETION_REQUEST_ENABLED: options.requestEnabled === true,
     __VARGA_ACCOUNT_DELETION_REQUEST_SLA_DAYS: options.requestSlaDays,
     firebase,
@@ -373,6 +376,39 @@ function deferred() {
     await clickDelete(h);
     assert.equal(h.controls.checked, 2);
     assert.equal(h.controls.deleted, false);
+  }
+
+  // Android Apple revocation is staged and remains disabled in production.
+  // This verifies the fail-closed path and its distinct OAuth token type.
+  h = harness({ platform: "android", appleUser: true, androidRevocationVerified: true });
+  await clickDelete(h);
+  assert.equal(h.controls.checked, 1);
+  assert.equal(h.controls.appleSignIns, 1);
+  assert.equal(h.controls.revoked, 1);
+  assert.equal(h.controls.deleted, true);
+  assert.deepEqual(h.calls.filter(c => ["reauth", "revoke"].includes(c[0])).map(c => c[0]),
+    ["reauth", "revoke"], "Android must reauth before revocation");
+
+  // Android must NOT fall back to an iOS authorization code if the OAuth
+  // access token is absent: no revocation and no account deletion.
+  h = harness({ platform: "android", appleUser: true, androidRevocationVerified: true,
+    appleResponse: () => ({ credential: {
+      idToken: "synthetic", nonce: "synthetic-raw-nonce",
+      authorizationCode: "synthetic-authorization-code"
+    } }) });
+  await clickDelete(h);
+  assert.equal(h.controls.revoked, 0);
+  assert.equal(h.controls.deleted, false);
+  assert.ok(h.alerts.some(msg => msg.includes("L'account non è stato eliminato")));
+
+  // Failed Firebase reauth or native revocation must block account deletion.
+  for (const failure of [{ reauthFails: true }, { revokeFails: true }]) {
+    h = harness({ platform: "android", appleUser: true,
+      androidRevocationVerified: true, ...failure });
+    await clickDelete(h);
+    assert.equal(h.controls.revoked, 0);
+    assert.equal(h.controls.deleted, false);
+    assert.equal(h.controls.signedOut, false);
   }
 
   // Normal non-Apple users retain the existing deletion flow on the web.

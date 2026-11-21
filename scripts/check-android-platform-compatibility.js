@@ -29,7 +29,7 @@ for (const required of [
   "protectWebContentFromAndroidSystemNavigation();",
   "findViewById(android.R.id.content)",
   "ViewCompat.setOnApplyWindowInsetsListener(contentRoot",
-  "WindowInsetsCompat.Type.navigationBars()",
+  "WindowInsetsCompat.Type.systemBars()",
   "WindowInsetsCompat.Type.displayCutout()",
   "windowInsets.getInsets(safeTypes)",
   "view.setPadding(left, top, right, bottom)",

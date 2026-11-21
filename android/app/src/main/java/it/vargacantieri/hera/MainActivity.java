@@ -113,7 +113,7 @@ public class MainActivity extends BridgeActivity {
         final int initialBottom = contentRoot.getPaddingBottom();
 
         ViewCompat.setOnApplyWindowInsetsListener(contentRoot, (view, windowInsets) -> {
-            int safeTypes = WindowInsetsCompat.Type.navigationBars()
+            int safeTypes = WindowInsetsCompat.Type.systemBars()
                 | WindowInsetsCompat.Type.displayCutout();
             Insets safe = windowInsets.getInsets(safeTypes);
 

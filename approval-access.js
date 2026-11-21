@@ -305,9 +305,13 @@
     try {
       let adminEmailSent = false;
       if (PENDING.has(statusOf(profile))) {
-        const callable = firebase.app().functions(REGION).httpsCallable("requestUserAccess");
-        const response = await callable({});
-        adminEmailSent = response?.data?.notificationSent === true;
+        try {
+          const callable = firebase.app().functions(REGION).httpsCallable("requestUserAccess");
+          const response = await callable({});
+          adminEmailSent = response?.data?.notificationSent === true;
+        } catch (_) {
+          console.warn("Email all’amministratore non confermata; mantengo la richiesta WhatsApp.");
+        }
       }
       window.open(`https://wa.me/${PHONE}?text=${encodeURIComponent(whatsappText())}`, "_blank", "noopener,noreferrer");
       el("access-approval-feedback").textContent = adminEmailSent

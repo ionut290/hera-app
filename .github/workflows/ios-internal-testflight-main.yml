@@ -235,6 +235,13 @@ jobs:
           # Re-sync after the opt-in files are added so the internal iOS
           # archive actually contains the demo-only UI.
           npx cap sync ios
+      - name: Configure native iOS capabilities for every candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          # These are required for the public candidate as well as internal
+          # TestFlight: Apple Sign-In must work and controls must stay below
+          # the iPhone camera/notch safe area.
           python3 scripts/mark-ios-native-safe-area.py
           ruby scripts/install-ios-native-geofence.rb
           ruby scripts/install-ios-apple-signin.rb

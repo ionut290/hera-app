@@ -368,7 +368,7 @@ function deferred() {
     assert.equal(h.controls.signedOut, false);
     assert.equal(h.controls.reloaded, false);
     assert.ok(h.alerts.some((value) =>
-      value.includes("solo nell'app iPhone") &&
+      value.includes("non è ancora disponibile nel browser") &&
       value.includes("Nessun account è stato eliminato")
     ));
     // Failed attempt should release the lock and remain non-destructive.

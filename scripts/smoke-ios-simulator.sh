@@ -3,14 +3,17 @@
 # Never configures signing, production access, app distribution or real credentials.
 set -euo pipefail
 
-if [[ "$#" -ne 2 ]]; then
-  echo "Uso: bash scripts/smoke-ios-simulator.sh /percorso/App.app /percorso/screenshot.png" >&2
+if [[ "$#" -lt 2 || "$#" -gt 3 ]]; then
+  echo "Uso: bash scripts/smoke-ios-simulator.sh /percorso/App.app /percorso/screenshot.png [iPhone|iPad]" >&2
   exit 2
 fi
 
 APP_PATH="$1"
 SCREENSHOT_PATH="$2"
 BUNDLE_ID="it.vargacantieri.hera"
+DEVICE_FAMILY="${3:-iPhone}"
+case "$DEVICE_FAMILY" in iPhone|iPad) ;; *) echo "Device family not supported: $DEVICE_FAMILY" >&2; exit 2 ;; esac
+export DEVICE_FAMILY
 
 if [[ ! -d "$APP_PATH" ]] || [[ ! -s "$APP_PATH/Info.plist" ]]; then
   echo "App iOS per il simulatore mancante: $APP_PATH" >&2
@@ -25,14 +28,15 @@ fi
 
 # An existing available iPhone simulator is supplied by the macOS hosted runner.
 SIMULATOR_UDID="$(xcrun simctl list devices available -j | python3 -c '
-import json, sys
+import json, os, sys
 data = json.load(sys.stdin)
+family = os.environ.get("DEVICE_FAMILY", "iPhone")
 for devices in data["devices"].values():
     for device in devices:
-        if device.get("name", "").startswith("iPhone") and device.get("isAvailable", True):
+        if device.get("name", "").startswith(family) and device.get("isAvailable", True):
             print(device["udid"])
             sys.exit(0)
-sys.exit("Nessun simulatore iPhone disponibile")
+sys.exit("Nessun simulatore " + family + " disponibile")
 ')"
 
 if [[ -z "$SIMULATOR_UDID" ]]; then
@@ -40,7 +44,7 @@ if [[ -z "$SIMULATOR_UDID" ]]; then
   exit 1
 fi
 
-echo "Simulatore selezionato: $SIMULATOR_UDID"
+echo "Simulatore $DEVICE_FAMILY selezionato: $SIMULATOR_UDID"
 if ! xcrun simctl list devices booted | grep -Fq "$SIMULATOR_UDID"; then
   xcrun simctl boot "$SIMULATOR_UDID"
 fi

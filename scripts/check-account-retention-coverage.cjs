@@ -57,15 +57,23 @@ const unresolved = Object.freeze([
   "Operational files and thumbnails retained on shared references require review",
   "Legacy aliases, free-text identity, chat and historical exports not fully verified",
   "Google Drive copies, backups, off-platform email and third-party recipients unverified",
-  "Ordinary-account deletion remains disabled; demo-only canary is not general release",
+  "Ordinary-account deletion is deployed for authenticated users; verify legacy data, retained business records, and disposable account end-to-end",
   "Apple reauthorization/revocation and deletion not fully verified on physical iPhone"
 ]);
 
 function audit() {
-  assert.ok(deletion.includes("const DEMO_ONLY_RELEASE = true;"),
-    "Do not claim review complete or enable ordinary deletion from this inventory");
-  assert.ok(deletion.includes('auth.token?.appReviewDemo !== true || auth.token?.apple_review !== true'),
-    "Demo-only server authorization gate unexpectedly changed");
+  // Track the actual released feature without treating this static inventory
+  // as legal sign-off or proof of complete erasure of off-platform copies.
+  assert.ok(deletion.includes("const DEMO_ONLY_RELEASE = false;"),
+    "General deletion release mode changed; re-review inventory");
+  assert.ok(deletion.includes("const uid = auth && auth.uid;"),
+    "Account deletion must be scoped to the authenticated UID");
+  assert.ok(deletion.includes("const MAX_AUTH_AGE_SECONDS = 600;"),
+    "Recent authentication gate changed; re-review inventory");
+  assert.ok(deletion.includes("ownAuthRecord.uid !== uid || ownAuthRecord.disabled === true"),
+    "Live Firebase Auth record verification changed; re-review inventory");
+  assert.ok(deletion.includes('keys.every(key => key === "confirmation" || key === "mode")'),
+    "Deletion request payload allow-list changed; re-review inventory");
   assert.ok(deletion.includes("await admin.auth().deleteUser(uid);"),
     "Auth deletion last-step assumption changed; re-review inventory");
   assert.ok(deletion.includes('if (request.data?.mode === "preflight")'),
@@ -122,7 +130,7 @@ function audit() {
     },
     unresolved,
     productionMutation: false,
-    ordinaryDeletionEnabled: false
+    ordinaryDeletionEnabled: true
   };
   assert.equal(report.reviewStatus.startsWith("BLOCKED"), true);
   assert.ok(unresolved.length >= 7);

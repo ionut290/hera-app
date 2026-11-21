@@ -54,11 +54,13 @@ jobs:
             grep -Fq "$gate" .github/workflows/deploy-account-deletion-protected.yml || { echo "Missing release gate: $gate"; exit 1; }
           done
           echo "Protected deployment checks are present"
-          # A new production callable is DEMO-ONLY until a separate privacy-reviewed release.
-          grep -Fxq 'const DEMO_ONLY_RELEASE = true;' functions/account-deletion.js
-          grep -Fq 'auth.token?.appReviewDemo !== true || auth.token?.apple_review !== true' functions/account-deletion.js
-          grep -Fq 'ownAuthRecord.customClaims?.appReviewDemo !== true' functions/account-deletion.js
-          grep -Fq 'APPROVED_DEMO_EMAIL_SHA256' functions/account-deletion.js
+          # The separately approved production release now supports all authenticated
+          # users. Preserve the identity-scoping and session-safety invariants.
+          grep -Fxq 'const DEMO_ONLY_RELEASE = false;' functions/account-deletion.js
+          grep -Fq 'const uid = auth && auth.uid;' functions/account-deletion.js
+          grep -Fq 'const MAX_AUTH_AGE_SECONDS = 600;' functions/account-deletion.js
+          grep -Fq 'ownAuthRecord.uid !== uid || ownAuthRecord.disabled === true' functions/account-deletion.js
+          grep -Fq 'await admin.auth().deleteUser(uid);' functions/account-deletion.js
           for gate in 'APPROVE_DEMO_CANARY_ONLY' 'required_reviewers' 'firebase-account-deletion-production' 'functions:deleteOwnVargaAccount'; do
             grep -Fq "$gate" .github/workflows/deploy-account-deletion-demo-canary.yml || {
               echo "Missing demo-only canary gate: $gate"; exit 1;

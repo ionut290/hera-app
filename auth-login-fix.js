@@ -521,7 +521,7 @@
     const webGoogleEnabled = !nativeAndroid;
     document.documentElement.classList.toggle("android-email-password-only", nativeAndroid);
     const message = document.getElementById("auth-gate-message");
-    if (message) message.textContent = nativeAndroid ? "Accedi con la tua email e password." : "Accedi con Google oppure con la tua email e password.";
+    if (message) message.textContent = nativeAndroid ? "Accedi con la tua email e password." : "Accedi con Google, Apple oppure con la tua email e password.";
     const emailLoginButton = document.getElementById("auth-email-login-btn");
     if (emailLoginButton) emailLoginButton.textContent = nativeAndroid ? "Accedi" : "Entra";
     const googleLoginButton = document.getElementById("auth-gate-login-btn");

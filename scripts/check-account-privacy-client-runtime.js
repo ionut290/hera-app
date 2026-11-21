@@ -19,6 +19,7 @@ function harness(options = {}) {
   let deleted = false;
   let signedOut = false;
   let appleSignIns = 0;
+  let webAppleSignIns = 0;
   let revoked = 0;
   let checked = 0;
   let signedIn = 0;
@@ -83,7 +84,13 @@ function harness(options = {}) {
   const authInstance = {
     currentUser: user,
     async signInWithCredential(credential) { signedIn++; calls.push(["firebaseAppleLogin", credential]); },
-    async signInWithPopup() { throw Error("Unexpected web popup"); },
+    async signInWithPopup(provider) {
+      assert.ok(provider instanceof auth.OAuthProvider);
+      webAppleSignIns++;
+      calls.push(["webApplePopup"]);
+      if (options.webPopupError) throw options.webPopupError;
+      return { user };
+    },
     async signOut() { signedOut = true; }
   };
   function auth() { return authInstance; }
@@ -179,6 +186,7 @@ function harness(options = {}) {
       get signedOut() { return signedOut; },
       get reloaded() { return reloaded; },
       get appleSignIns() { return appleSignIns; },
+      get webAppleSignIns() { return webAppleSignIns; },
       get revoked() { return revoked; },
       get signedIn() { return signedIn; },
       get requested() { return requested; },
@@ -202,6 +210,20 @@ function deferred() {
   assert.ok(h.elements.has("auth-apple-login-btn"), "Sign in with Apple must remain available");
   assert.equal(h.elements.has("varga-account-delete-menu"), false, "Deletion hidden until backend release");
   assert.equal(h.elements.has("varga-account-delete-profile"), false, "Profile deletion hidden until backend release");
+  // A clear, non-destructive information entry remains visible to the user.
+  assert.ok(h.elements.has("varga-deletion-info-profile"), "Hidden backend must not hide all privacy information");
+  assert.ok(h.elements.has("varga-deletion-info-menu"), "Deletion status must be discoverable in normal menu");
+  assert.ok(h.elements.has("varga-deletion-info-pending"), "Pending users must see deletion status");
+  assert.ok(h.elements.has("varga-deletion-info-gate"), "New users must see deletion status at login gate");
+  assert.equal(h.elements.get("varga-deletion-info-menu").href, "./delete-account.html",
+    "Account-deletion information must link to the existing public support guide");
+  assert.equal(h.alerts.length, 0,
+    "Information-only link must not pretend a deletion request was sent");
+  assert.equal(h.controls.checked, 0);
+  assert.equal(h.controls.requested, 0);
+  assert.equal(h.controls.deleted, false);
+  assert.equal(h.controls.appleSignIns, 0);
+  assert.equal(h.controls.signedOut, false);
   // Request intake is opt-in only; no ghost UI before backend deployment.
   // An unapproved, absent, malformed or out-of-range SLA must hide the request/status UI.
   for (const invalidDays of [undefined, null, 0, -1, 1.5, 91, "14", Infinity]) {
@@ -217,6 +239,8 @@ function deferred() {
   h = harness({ platform: "ios", deletionEnabled: false, requestEnabled: true, requestSlaDays: 14,
     typedConfirmation: "RICHIEDO" });
   assert.ok(h.elements.has("varga-deletion-request-menu"));
+  assert.equal(h.elements.has("varga-deletion-info-menu"), false,
+    "Information-only fallback must disappear once approved request backend is available");
   assert.equal(h.elements.has("varga-account-delete-menu"), false);
   await h.elements.get("varga-deletion-request-menu").click();
   assert.equal(h.controls.requested, 1);
@@ -246,6 +270,7 @@ function deferred() {
   await h.elements.get("varga-deletion-request-menu").click();
   assert.equal(h.controls.requested, 0);
   h = harness({ platform: "ios", deletionEnabled: true, requestEnabled: true, requestSlaDays: 14 });
+  assert.equal(h.elements.has("varga-deletion-info-menu"), false);
   assert.equal(h.elements.has("varga-deletion-request-menu"), false);
 
   // A status check uses the verified caller, never creates another request.
@@ -313,7 +338,19 @@ function deferred() {
   assert.equal(credential.rawNonce, "synthetic-raw-nonce");
 
   h = harness({ platform: "web" });
-  assert.equal(h.elements.has("auth-apple-login-btn"), false);
+  assert.ok(h.elements.has("auth-apple-login-btn"), "Apple OAuth button must be visible on web");
+  await h.elements.get("auth-apple-login-btn").click();
+  assert.equal(h.controls.webAppleSignIns, 1, "Web must use Firebase Apple OAuth popup");
+  assert.equal(h.controls.appleSignIns, 0, "Web must never invoke native iOS Apple plugin");
+  assert.deepEqual(h.calls.filter(x=>x[0]==="webApplePopup").map(x=>x[0]), ["webApplePopup"]);
+  h = harness({ platform: "android", deletionEnabled: false });
+  assert.equal(h.elements.has("auth-apple-login-btn"), false,
+    "Native Android remains email/password only");
+  h = harness({ platform: "web", deletionEnabled: false,
+    webPopupError: {code:"auth/unauthorized-domain"} });
+  await h.elements.get("auth-apple-login-btn").click();
+  assert.ok(h.alerts.some(msg=>msg.includes("dominio") && msg.includes("Firebase")),
+    "Unauthorized web domain must be explained without exposing internals");
 
   // Do not silently delete an Apple-linked Firebase account on platforms
   // without a working Apple OAuth revocation flow.

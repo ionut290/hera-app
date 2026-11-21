@@ -116,7 +116,7 @@ function make({platform="ios",plugin=true,idToken="synthetic-id-token",nativeErr
 
   const missing=make({plugin:false});
   await missing.click();
-  assert.match(missing.alerts.at(-1),/Plugin Google non disponibile nell'app iPhone/);
+  assert.match(missing.alerts.at(-1),/Plugin Google non disponibile nell'app nativa/);
   assert.ok(!missing.calls.includes("native-google"));
   assert.equal(missing.calls.filter(x=>Array.isArray(x)&&x[0]==="web-popup").length,0);
 

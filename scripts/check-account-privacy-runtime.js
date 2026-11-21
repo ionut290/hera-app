@@ -183,7 +183,7 @@ function setup(options = {}) {
       }
       throw new Error("Unexpected module: " + id);
     },
-    console: { error: () => {} },
+    console: { error: () => {}, warn: () => {} },
     Date
   };
   const code = fs.readFileSync(path.resolve(__dirname, "../functions/account-deletion.js"), "utf8");
@@ -210,34 +210,31 @@ async function rejectedCode(promise, expected) {
   }), "failed-precondition");
   assert.equal(state.removedUsers.length, 0);
 
-  // Canary must NEVER read or alter a real account, even for preflight.
-  for (const [claims, label] of [
-    [{}, "no claims"], [{ apple_review: true }, "one reviewer claim"],
-    [{ appReviewDemo: true }, "one demo claim"]
-  ]) {
-    state = setup();
-    await rejectedCode(state.handler({
-      auth: { uid: "worker-1", token: { auth_time: goodAuth.token.auth_time, ...claims } },
-      data: { confirmation: "ELIMINA", mode: "preflight" }
-    }), "permission-denied");
-    assert.deepEqual(state.removed, [], label + " deleted documents");
-    assert.deepEqual(state.removedUsers, [], label + " deleted Auth user");
-    assert.deepEqual(state.updated, [], label + " changed shared records");
-  }
-  state = setup();
-  await rejectedCode(state.handler({
-    auth: { uid: "worker-2", token: goodAuth.token },
-    data: { confirmation: "ELIMINA" }
-  }), "permission-denied");
-  assert.deepEqual(state.removedUsers, [], "second worker cannot be deleted");
-  assert.deepEqual(state.removed, [], "second worker data stays intact");
+  // Ordinary authenticated users may use the same self-service path; no
+  // reviewer claims or demo email allow-list are required. The operation is
+  // still scoped to the live Auth UID and personal data only.
   state = setup({ missingServerDemoClaim: true });
-  await rejectedCode(state.handler({ auth: goodAuth, data: { confirmation: "ELIMINA" } }),
-    "permission-denied");
-  assert.deepEqual(state.removedUsers, [], "server-side claims are required");
-  assert.deepEqual(state.removed, [], "no removal when server claims absent");
+  const ordinaryReady = await state.handler({
+    auth: { uid: "worker-1", token: { auth_time: goodAuth.token.auth_time } },
+    data: { confirmation: "ELIMINA", mode: "preflight" }
+  });
+  assert.equal(ordinaryReady.ready, true);
+  assert.equal(ordinaryReady.personalDocuments, 1);
+  assert.deepEqual(state.removedUsers, []);
+  assert.deepEqual(state.removedFiles, []);
+  assert.deepEqual(state.removed, []);
+  assert.deepEqual(state.updated, []);
 
-  // A demo claim or old signed token alone is never enough. The CURRENT
+  state = setup();
+  const secondWorkerReady = await state.handler({
+    auth: { uid: "worker-2", token: { auth_time: goodAuth.token.auth_time } },
+    data: { confirmation: "ELIMINA", mode: "preflight" }
+  });
+  assert.equal(secondWorkerReady.ready, true);
+  assert.equal(secondWorkerReady.personalDocuments, 1);
+  assert.deepEqual(state.removedUsers, []);
+
+  // An old signed token alone is never enough. The CURRENT
   // Firebase Auth user must be enabled and have the exact verified UID.
   // Reject even read-only preflight before touching business data.
   for (const [flag, label] of [
@@ -258,7 +255,7 @@ async function rejectedCode(promise, expected) {
   }
 
   // An unexpected user ID, storage path or action must be rejected, not
-  // merely ignored, even when the demo account is authorized.
+  // merely ignored, even when the authenticated account is authorized.
   for (const field of ["uid", "email", "storagePath", "action", "admin"]) {
     state = setup();
     await rejectedCode(state.handler({

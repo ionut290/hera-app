@@ -195,7 +195,7 @@
       ? "La tua richiesta di accesso non è stata approvata. Per maggiori informazioni contatta l’amministratore."
       : "Il tuo account è stato registrato correttamente, ma deve essere autorizzato da un amministratore. Premi il pulsante qui sotto per inviare la richiesta di accesso tramite WhatsApp.";
     el("access-approval-status").textContent = rejected ? (state === "bloccato" ? "Account bloccato" : "Accesso rifiutato") : "In attesa di approvazione";
-    el("access-request-whatsapp").textContent = rejected ? "CONTATTA L’AMMINISTRATORE SU WHATSAPP" : "RICHIEDI ACCESSO SU WHATSAPP";
+    el("access-request-whatsapp").textContent = rejected ? "CONTATTA L’AMMINISTRATORE SU WHATSAPP" : "RICHIEDI ACCESSO VIA EMAIL E WHATSAPP";
     el("access-check-approval").classList.toggle("hidden", rejected);
     if (profile) {
       el("access-approval-name").textContent = profile.nomeCompleto || profile.displayName || user?.displayName || "—";
@@ -318,7 +318,7 @@
       button.textContent = `RIPROVA TRA ${remaining}s`;
       cooldownTimer = setInterval(() => {
         remaining -= 1;
-        button.textContent = remaining > 0 ? `RIPROVA TRA ${remaining}s` : "RICHIEDI ACCESSO SU WHATSAPP";
+        button.textContent = remaining > 0 ? `RIPROVA TRA ${remaining}s` : "RICHIEDI ACCESSO VIA EMAIL E WHATSAPP";
         if (remaining <= 0) { clearInterval(cooldownTimer); button.disabled = false; }
       }, 1000);
     } catch (error) { show("error"); }

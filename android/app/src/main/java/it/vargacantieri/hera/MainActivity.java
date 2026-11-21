@@ -8,7 +8,11 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Window;
+import android.view.ViewGroup;
 import android.webkit.WebView;
+
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
 
 import androidx.activity.EdgeToEdge;
 import androidx.core.view.WindowCompat;
@@ -54,6 +58,7 @@ public class MainActivity extends BridgeActivity {
             getActionBar().hide();
         }
         hideAndroidStatusBar();
+        protectWebContentFromAndroidSystemNavigation();
         clearWebViewCacheAfterAppUpdate();
         applyTemporaryLoginDeepLink(getIntent());
     }
@@ -84,6 +89,52 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception ignored) {
             // La barra di stato non deve mai interferire con l'avvio dell'app.
         }
+    }
+
+    /**
+     * Android 15/16 enforce edge-to-edge when targeting modern SDKs. Our entire
+     * Capacitor UI (including all fixed bottom buttons, menus and modals) lives
+     * inside android.R.id.content. Protect that *native viewport*, rather than
+     * applying separate CSS offsets that cannot reliably cover every overlay.
+     *
+     * Insets change on rotation and between 3-button/gesture navigation. Apply
+     * them to the content root so WebView's 100dvh/fixed elements are constrained
+     * to the usable rectangle. Pass IME insets through for keyboard handling,
+     * but clear the system-bar/cutout types already applied by native padding
+     * to prevent double safe-area offsets inside WebView CSS.
+     */
+    private void protectWebContentFromAndroidSystemNavigation() {
+        final ViewGroup contentRoot = findViewById(android.R.id.content);
+        if (contentRoot == null) return;
+
+        final int initialLeft = contentRoot.getPaddingLeft();
+        final int initialTop = contentRoot.getPaddingTop();
+        final int initialRight = contentRoot.getPaddingRight();
+        final int initialBottom = contentRoot.getPaddingBottom();
+
+        ViewCompat.setOnApplyWindowInsetsListener(contentRoot, (view, windowInsets) -> {
+            int safeTypes = WindowInsetsCompat.Type.systemBars()
+                | WindowInsetsCompat.Type.displayCutout();
+            Insets safe = windowInsets.getInsets(safeTypes);
+
+            int left = initialLeft + safe.left;
+            int top = initialTop + safe.top;
+            int right = initialRight + safe.right;
+            int bottom = initialBottom + safe.bottom;
+            if (view.getPaddingLeft() != left || view.getPaddingTop() != top
+                    || view.getPaddingRight() != right || view.getPaddingBottom() != bottom) {
+                view.setPadding(left, top, right, bottom);
+            }
+
+            // Leave IME/keyboard insets untouched. WebView must not account for
+            // navigation/cutout insets again after this native viewport padding.
+            return new WindowInsetsCompat.Builder(windowInsets)
+                .setInsets(safeTypes, Insets.NONE)
+                .build();
+        });
+        // Dispatch again once the WebView is attached; later system inset
+        // changes (rotation/navigation mode/gesture bar) invoke the listener.
+        contentRoot.post(() -> ViewCompat.requestApplyInsets(contentRoot));
     }
 
     private void applyTemporaryLoginDeepLink(Intent intent) {

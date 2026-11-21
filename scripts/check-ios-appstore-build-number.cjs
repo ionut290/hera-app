@@ -8,8 +8,8 @@ const script = "scripts/check-ios-appstore-build-number.sh";
 const workflow = fs.readFileSync(".github/workflows/ios-appstore-candidate.yml", "utf8");
 const internal = fs.readFileSync(".github/workflows/ios-internal-testflight-main.yml", "utf8");
 assert.match(internal, /default: "20017"/);
-assert.match(internal, /TestFlight build 1\\.0 \\(20016\\)/);
-assert.equal((internal.match(/bash scripts\\/check-ios-appstore-build-number\\.sh "\\$IOS_BUILD_NUMBER"/g) || []).length, 2,
+assert.match(internal, /TestFlight build 1\.0 \(20016\)/);
+assert.equal((internal.match(/bash scripts\/check-ios-appstore-build-number\.sh "\$IOS_BUILD_NUMBER"/g) || []).length, 2,
   "Both stages of internal TestFlight must reject build reuse");
 assert.match(workflow, /default: "20017"/);
 assert.match(workflow, /TestFlight build 1\.0 \(20016\)/);

@@ -39,7 +39,7 @@ Riferimenti: issue [#1609](https://github.com/ionut290/hera-app/issues/1609), [#
 
 Il workflow `.github/workflows/ios-internal-testflight-main.yml` consente di preparare una build firmata del codice `main` per il **TestFlight interno**, anche quando l'audit per App Review pubblica rimane `BLOCKED`.
 
-1. Verificare la build numericamente più recente su App Store Connect. Al 20/11/2026 è `1.0 (20015)`; il prossimo valore *proposto*, se ancora libero, è `20016`.
+1. Verificare la build numericamente più recente su App Store Connect. **Aggiornamento 21/11/2026:** `1.0 (20016)` è già in Testing interno; il prossimo valore *proposto*, solo se ancora libero, è **`20017`**. Il workflow rifiuta i numeri ≤ 20016.
 2. Verificare i controlli CI del commit `main` e assicurarsi che nessun dato/utente reale sia esposto. Non sostituire il workflow pubblico o eliminare il suo gate.
 3. Da GitHub Actions > **Varga Cantieri internal TestFlight from reviewed main**, scegliere branch `main`, opzione `UPLOAD_INTERNAL_TESTFLIGHT_ONLY`, numero build non usato e SHA esatto del commit `main`.
 4. Il workflow verifica due volte l'identità `ionut290`, il primo tentativo e il SHA. Richiede configurazione Apple privata nel preesistente environment `ios-internal-testflight`; genera l'app con login Apple e Google, crea un archivio firmato e carica su **App Store Connect per TestFlight**, non in App Review.

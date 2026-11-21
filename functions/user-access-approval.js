@@ -96,7 +96,7 @@ function buildApprovalMessage({ userName, userEmail, administratorName }) {
     `L’amministratore ${administratorName} ha accettato la tua richiesta e ora puoi accedere all’app.`,
     "",
     "COME ACCEDERE",
-    `Email: ${userEmail}`,
+    `Email / Email address: ${userEmail}`,
     "Password: usa la password che hai scelto durante la registrazione.",
     "Per la tua sicurezza, non comunicare la password ad altre persone.",
     "",
@@ -271,6 +271,109 @@ async function sendApprovalEmail({ apiKey, from, to, message, requestId, userNam
     throw new Error(`Servizio email ${response.status}${detail ? `: ${detail}` : ""}`);
   }
 }
+
+async function sendAccessRequestEmail({ apiKey, from, requestId, userName, userEmail, uid }) {
+  const safeName = escapeHtml(cleanText(userName, 180) || "Nuovo utente");
+  const safeEmail = escapeHtml(cleanText(userEmail, 254));
+  const safeUid = escapeHtml(cleanText(uid, 160));
+  const html = `<!doctype html><html lang="it"><body style="font-family:Arial,sans-serif;color:#202124">
+    <h2>Nuova richiesta di accesso — ${APP_NAME}<br>New access request — ${APP_NAME}</h2>
+    <p><strong>${safeName}</strong> ha chiesto di accedere all’app.<br><strong>${safeName}</strong> has requested access to the app.</p>
+    <p>Email / Email address: <a href="mailto:${safeEmail}">${safeEmail}</a><br>ID account / Account ID: ${safeUid}</p>
+    <p>Apri l’app e approva manualmente la richiesta nella sezione utenti in attesa. L’account resta bloccato fino alla tua approvazione.<br>Open the app and manually approve this request in the pending users section. The account remains blocked until you approve it.</p>
+    <p><a href="${APP_URL}">${APP_URL}</a></p>
+  </body></html>`;
+  const response = await fetch(RESEND_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "User-Agent": "varga-cantieri-access-request/1.0",
+      "Idempotency-Key": `varga-access-request-${requestId}`
+    },
+    body: JSON.stringify({
+      from,
+      to: [BUILT_IN_ADMIN_EMAIL],
+      subject: `Richiesta di accesso / Access request: ${cleanText(userName, 100) || userEmail}`,
+      text: [
+        `Nuova richiesta di accesso a ${APP_NAME}. / New access request for ${APP_NAME}.`,
+        `Nome / Name: ${cleanText(userName, 180) || "Nuovo utente"}`,
+        `Email: ${userEmail}`,
+        `ID account / Account ID: ${uid}`,
+        "L’account resta bloccato fino alla tua approvazione. / The account stays blocked until you approve it.",
+        `Apri l’app / Open the app: ${APP_URL}`
+      ].join("\n"),
+      html
+    })
+  });
+  if (!response.ok) {
+    const detail = cleanText(await response.text().catch(() => ""), 500);
+    throw new Error(`Servizio email ${response.status}${detail ? `: ${detail}` : ""}`);
+  }
+}
+
+exports.requestUserAccess = functions
+  .region(REGION)
+  .runWith({ secrets: [RUNTIME_CONFIG] })
+  .https.onCall(async (_data, context) => {
+    assertNotAppleReviewer(context?.auth);
+    const uid = String(context.auth?.uid || "").trim();
+    if (!uid) throw new functions.https.HttpsError("unauthenticated", "Accedi e riprova.");
+    const db = admin.firestore();
+    const userRef = db.collection("platformUsers").doc(uid);
+    const snapshot = await userRef.get();
+    if (!snapshot.exists) throw new functions.https.HttpsError("not-found", "Profilo utente non trovato.");
+    const profile = snapshot.data() || {};
+    const status = cleanText(profile.statoAccount || profile.accountStatus, 40).toLowerCase();
+    if (!["in_attesa", "richiesta_inviata"].includes(status)) {
+      throw new functions.https.HttpsError("failed-precondition", "Questo account non è in attesa di approvazione.");
+    }
+    const userEmail = cleanText(context.auth.token?.email || profile.email, 254).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
+      throw new functions.https.HttpsError("failed-precondition", "L’account non ha un indirizzo email valido.");
+    }
+    const userName = cleanText(context.auth.token?.name || profile.nomeCompleto || profile.displayName, 180) || userEmail;
+    const requestId = crypto.randomUUID();
+    const lastSent = profile.adminAccessEmailSentAt?.toDate?.()?.getTime?.() || 0;
+    if (Date.now() - lastSent < 90_000) {
+      return { requested: true, notificationSent: true, cooldown: true };
+    }
+
+    await userRef.set({
+      statoAccount: "richiesta_inviata",
+      accountStatus: "richiesta_inviata",
+      richiestaAccessoAt: admin.firestore.FieldValue.serverTimestamp(),
+      accessRequestAt: admin.firestore.FieldValue.serverTimestamp(),
+      numeroRichieste: admin.firestore.FieldValue.increment(1),
+      requestCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    const { apiKey, from } = optionalEmailConfiguration();
+    if (!apiKey || !from) {
+      console.error("Email richiesta accesso non configurata in RUNTIME_CONFIG.");
+      return { requested: true, notificationSent: false, reason: "email_not_configured" };
+    }
+    try {
+      await sendAccessRequestEmail({ apiKey, from, requestId, userName, userEmail, uid });
+      await userRef.set({
+        adminAccessEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        adminAccessEmailStatus: "inviata",
+        adminAccessEmailRequestId: requestId
+      }, { merge: true });
+      return { requested: true, notificationSent: true };
+    } catch (error) {
+      await userRef.set({
+        adminAccessEmailStatus: "errore",
+        adminAccessEmailErrorAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      console.error("Email richiesta accesso amministratore non inviata.", {
+        uid,
+        message: cleanText(error?.message, 500)
+      });
+      return { requested: true, notificationSent: false, reason: "email_send_failed" };
+    }
+  });
 
 exports.approveUserAccess = functions
   .region(REGION)

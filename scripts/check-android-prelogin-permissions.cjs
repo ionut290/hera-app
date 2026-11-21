@@ -48,6 +48,10 @@ const vm = require("node:vm");
       async register() {}
     }
   };
+  // Keep references to real native methods: in production Capacitor may not
+  // allow replacement of its plugin proxy. The runtime itself must still be
+  // fail-closed even if the early proxy guard does not intercept anything.
+  const unwrappedPlugins = { ...nativePlugins };
   const auth = {
     get currentUser() { return currentUser; },
     onAuthStateChanged(callback) { authListeners.push(callback); }
@@ -68,6 +72,7 @@ const vm = require("node:vm");
     setTimeout, setInterval, clearInterval, CustomEvent: class {}
   };
   vm.runInNewContext(gate, context, {filename:"android-prelogin-permission-gate.js"});
+  Object.assign(nativePlugins, unwrappedPlugins); // Simulate immutable Capacitor native method proxies
   vm.runInNewContext(runtime, context, {filename:"native-android-runtime.js"});
   await new Promise(resolve => setTimeout(resolve, 20));
 
@@ -80,7 +85,10 @@ const vm = require("node:vm");
   await window.HeraNativeAndroid.configureBackgroundLocation();
   await window.HeraNativeAndroid.configureNotifications();
   assert.equal(calls.gpsCheck, 0);
+  assert.equal(calls.gpsPrompt, 0);
   assert.equal(calls.geofence, 0);
+  assert.equal(calls.pushCheck, 0);
+  assert.equal(calls.pushPrompt, 0);
 
   currentUser = { uid: "synthetic-uid" };
   authListeners.forEach(fn => fn(currentUser));

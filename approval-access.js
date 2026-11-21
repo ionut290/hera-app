@@ -303,16 +303,16 @@
     const button = el("access-request-whatsapp");
     if (button.disabled) return;
     try {
+      let adminEmailSent = false;
       if (PENDING.has(statusOf(profile))) {
-        await db.collection("platformUsers").doc(user.uid).update({
-          statoAccount: "richiesta_inviata", accountStatus: "richiesta_inviata",
-          richiestaWhatsappAt: serverTime(), whatsappRequestedAt: serverTime(),
-          ultimaRichiestaAt: serverTime(), lastRequestAt: serverTime(),
-          numeroRichieste: firebase.firestore.FieldValue.increment(1), requestCount: firebase.firestore.FieldValue.increment(1)
-        });
+        const callable = firebase.app().functions(REGION).httpsCallable("requestUserAccess");
+        const response = await callable({});
+        adminEmailSent = response?.data?.notificationSent === true;
       }
       window.open(`https://wa.me/${PHONE}?text=${encodeURIComponent(whatsappText())}`, "_blank", "noopener,noreferrer");
-      el("access-approval-feedback").textContent = "Richiesta preparata. Completa l’invio su WhatsApp.";
+      el("access-approval-feedback").textContent = adminEmailSent
+        ? "Richiesta inviata: ti abbiamo avvisato via email. Completa anche l’invio su WhatsApp. / Request sent: we emailed you. Please also complete the WhatsApp message."
+        : "Richiesta preparata. L’email all’amministratore non è stata confermata: completa l’invio su WhatsApp. / Request prepared. Admin email was not confirmed; please complete the WhatsApp message.";
       let remaining = WAIT_MS / 1000;
       button.disabled = true;
       button.textContent = `RIPROVA TRA ${remaining}s`;

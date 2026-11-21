@@ -163,4 +163,4 @@ if (
   throw new Error("Il workflow Android non include auth-login-fix.js.");
 }
 
-console.log("Login check passed: web keeps Google; Android remains email/password-only.");
+console.log("Login check passed: Web, Android and iOS share Google, Apple and email sign-in paths.");

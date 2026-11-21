@@ -1,0 +1,25 @@
+name: Check iOS App Review does not prompt for GPS before login
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - app.js
+      - scripts/check-ios-review-no-early-location.cjs
+      - .github/workflows/check-ios-review-no-early-location.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  login-gps-privacy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Fail when unauthenticated login opens the GPS permission dialog
+        run: |
+          set -euo pipefail
+          node --check app.js
+          node --check scripts/check-ios-review-no-early-location.cjs
+          node scripts/check-ios-review-no-early-location.cjs

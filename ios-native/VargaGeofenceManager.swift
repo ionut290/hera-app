@@ -40,6 +40,12 @@ final class VargaGeofenceManager: NSObject, CLLocationManagerDelegate {
         _ = locationManager
         if let settings = readSettings(), settings.enabled {
             reconcileMonitoring(settings)
+            // A background relaunch may occur while the phone is already inside.
+            // Ask iOS for the current region state instead of relying only on
+            // a new boundary crossing.
+            for region in locationManager.monitoredRegions where region.identifier == regionID {
+                locationManager.requestState(for: region)
+            }
         }
     }
 
@@ -161,6 +167,19 @@ final class VargaGeofenceManager: NSObject, CLLocationManagerDelegate {
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         if let settings = readSettings() { reconcileMonitoring(settings) }
         else { stopOurRegion() }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didStartMonitoringFor region: CLRegion) {
+        guard region.identifier == regionID else { return }
+        // Newly enabled monitoring does not guarantee an entry callback if
+        // the device was already inside when monitoring started.
+        manager.requestState(for: region)
+    }
+
+    func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
+        guard region.identifier == regionID, state == .inside else { return }
+        // Reuse the identical weekday/window/deduplication checks.
+        locationManager(manager, didEnterRegion: region)
     }
 
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {

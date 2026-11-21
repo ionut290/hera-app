@@ -57,6 +57,24 @@ async function reviewer(request) {
       live.customClaims?.admin !== true) {
     throw new HttpsError("permission-denied", "Autorizzazione di revisione revocata.");
   }
+
+  // A valid signed token can still circulate after an administrator revokes
+  // refresh tokens (or the account password changes). Authorization must
+  // check the live Firebase Auth revocation timestamp, not just custom claims.
+  // Admin SDK omits tokensValidAfterTime on accounts never revoked.
+  const validSinceText = live.tokensValidAfterTime;
+  if (validSinceText != null) {
+    const validSince = typeof validSinceText === "string"
+      ? Date.parse(validSinceText) : NaN;
+    if (!Number.isFinite(validSince)) {
+      throw new HttpsError("permission-denied",
+        "Verifica revoca autorizzazione non disponibile.");
+    }
+    if (authTime * 1000 < validSince) {
+      throw new HttpsError("permission-denied",
+        "Sessione operatore revocata. Accedi nuovamente.");
+    }
+  }
   return uid;
 }
 

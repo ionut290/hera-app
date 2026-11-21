@@ -123,18 +123,14 @@
       deleting = false;
       return;
     }
-    // Apple-linked identities require Apple OAuth token revocation before
-    // account deletion. Android's native SDK accepts an OAuth access token,
-    // while iOS uses an Apple authorization code. Keep Android FAIL CLOSED
-    // until the complete flow has been verified on a physical Android device.
-    // Web revocation is not implemented and must remain blocked.
+    // Apple-linked identities require Apple OAuth revocation before account
+    // deletion. The Android SDK revokes the returned OAuth access token,
+    // while iOS revokes a fresh Apple authorization code. On both platforms
+    // failure or missing token blocks deletion. Web remains fail-closed.
     const appleLinked = user.providerData?.some((provider) => provider.providerId === "apple.com");
     const platform = nativePlatform();
-    const androidAppleRevocationVerified =
-      window.__VARGA_ANDROID_APPLE_REVOCATION_VERIFIED === true;
-    if (appleLinked && platform !== "ios" &&
-        !(platform === "android" && androidAppleRevocationVerified)) {
-      alert("L'eliminazione di un account collegato ad Apple è attualmente disponibile solo nell'app iPhone con revoca Apple verificata. Nessun account è stato eliminato. Per assistenza contatta il responsabile.");
+    if (appleLinked && platform !== "ios" && platform !== "android") {
+      alert("La cancellazione diretta di un account collegato ad Apple non è ancora disponibile nel browser. Usa l'app per iPhone o Android aggiornata, oppure contatta l'assistenza. Nessun account è stato eliminato.");
       deleting = false;
       return;
     }

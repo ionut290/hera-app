@@ -163,7 +163,6 @@ function harness(options = {}) {
   };
   const window = {
     __VARGA_ACCOUNT_DELETION_ENABLED: options.deletionEnabled !== false,
-    __VARGA_ANDROID_APPLE_REVOCATION_VERIFIED: options.androidRevocationVerified === true,
     __VARGA_ACCOUNT_DELETION_REQUEST_ENABLED: options.requestEnabled === true,
     __VARGA_ACCOUNT_DELETION_REQUEST_SLA_DAYS: options.requestSlaDays,
     firebase,
@@ -360,7 +359,7 @@ function deferred() {
 
   // Do not silently delete an Apple-linked Firebase account on platforms
   // without a working Apple OAuth revocation flow.
-  for (const platform of ["web", "android"]) {
+  for (const platform of ["web"]) {
     h = harness({ platform, appleUser: true });
     await clickDelete(h);
     assert.equal(h.controls.checked, 1, "Preflight must still run first");
@@ -378,9 +377,9 @@ function deferred() {
     assert.equal(h.controls.deleted, false);
   }
 
-  // Android Apple revocation is staged and remains disabled in production.
-  // This verifies the fail-closed path and its distinct OAuth token type.
-  h = harness({ platform: "android", appleUser: true, androidRevocationVerified: true });
+  // Android uses the OAuth access token rather than the iOS authorization code.
+  // The flow is enabled, but still aborts for missing or unrevokable tokens.
+  h = harness({ platform: "android", appleUser: true });
   await clickDelete(h);
   assert.equal(h.controls.checked, 1);
   assert.equal(h.controls.appleSignIns, 1);
@@ -391,7 +390,7 @@ function deferred() {
 
   // Android must NOT fall back to an iOS authorization code if the OAuth
   // access token is absent: no revocation and no account deletion.
-  h = harness({ platform: "android", appleUser: true, androidRevocationVerified: true,
+  h = harness({ platform: "android", appleUser: true,
     appleResponse: () => ({ credential: {
       idToken: "synthetic", nonce: "synthetic-raw-nonce",
       authorizationCode: "synthetic-authorization-code"
@@ -403,8 +402,7 @@ function deferred() {
 
   // Failed Firebase reauth or native revocation must block account deletion.
   for (const failure of [{ reauthFails: true }, { revokeFails: true }]) {
-    h = harness({ platform: "android", appleUser: true,
-      androidRevocationVerified: true, ...failure });
+    h = harness({ platform: "android", appleUser: true, ...failure });
     await clickDelete(h);
     assert.equal(h.controls.revoked, 0);
     assert.equal(h.controls.deleted, false);

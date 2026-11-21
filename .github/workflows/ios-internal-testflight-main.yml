@@ -21,6 +21,14 @@ on:
         type: string
         required: true
         default: "20017"
+      demo_ui:
+        description: "Optional isolated Apple reviewer demo UI for this INTERNAL TestFlight build only"
+        type: choice
+        required: true
+        default: DISABLED
+        options:
+          - DISABLED
+          - ENABLE_ISOLATED_DEMO_DELETION_UI
       reviewed_commit_sha:
         description: "Exact 40-character reviewed commit SHA shown in GitHub"
         required: true
@@ -200,6 +208,30 @@ jobs:
           # Never remove repository locks or update unrelated production deps.
           (cd ios/App && pod update GTMSessionFetcher/Core)
           npx cap sync ios
+
+      - name: Add isolated demo-only deletion UI (INTERNAL TestFlight only)
+        if: ${{ inputs.demo_ui == 'ENABLE_ISOLATED_DEMO_DELETION_UI' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This file is deliberately excluded by prepare-capacitor-web.js.
+          # It is copied only after the internal workflow explicitly opts in.
+          cp apple-review-demo-deletion-ui.js www/apple-review-demo-deletion-ui.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("www/index.html")
+          html = p.read_text(encoding="utf-8")
+          marker = "<script>window.__VARGA_INTERNAL_DEMO_DELETION_ENABLED=true;</script><script src=\"apple-review-demo-deletion-ui.js\"></script>"
+          if marker not in html:
+              if "</body>" not in html:
+                  raise SystemExit("index.html lacks closing body tag")
+              html = html.replace("</body>", marker + "</body>", 1)
+              p.write_text(html, encoding="utf-8")
+          PY
+          test -s www/apple-review-demo-deletion-ui.js
+          grep -F '__VARGA_INTERNAL_DEMO_DELETION_ENABLED=true' www/index.html
+          echo "Isolated demo deletion UI enabled for this INTERNAL TestFlight build only."
+
           python3 scripts/mark-ios-native-safe-area.py
           ruby scripts/install-ios-native-geofence.rb
           ruby scripts/install-ios-apple-signin.rb

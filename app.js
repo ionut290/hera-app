@@ -2302,7 +2302,9 @@ document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
 startQuickSquadraWindowTicker();
 addSquadraRow();
 initHoursPage();
-initGeolocation();
+// Do not prompt for precise location on the login screen. Authenticated
+// startup already calls initGeolocation() in runDeferredStartupTasks.
+// Apple App Review should see the login options before any location request.
 prefillSegnalazioneDateTime();
 renderHowtoFaq();
 if (window.location.hash) {

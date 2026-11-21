@@ -303,14 +303,16 @@
       ];
       for (const [parent, id] of locations) {
         if (!parent || document.getElementById(id)) continue;
-        const button = makeButton(id, "Elimina account (non ancora disponibile)", "btn");
-        button.addEventListener("click", () => {
-          alert("La cancellazione dell'account non è ancora disponibile nell'app: " +
-            "la procedura privacy e il servizio protetto devono essere attivati. " +
-            "Nessuna richiesta è stata inviata e nessun account è stato eliminato. " +
-            "Per assistenza rivolgiti all'amministratore di VARGA CANTIERI.");
-        });
-        parent.appendChild(button);
+        // The published /delete-account.html already documents the actual
+        // assistance route and clearly says this is NOT in-app deletion.
+        // A real hyperlink lets users open that information even if scripts
+        // or popups are blocked, without calling a destructive backend.
+        const link = document.createElement("a");
+        link.id = id;
+        link.href = "./delete-account.html";
+        link.textContent = "Elimina account (informazioni e assistenza)";
+        link.className = "btn";
+        parent.appendChild(link);
       }
     }
 

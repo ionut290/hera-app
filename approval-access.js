@@ -44,7 +44,7 @@
   const dateValue = (value) => value?.toDate ? value.toDate() : value ? new Date(value) : null;
   const formatDateTime = (value) => {
     const date = dateValue(value);
-    return date && !Number.isNaN(date.getTime()) ? date.toLocaleString("it-IT") : "—";
+    return date && !Number.isNaN(date.getTime()) ? date.toLocaleString("en-GB") : "—";
   };
   const escape = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
   const firstValue = (source, keys) => keys.map((key) => String(source?.[key] || "").trim()).find(Boolean) || "";
@@ -115,18 +115,18 @@
     dialog.innerHTML = `
       <div class="access-approval-result-card">
         <div class="access-approval-result-icon" aria-hidden="true">✅</div>
-        <h2 id="access-approval-result-title">Utente sbloccato / User approved</h2>
+        <h2 id="access-approval-result-title">User approved</h2>
         <p id="access-approval-result-email-status" class="access-approval-result-status"></p>
-        <p class="muted">Puoi avvisare l’utente anche con WhatsApp. / You can also notify the user by WhatsApp.</p>
-        <label class="access-approval-phone-label">Numero WhatsApp (facoltativo) / WhatsApp number (optional)
-          <input id="access-approval-result-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Es. 393331234567">
+        <p class="muted">You can also notify this user with the same message via WhatsApp.</p>
+        <label class="access-approval-phone-label">WhatsApp number (optional)
+          <input id="access-approval-result-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="e.g. 393331234567">
         </label>
-        <p class="muted">Se lasci il numero vuoto, scegli il contatto dopo l’apertura di WhatsApp. / Leave blank to choose a contact after WhatsApp opens.</p>
+        <p class="muted">Leave blank to choose a contact after WhatsApp opens.</p>
         <div class="access-approval-result-actions">
-          <button id="access-approval-result-email" class="btn btn-primary" type="button">INVIA EMAIL / SEND EMAIL</button>
-          <button id="access-approval-result-whatsapp" class="btn access-whatsapp" type="button">INVIA LO STESSO MESSAGGIO SU WHATSAPP / SEND THE SAME MESSAGE BY WHATSAPP</button>
-          <button id="access-approval-result-copy" class="btn" type="button">COPIA MESSAGGIO / COPY MESSAGE</button>
-          <button id="access-approval-result-close" class="btn" type="button">CHIUDI / CLOSE</button>
+          <button id="access-approval-result-email" class="btn btn-primary" type="button">SEND EMAIL</button>
+          <button id="access-approval-result-whatsapp" class="btn access-whatsapp" type="button">SEND THE SAME MESSAGE BY WHATSAPP</button>
+          <button id="access-approval-result-copy" class="btn" type="button">COPY MESSAGE</button>
+          <button id="access-approval-result-close" class="btn" type="button">CLOSE</button>
         </div>
       </div>`;
     document.body.appendChild(dialog);
@@ -134,12 +134,12 @@
     el("access-approval-result-email")?.addEventListener("click", () => {
       const message = String(dialog.dataset.message || "");
       const email = String(dialog.dataset.email || "").trim();
-      if (!message || !email) return alert("Email o messaggio di approvazione non disponibile. / Approval email or message unavailable.");
-      window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent("✅ Accesso a Varga Cantieri approvato")}&body=${encodeURIComponent(message)}`;
+      if (!message || !email) return alert("Approval email or message unavailable.");
+      window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent("✅ Varga Cantieri access approved")}&body=${encodeURIComponent(message)}`;
     });
     el("access-approval-result-whatsapp")?.addEventListener("click", () => {
       const message = String(dialog.dataset.message || "");
-      if (!message) return alert("Messaggio di approvazione non disponibile. / Approval message unavailable.");
+      if (!message) return alert("Approval message unavailable.");
       const phone = normalizePhone(el("access-approval-result-phone")?.value || "");
       window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
     });
@@ -147,9 +147,9 @@
       const message = String(dialog.dataset.message || "");
       try {
         await navigator.clipboard.writeText(message);
-        alert("Messaggio copiato. / Message copied.");
+        alert("Message copied.");
       } catch (_) {
-        window.prompt("Copia il messaggio / Copy the message:", message);
+        window.prompt("Copy the message:", message);
       }
     });
     return dialog;
@@ -159,10 +159,10 @@
     const dialog = ensureApprovalResultDialog();
     dialog.dataset.message = String(result.message || "");
     dialog.dataset.email = String(result.userEmail || "");
-    el("access-approval-result-title").textContent = `${result.userName || "Utente"} è stato sbloccato / ${result.userName || "User"} has been approved`;
+    el("access-approval-result-title").textContent = `${result.userName || "User"} has been approved`;
     el("access-approval-result-email-status").textContent = result.emailSent
-      ? `Email di conferma inviata automaticamente a ${result.userEmail}. / Confirmation email sent automatically to ${result.userEmail}.`
-      : `Utente sbloccato. ${result.emailError || "Premi INVIA EMAIL o usa WhatsApp per avvisarlo."} / User approved. ${result.emailError || "Press SEND EMAIL or use WhatsApp to notify them."}`;
+      ? `Confirmation email sent automatically to ${result.userEmail}.`
+      : `User approved. ${result.emailError ? "Automatic email unavailable." : "Press SEND EMAIL or use WhatsApp to notify them."}`;
     el("access-approval-result-email-status").classList.toggle("is-warning", !result.emailSent);
     el("access-approval-result-phone").value = String(result.phone || "");
     dialog.classList.remove("hidden");
@@ -188,14 +188,14 @@
     el("access-approval-loading").classList.toggle("hidden", state !== "checking" && state !== "error");
     el("access-approval-content").classList.toggle("hidden", state === "checking" || state === "error");
     el("access-approval-error").classList.toggle("hidden", state !== "error");
-    if (state === "error") el("access-approval-error-message").textContent = message || "Impossibile verificare l’autorizzazione. Controlla la connessione e riprova. / Could not verify access. Check your connection and try again.";
+    if (state === "error") el("access-approval-error-message").textContent = message || "Could not verify access. Check your connection and try again.";
     const rejected = state === "rifiutato" || state === "bloccato";
-    el("access-approval-title").textContent = rejected ? "ACCESSO NON AUTORIZZATO / ACCESS NOT AUTHORIZED" : "ACCESSO IN ATTESA DI APPROVAZIONE / ACCESS PENDING APPROVAL";
+    el("access-approval-title").textContent = rejected ? "ACCESS NOT AUTHORIZED" : "ACCESS PENDING APPROVAL";
     el("access-approval-description").textContent = rejected
-      ? "La tua richiesta di accesso non è stata approvata. Contatta l’amministratore per informazioni. / Your access request was not approved. Contact the administrator for more information."
-      : "Il tuo account è registrato, ma deve essere autorizzato da un amministratore. Usa il pulsante qui sotto per inviare la richiesta via email e WhatsApp. / Your account is registered, but an administrator must approve it. Use the button below to send your request by email and WhatsApp.";
-    el("access-approval-status").textContent = rejected ? (state === "bloccato" ? "Account bloccato / Account blocked" : "Accesso rifiutato / Access denied") : "In attesa di approvazione / Pending approval";
-    el("access-request-whatsapp").textContent = rejected ? "CONTATTA L’AMMINISTRATORE / CONTACT THE ADMINISTRATOR" : "RICHIEDI ACCESSO VIA EMAIL E WHATSAPP / REQUEST ACCESS BY EMAIL AND WHATSAPP";
+      ? "Your access request was not approved. Contact the administrator for more information."
+      : "Your account is registered, but an administrator must approve it. Use the button below to send an access request via WhatsApp.";
+    el("access-approval-status").textContent = rejected ? (state === "bloccato" ? "Account blocked" : "Access denied") : "Pending approval";
+    el("access-request-whatsapp").textContent = rejected ? "CONTACT THE ADMINISTRATOR ON WHATSAPP" : "REQUEST ACCESS VIA WHATSAPP";
     el("access-check-approval").classList.toggle("hidden", rejected);
     if (profile) {
       el("access-approval-name").textContent = profile.nomeCompleto || profile.displayName || user?.displayName || "—";
@@ -247,7 +247,7 @@
       const status = statusOf(profile);
       if (isAllowedStatus(status)) {
         stop();
-        el("access-approval-feedback").textContent = "Accesso autorizzato / Access approved";
+        el("access-approval-feedback").textContent = "Access approved";
         setTimeout(() => window.location.reload(), 700);
       } else show(status);
     }, () => show("error"));
@@ -286,7 +286,7 @@
       else hide();
       return { allowed, profile, status };
     } catch (error) {
-      console.error("Verifica autorizzazione fallita", error);
+      console.error("Access verification failed", error);
       show("error");
       return { allowed: false, error };
     }
@@ -294,35 +294,31 @@
 
   function whatsappText() {
     const now = new Date();
-    const date = now.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
-    const time = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
-    return `🔐 RICHIESTA ACCESSO VARGA CANTIERI\n\nUn nuovo utente richiede l’autorizzazione per accedere all’app.\n\n👤 Nome e cognome: ${profile?.nomeCompleto || profile?.displayName || user.displayName || ""}\n📧 Email: ${profile?.email || user.email || ""}\n🆔 ID utente: ${user.uid}\n📅 Data richiesta: ${date}\n🕐 Ora richiesta: ${time}\n\nL’utente è attualmente in attesa di approvazione.\n\nAccedi nell’app come amministratore e apri:\n\nMenu → Gestione utenti → Utenti in attesa`;
+    const date = now.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const time = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    return `🔐 VARGA CANTIERI ACCESS REQUEST\n\nA new user is requesting access to the app.\n\n👤 Name: ${profile?.nomeCompleto || profile?.displayName || user.displayName || ""}\n📧 Email: ${profile?.email || user.email || ""}\n🆔 User ID: ${user.uid}\n📅 Request date: ${date}\n🕐 Request time: ${time}\n\nThe user is waiting for approval.\n\nSign in as an administrator and open:\n\nMenu → User management → Users awaiting approval`;
   }
 
   async function requestWhatsapp() {
     const button = el("access-request-whatsapp");
     if (button.disabled) return;
     try {
-      let adminEmailSent = false;
       if (PENDING.has(statusOf(profile))) {
-        try {
-          const callable = firebase.app().functions(REGION).httpsCallable("requestUserAccess");
-          const response = await callable({});
-          adminEmailSent = response?.data?.notificationSent === true;
-        } catch (_) {
-          console.warn("Email all’amministratore non confermata; mantengo la richiesta WhatsApp.");
-        }
+        await db.collection("platformUsers").doc(user.uid).update({
+          statoAccount: "richiesta_inviata", accountStatus: "richiesta_inviata",
+          richiestaWhatsappAt: serverTime(), whatsappRequestedAt: serverTime(),
+          ultimaRichiestaAt: serverTime(), lastRequestAt: serverTime(),
+          numeroRichieste: firebase.firestore.FieldValue.increment(1), requestCount: firebase.firestore.FieldValue.increment(1)
+        });
       }
       window.open(`https://wa.me/${PHONE}?text=${encodeURIComponent(whatsappText())}`, "_blank", "noopener,noreferrer");
-      el("access-approval-feedback").textContent = adminEmailSent
-        ? "Richiesta inviata: ti abbiamo avvisato via email. Completa anche WhatsApp. / Request sent: we emailed you. Please also complete WhatsApp."
-        : "Richiesta preparata. Email non confermata: completa WhatsApp. / Request prepared. Email not confirmed; please complete WhatsApp.";
+      el("access-approval-feedback").textContent = "Request prepared. Complete the message in WhatsApp.";
       let remaining = WAIT_MS / 1000;
       button.disabled = true;
-      button.textContent = `RIPROVA TRA ${remaining}s / RETRY IN ${remaining}s`;
+      button.textContent = `RETRY IN ${remaining}s`;
       cooldownTimer = setInterval(() => {
         remaining -= 1;
-        button.textContent = remaining > 0 ? `RIPROVA TRA ${remaining}s / RETRY IN ${remaining}s` : "RICHIEDI ACCESSO VIA EMAIL E WHATSAPP / REQUEST ACCESS BY EMAIL AND WHATSAPP";
+        button.textContent = remaining > 0 ? `RETRY IN ${remaining}s` : "REQUEST ACCESS VIA WHATSAPP";
         if (remaining <= 0) { clearInterval(cooldownTimer); button.disabled = false; }
       }, 1000);
     } catch (error) { show("error"); }
@@ -341,7 +337,7 @@
 
   async function approve(uid, button) {
     const admin = firebase.auth().currentUser;
-    if (!admin) throw new Error("Sessione amministratore non disponibile. Accedi di nuovo. / Administrator session unavailable. Sign in again.");
+    if (!admin) throw new Error("Administrator session unavailable. Sign in again.");
     const target = pendingUsersById.get(String(uid)) || { uid, id: uid, email: "" };
     const administratorName = firstValue(profile, ["nomeCompleto", "displayName"])
       || admin.displayName
@@ -349,7 +345,7 @@
       || "Amministratore";
     const requestId = createRequestId();
     button.disabled = true;
-    button.textContent = "SBLOCCO E INVIO EMAIL / APPROVING AND SENDING EMAIL…";
+    button.textContent = "APPROVING AND SENDING EMAIL…";
 
     try {
       const callable = firebase.app().functions(REGION).httpsCallable("approveUserAccess");
@@ -358,7 +354,7 @@
         requestId,
         administratorName
       });
-      if (!response?.data?.approved) throw new Error("Il server non ha confermato lo sblocco. / The server did not confirm approval.");
+      if (!response?.data?.approved) throw new Error("The server did not confirm approval.");
       showApprovalResult(response.data);
       return;
     } catch (cloudError) {
@@ -366,7 +362,7 @@
       if (["functions/unauthenticated", "functions/permission-denied", "functions/invalid-argument", "functions/not-found"].includes(code)) {
         throw cloudError;
       }
-      console.warn("Callable approvazione non disponibile; applico il salvataggio Firestore compatibile.", cloudError);
+      console.warn("Approval service unavailable; using the Firestore fallback.", cloudError);
     }
 
     const ref = db.collection("platformUsers").doc(uid);
@@ -387,8 +383,8 @@
     showApprovalResult({
       approved: true,
       emailSent: false,
-      emailError: "Il servizio email non era raggiungibile: invia lo stesso avviso tramite WhatsApp.",
-      userName: firstValue(target, ["nomeCompleto", "displayName", "fullName"]) || target.email || "Utente",
+      emailError: "Email service unavailable: use WhatsApp to notify the user.",
+      userName: firstValue(target, ["nomeCompleto", "displayName", "fullName"]) || target.email || "User",
       userEmail: target.email || "",
       phone: approvalPhone(target),
       administratorName,
@@ -398,19 +394,19 @@
   }
 
   async function decide(uid, decision, button) {
-    if (!window.confirm(decision === "attivo" ? "Autorizzare questo utente? / Approve this user?\n\nL’utente potrà accedere alle normali funzioni e ai dati dell’app. / The user will be able to access the app’s standard features and data." : "Rifiutare l’accesso a questo utente? / Deny this user access?")) return;
+    if (!window.confirm(decision === "attivo" ? "Approve this user?\n\nThe user will be able to access the app’s standard features and data." : "Deny access to this user?")) return;
     if (decision === "attivo") {
       try {
         await approve(uid, button);
       } catch (error) {
-        console.error("Sblocco utente non riuscito", error);
-        alert(`Sblocco non riuscito: ${error?.message || "controlla la connessione e riprova."}`);
+        console.error("User approval failed", error);
+        alert(`Approval failed: ${error?.message || "check your connection and try again."}`);
         button.disabled = false;
-        button.textContent = "SBLOCCA UTENTE / APPROVE USER";
+        button.textContent = "APPROVE USER";
       }
       return;
     }
-    const reason = decision === "rifiutato" ? (window.prompt("Motivazione facoltativa / Optional reason:", "") || "") : "";
+    const reason = decision === "rifiutato" ? (window.prompt("Optional reason:", "") || "") : "";
     const admin = firebase.auth().currentUser;
     if (!admin) throw new Error("Sessione amministratore non disponibile. Esci e accedi di nuovo.");
     const ref = db.collection("platformUsers").doc(uid);
@@ -422,7 +418,7 @@
     batch.update(ref, patch);
     batch.set(audit, { userId: uid, action: decision === "attivo" ? "approvazione" : "rifiuto", reason, administratorUid: admin.uid, administratorEmail: admin.email || "", createdAt: serverTime() });
     await batch.commit();
-    alert("Accesso rifiutato / Access denied.");
+    alert("Access denied.");
   }
 
   function renderAdmin(users, isAdmin) {
@@ -437,7 +433,7 @@
     const menuBadge = el("pending-users-menu-badge");
     menuBadge.textContent = pending.length;
     menuBadge.classList.toggle("hidden", !pending.length);
-    container.innerHTML = pending.length ? pending.map((item) => `<article class="pending-user-card"><h4>${escape(item.nomeCompleto || item.displayName)}</h4><p>${escape(item.email)}</p><dl><dt>ID utente / User ID</dt><dd>${escape(item.uid || item.id)}</dd><dt>Primo accesso / First login</dt><dd>${formatDateTime(item.primoAccessoAt || item.firstLoginAt)}</dd><dt>Richiesta di accesso / Access request</dt><dd>${formatDateTime(item.ultimaRichiestaAt || item.richiestaWhatsappAt)}</dd><dt>Stato / Status</dt><dd>${escape(statusOf(item))}</dd><dt>Richieste inviate / Requests sent</dt><dd>${Number(item.numeroRichieste || item.requestCount || 0)}</dd></dl><div class="actions-row"><button class="btn btn-primary" type="button" data-approve-user="${escape(item.id)}">SBLOCCA UTENTE / APPROVE USER</button><button class="btn btn-danger" type="button" data-reject-user="${escape(item.id)}">RIFIUTA ACCESSO / DENY ACCESS</button></div></article>`).join("") : "<p class='muted'>Nessun utente in attesa. / No users awaiting approval.</p>";
+    container.innerHTML = pending.length ? pending.map((item) => `<article class="pending-user-card"><h4>${escape(item.nomeCompleto || item.displayName)}</h4><p>${escape(item.email)}</p><dl><dt>User ID</dt><dd>${escape(item.uid || item.id)}</dd><dt>First login</dt><dd>${formatDateTime(item.primoAccessoAt || item.firstLoginAt)}</dd><dt>Access request</dt><dd>${formatDateTime(item.ultimaRichiestaAt || item.richiestaWhatsappAt)}</dd><dt>Status</dt><dd>${escape(statusOf(item))}</dd><dt>Requests sent</dt><dd>${Number(item.numeroRichieste || item.requestCount || 0)}</dd></dl><div class="actions-row"><button class="btn btn-primary" type="button" data-approve-user="${escape(item.id)}">APPROVE USER</button><button class="btn btn-danger" type="button" data-reject-user="${escape(item.id)}">DENY ACCESS</button></div></article>`).join("") : "<p class='muted'>No users awaiting approval.</p>";
   }
 
   document.addEventListener("click", (event) => {
@@ -445,8 +441,8 @@
     const reject = event.target.closest("[data-reject-user]");
     if (approve) void decide(approve.dataset.approveUser, "attivo", approve);
     if (reject) void decide(reject.dataset.rejectUser, "rifiutato", reject).catch((error) => {
-      console.error("Rifiuto accesso non riuscito", error);
-      alert(`Rifiuto non riuscito: ${error?.message || "controlla la connessione e riprova."}`);
+      console.error("Access denial failed", error);
+      alert(`Access denial failed: ${error?.message || "check your connection and try again."}`);
     });
   });
   el("access-request-whatsapp")?.addEventListener("click", requestWhatsapp);

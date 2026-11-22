@@ -1,4 +1,4 @@
-/* Varga Cantieri - servizi neve Castel Maggiore. Catalogo read-only; operativita separata e tracciata. */
+/* Varga Cantieri - percorsi neve nelle COMMESSE NORMALI. Non usa neve_commesse. */
 (function () {
   "use strict";
   const C = window.VARGA_SNOW_CM_CATALOG;
@@ -10,7 +10,18 @@
   const admin = () => typeof canManageData === "function" && !!canManageData();
   const sectionsFor = (group) => group.indices.flatMap((sectionIndex) => C.sections[sectionIndex].stops.map((stop) => ({...stop, sectionIndex, sectionName:C.sections[sectionIndex].name})));
   const today = () => { const d=new Date(); return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-"); };
-  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null};
+  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, subscriptionKey:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null, activeCommessaId:null};
+  const normalPageVisible = () => {
+    const page=id("impianti-page");
+    return !!page && !page.hidden && !page.classList.contains("hidden") && !document.body.classList.contains("snow-management-context");
+  };
+  function activeGroup(){
+    if(!normalPageVisible() || typeof selectedCommessaId==="undefined" || !selectedCommessaId || typeof commesseById==="undefined") return -1;
+    const c=commesseById.get(selectedCommessaId);
+    if(!c) return -1;
+    const code=String(c.codice||"").trim().toUpperCase(),name=String(c.nome||"").trim().toLowerCase();
+    return C.groups.findIndex(g=>code===g.code || name===g.name.toLowerCase() || (c.snowPlan==="castel-maggiore-viabilita-minore" && String(c.id||selectedCommessaId)===String(state.docs.get(g.id)||"")));
+  }
   const stopByKey = (key) => C.sections.flatMap((s,i)=>s.stops.map((x)=>({...x,sectionIndex:i}))).find((s)=>s.key===key);
   function targetGroup(stop){ return C.groups.findIndex((g)=>g.indices.includes(stop.sectionIndex)); }
   function aggregate(stopKey){
@@ -26,26 +37,29 @@
   const colors={done:"#16a34a",cleared:"#0d9488",salted:"#a855f7",active:"#f59e0b",blocked:"#dc2626",todo:"#2563eb"};
   const labels={done:"Pulizia e salatura completate",cleared:"Pulito · da salare",salted:"Salato · da pulire",active:"In corso",blocked:"Problema segnalato",todo:"Da fare"};
   function ensureDom(){
-    const page=id("snow-service-page");
+    const page=id("impianti-page");
     if(!page)return false;
     if(!id("snow-plan-panel")){
       const section=document.createElement("section");
-      section.id="snow-plan-panel";section.className="card snow-plan-panel";
-      section.innerHTML='<div class="snow-plan-heading"><div><h2>🗺️ Percorsi neve Castel Maggiore</h2><p class="muted">3 commesse · 4 sottopercorsi · 45 interventi. Tratti di strada, marciapiedi, ciclabili e accessi.</p></div><button type="button" class="btn btn-primary" id="snow-plan-import">Prepara le 3 commesse</button></div><p id="snow-plan-feedback" role="status" aria-live="polite" class="muted"></p><div class="snow-plan-filters"><label>Commessa<select id="snow-plan-group"></select></label><label>Giorno<input type="date" id="snow-plan-day"></label></div><p class="snow-plan-rules">⚠️ Piano operativo: attivazione oltre 5 cm di neve a terra. I punti prioritari sono evidenziati; verificare sul posto marciapiedi, accessi e geometrie. Ogni intervento prevede passaggi pedonali e salatura.</p><div class="snow-plan-summary" id="snow-plan-summary"></div><div class="snow-plan-layout"><div class="snow-plan-map-wrap"><div id="snow-plan-map" role="application" aria-label="Mappa dei percorsi neve"></div><div class="snow-plan-map-legend"><span>🔵 Da fare</span><span>🟠 In corso</span><span>🟢 Completato</span><span>🔴 Problema</span></div></div><div class="snow-plan-details"><h3 id="snow-plan-list-title">Interventi da pulire</h3><div id="snow-plan-stops"></div></div></div><p class="muted snow-plan-source">Tracce ricostruite da OSM / DBTR e ortofoto, da confermare sul posto. © OpenStreetMap contributors (ODbL), Regione Emilia-Romagna (CC BY 4.0). Il percorso di trasferimento stradale non equivale al tratto da pulire.</p>';
-      const squadre=page.querySelector("#snow-squadre-lista")?.closest(".squadre-card");
-      if(squadre)page.insertBefore(section,squadre);else page.appendChild(section);
+      section.id="snow-plan-panel";section.className="card snow-plan-panel hidden";section.setAttribute("aria-hidden","true");
+      section.innerHTML='<div class="snow-plan-heading"><div><h2>🗺️ Percorsi neve Castel Maggiore</h2><p class="muted">3 commesse · 4 sottopercorsi · 45 interventi. Tratti di strada, marciapiedi, ciclabili e accessi.</p></div></div><p id="snow-plan-feedback" role="status" aria-live="polite" class="muted"></p><div class="snow-plan-filters"><label>Commessa<select id="snow-plan-group"></select></label><label>Giorno<input type="date" id="snow-plan-day"></label></div><p class="snow-plan-rules">⚠️ Piano operativo: attivazione oltre 5 cm di neve a terra. I punti prioritari sono evidenziati; verificare sul posto marciapiedi, accessi e geometrie. Ogni intervento prevede passaggi pedonali e salatura.</p><div class="snow-plan-summary" id="snow-plan-summary"></div><div class="snow-plan-layout"><div class="snow-plan-map-wrap"><div id="snow-plan-map" role="application" aria-label="Mappa dei percorsi neve"></div><div class="snow-plan-map-legend"><span>🔵 Da fare</span><span>🟠 In corso</span><span>🟢 Completato</span><span>🔴 Problema</span></div></div><div class="snow-plan-details"><h3 id="snow-plan-list-title">Interventi da pulire</h3><div id="snow-plan-stops"></div></div></div><p class="muted snow-plan-source">Tracce ricostruite da OSM / DBTR e ortofoto, da confermare sul posto. © OpenStreetMap contributors (ODbL), Regione Emilia-Romagna (CC BY 4.0). Il percorso di trasferimento stradale non equivale al tratto da pulire.</p>';
+      const mapCard=page.querySelector("#commessa-operational-card");
+      if(mapCard)mapCard.insertAdjacentElement("afterend",section);else page.appendChild(section);
       id("snow-plan-group").innerHTML=C.groups.map((g,i)=>'<option value="'+i+'">'+esc(g.name)+'</option>').join("");
-      id("snow-plan-group").addEventListener("change",(e)=>{state.group=Number(e.target.value)||0; state.selected=null; draw();});
+      id("snow-plan-group").disabled=true;
       id("snow-plan-day").value=state.dayKey;
       id("snow-plan-day").addEventListener("change",(e)=>{state.dayKey=e.target.value||today();watch();});
-      id("snow-plan-import").addEventListener("click", seed);
+
     }
-    const home=id("snow-service-btn");
-    if(home && !id("snow-plan-home-btn")){
-      const open=document.createElement("button");open.type="button";open.id="snow-plan-home-btn";open.className="snow-service-btn";open.textContent="🗺️ PERCORSI NEVE";open.setAttribute("aria-label","Apri percorsi neve Castel Maggiore");home.insertAdjacentElement("afterend",open);
-      open.addEventListener("click",()=>{if(!userReady())return; if(typeof openSnowServicePage==="function")openSnowServicePage();else window.location.hash="servizio-neve";setTimeout(show,100);});
+    // Importazione delle 3 commesse dall'elenco ordinario di Gestione commesse.
+    const tools=id("panel-commesse")?.querySelector(".commesse-management-actions");
+    if(tools && !id("snow-plan-import")){
+      const wrap=document.createElement("div");wrap.className="snow-normal-import-wrap";
+      const button=document.createElement("button");button.type="button";button.className="btn";button.id="snow-plan-import";button.textContent="❄️ Inserisci Castel Maggiore 1, 2, 3";
+      const feedback=document.createElement("p");feedback.id="snow-plan-seed-feedback";feedback.className="muted";feedback.setAttribute("role","status");
+      wrap.append(button,feedback);tools.appendChild(wrap);button.addEventListener("click",seed);
     }
-    id("snow-plan-import").hidden=!admin();
+    if(id("snow-plan-import"))id("snow-plan-import").hidden=!admin();
     return true;
   }
   function mapInit(){
@@ -103,9 +117,11 @@
     const link=window.VargaNavigation?.buildUrl?.(pos[0],pos[1])||fallback;
     window.open(link,"_blank","noopener,noreferrer");
   }
-  function message(value){const node=id("snow-plan-feedback");if(node)node.textContent=value||"";}
+  function message(value){
+    for(const name of ["snow-plan-feedback","snow-plan-seed-feedback"]){const node=id(name);if(node)node.textContent=value||"";}
+  }
   function draw(){
-    if(!ensureDom())return;
+    if(!ensureDom() || activeGroup()<0)return;
     const group=C.groups[state.group],stops=sectionsFor(group);
     id("snow-plan-group").value=String(state.group);
     id("snow-plan-list-title").textContent="Interventi · "+group.name;
@@ -128,9 +144,12 @@
     mapDraw(stops);
   }
   function watch(){
-    if(state.unlisten){state.unlisten();state.unlisten=null}
-    state.records=[];draw();
-    if(!dbReady()||!userReady()||window.location.hash!=="#servizio-neve")return;
+    const key=normalPageVisible() && activeGroup()>=0 && dbReady() && userReady() ? state.dayKey : null;
+    if(state.subscriptionKey===key && (!key || state.unlisten))return;
+    if(state.unlisten){state.unlisten();state.unlisten=null;}
+    state.subscriptionKey=key;
+    state.records=[];if(key)draw();
+    if(!key)return;
     state.unlisten=db.collection("snowRouteWork").where("dayKey","==",state.dayKey).onSnapshot((snapshot)=>{
       state.records=snapshot.docs.map(d=>({id:d.id,...d.data()}));
       draw();
@@ -157,13 +176,19 @@
     state.busy=true; const btn=id("snow-plan-import");btn.disabled=true;
     message("Verifico le commesse e i 45 interventi, senza modificare quelli già presenti…");
     try{
-      const all=await db.collection("neve_commesse").get(), known=all.docs;
+      const all=await db.collection("commesse").get(), known=all.docs;
       const refs=[];
       for(const group of C.groups){
         const found=known.find((d)=>String(d.data().codice||"").toUpperCase()===group.code || String(d.data().nome||"").trim().toLowerCase()===group.name.toLowerCase());
-        const ref=found?.ref||db.collection("neve_commesse").doc(group.id);
+        const ref=found?.ref||db.collection("commesse").doc("normal-"+group.id);
         const current=await ref.get();
-        if(!current.exists)await ref.set({nome:group.name,codice:group.code,tipo:"main",snowService:true,snowPlan:"castel-maggiore-viabilita-minore",createdAt:firebase.firestore.FieldValue.serverTimestamp(),createdBy:currentUser?.email||""});
+        if(current.exists && !found){
+          throw new Error("ID occupato da una commessa differente: "+ref.id);
+        }
+        if(!current.exists)await ref.set({
+          nome:group.name,codice:group.code,tipo:"main",snowPlan:"castel-maggiore-viabilita-minore",
+          createdAt:firebase.firestore.FieldValue.serverTimestamp(),createdBy:currentUser?.email||""
+        });
         refs.push(ref);
       }
       let created=0,existing=0;
@@ -198,20 +223,40 @@
         if(pending.length){const batch=db.batch();pending.forEach(({ref,data})=>batch.set(ref,data));await batch.commit();created+=pending.length}
       }
       state.docs=new Map(C.groups.map((g,i)=>[g.id,refs[i].id]));
-      message("Commesse pronte: "+created+" interventi creati, "+existing+" già presenti. Nessun lavoro precedente sovrascritto.");
+      message("COMMESSE NORMALI: "+C.groups.length+" commesse pronte, "+created+" interventi creati, "+existing+" già presenti. Nessun lavoro precedente sovrascritto.");
+      if(typeof subscribeCommesse==="function")subscribeCommesse();
+      show();
     }catch(error){console.error("Importazione piano neve",error);message("Creazione non completata: "+(error.message||error)+". Riprova: la procedura evita i duplicati.");}
     finally{state.busy=false;btn.disabled=false}
   }
   function show(){
     if(!ensureDom())return;
-    const visible=window.location.hash==="#servizio-neve";
-    if(visible){draw();watch();requestAnimationFrame(()=>setTimeout(()=>state.map?.invalidateSize(),250));}
-    else if(state.unlisten){state.unlisten();state.unlisten=null}
+    const index=activeGroup(),visible=index>=0;
+    const panel=id("snow-plan-panel");
+    panel.classList.toggle("hidden",!visible);panel.setAttribute("aria-hidden",String(!visible));
+    if(visible){
+      if(state.activeCommessaId!==selectedCommessaId || state.group!==index){
+        state.activeCommessaId=selectedCommessaId;state.group=index;state.selected=null;state.lastFitGroup=null;
+      }
+      draw();watch();
+      requestAnimationFrame(()=>setTimeout(()=>state.map?.invalidateSize(),180));
+    }else{
+      state.activeCommessaId=null;state.lastFitGroup=null;
+      if(state.unlisten){state.unlisten();state.unlisten=null;state.subscriptionKey=null;}
+    }
   }
   function init(){
     if(!ensureDom())return;
     window.addEventListener("hashchange",show);
-    window.addEventListener("pageshow",()=>{if(window.location.hash==="#servizio-neve")show()});
+    window.addEventListener("pageshow",show);
+    window.addEventListener("focus",show);
+    // Le pagine commessa vengono aperte senza cambiare sempre l'hash.
+    // La verifica leggera non invia richieste se la commessa non cambia.
+    let oldId=null,wasVisible=false;
+    setInterval(()=>{
+      const visible=normalPageVisible(),active=visible?selectedCommessaId:null;
+      if(visible!==wasVisible || active!==oldId){wasVisible=visible;oldId=active;show();}
+    },900);
     show();
   }
   window.VargaSnowPlanUI={show,refresh:draw,catalog:C,aggregate};

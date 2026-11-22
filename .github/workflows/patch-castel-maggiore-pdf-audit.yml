@@ -1,0 +1,58 @@
+name: Correct Castel Maggiore snow PDF fidelity (guarded)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "snow-castel-maggiore-catalog.js"
+      - "scripts/snow-castel-maggiore-legacy-metadata.json"
+      - "scripts/patch-castel-maggiore-pdf-audit.cjs"
+      - ".github/workflows/patch-castel-maggiore-pdf-audit.yml"
+  pull_request:
+    paths:
+      - "snow-castel-maggiore-catalog.js"
+      - "scripts/snow-castel-maggiore-legacy-metadata.json"
+      - "scripts/patch-castel-maggiore-pdf-audit.cjs"
+      - ".github/workflows/patch-castel-maggiore-pdf-audit.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: snow-castel-maggiore-pdf-audit
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Read-only checks of 45 PDF entries, priorities and locations
+        run: |
+          node --check snow-castel-maggiore-catalog.js
+          node --check scripts/patch-castel-maggiore-pdf-audit.cjs
+          node --check snow-plan-operations.js
+          node scripts/check-snow-castel-maggiore.js
+          node scripts/patch-castel-maggiore-pdf-audit.cjs --validate
+  patch-pdf-metadata:
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned Firebase Admin SDK
+        run: npm ci --prefix functions --omit=dev --no-audit --no-fund --ignore-scripts
+      - name: Authenticate to Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+      - name: Safely update only PDF text, red priorities, personnel and equipment
+        env:
+          CONFIRM_PDF_AUDIT_PATCH: CORREGGI-PDF-ALLEGATO-1
+          GOOGLE_CLOUD_PROJECT: hera-app-6cd2b
+        run: node scripts/patch-castel-maggiore-pdf-audit.cjs --execute

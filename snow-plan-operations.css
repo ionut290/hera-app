@@ -84,7 +84,7 @@
   background:#e8f5ee; color:#167343; font-size:12px; font-weight:700;
 }
 .snow-map-editor-controls { flex:none; max-height:34vh; overflow:auto; padding:6px 12px; }
-#snow-map-editor-dedicated .snow-plan-editor { margin:0; border:0; border-radius:0; background:transparent; padding:4px 0; }
+#snow-plan-dedicated-editor .snow-plan-editor { margin:0; border:0; border-radius:0; background:transparent; padding:4px 0; }
 .snow-map-editor-canvas { flex:1 1 auto; min-height:0; display:flex; }
 #snow-plan-dedicated-editor .snow-plan-map-wrap { flex:1; min-height:0; display:flex; flex-direction:column; }
 #snow-plan-dedicated-editor #snow-plan-map { flex:1; height:auto; min-height:0; width:100%; border-radius:0; }

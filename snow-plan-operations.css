@@ -1,0 +1,46 @@
+/* Varga Cantieri · Percorsi neve Castel Maggiore. Mobile-first e safe areas. */
+.snow-plan-panel { margin: 12px 0 20px; padding: clamp(12px,2vw,22px); overflow: visible; }
+.snow-plan-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.snow-plan-heading h2 { margin:0 0 6px; font-size:clamp(18px,2.8vw,24px); }
+.snow-plan-heading p { margin:0; }
+.snow-plan-heading button { min-height:44px; white-space:normal; }
+.snow-plan-filters { display:flex; flex-wrap:wrap; gap:12px; margin:14px 0; }
+.snow-plan-filters label { display:flex; flex:1; flex-direction:column; gap:5px; font-weight:600; min-width:min(200px,100%); }
+.snow-plan-filters select,.snow-plan-filters input { width:100%; min-height:44px; padding:8px 10px; border:1px solid var(--border,#bec5ce); border-radius:9px; background:var(--card,#fff); color:inherit; font-size:16px; }
+.snow-plan-rules { font-size:13px; line-height:1.5; margin:12px 0; }
+.snow-plan-summary { font-weight:700; margin:8px 0 12px; }
+.snow-plan-layout { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(280px,1fr); gap:14px; align-items:start; }
+.snow-plan-map-wrap { min-width:0; position:relative; }
+#snow-plan-map { height: min(66vh,560px); min-height:325px; width:100%; border-radius:12px; overflow:hidden; background:#e5e7eb; z-index:0; }
+.snow-plan-map-legend { display:flex; flex-wrap:wrap; gap:8px; margin:7px 0 0; font-size:11px; }
+.snow-plan-details { min-width:0; }
+.snow-plan-details h3 { font-size:16px; margin:0 0 9px; }
+#snow-plan-stops { max-height:590px; overflow:auto; overscroll-behavior:contain; padding-right:3px; }
+.snow-plan-stop { border:1px solid var(--border,#cdd4db); border-radius:11px; padding:11px; margin-bottom:9px; background:var(--surface,#fff); }
+.snow-plan-stop.selected { outline:2px solid #2563eb; outline-offset:-2px; }
+.snow-plan-stop-head { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; justify-content:space-between; font-size:13px; }
+.snow-plan-stop-head strong { font-size:14px; }
+.snow-plan-stop-head span { font-weight:700; }
+.snow-plan-stop p { margin:7px 0; line-height:1.5; font-size:14px; }
+.snow-plan-stop small { display:block; margin-top:8px; opacity:.75; line-height:1.45; }
+.snow-plan-stop-buttons { display:flex; flex-wrap:wrap; gap:5px; }
+.snow-plan-stop-buttons button { min-height:40px; border-radius:7px; padding:7px 10px; border:1px solid var(--border,#cbd5e1); background:var(--card,#fff); color:inherit; cursor:pointer; font-weight:600; }
+.snow-plan-stop-buttons button:focus-visible { outline:3px solid #2563eb; }
+.snow-plan-stop-buttons button[data-action="clear"],.snow-plan-stop-buttons button[data-action="salt"] { border-color:#059669; }
+.snow-plan-source { font-size:12px; line-height:1.5; margin-top:12px; }
+#snow-plan-home-btn { min-height:44px; padding-inline:8px; font-size:12px; }
+#snow-plan-feedback { min-height:1.4em; overflow-wrap:anywhere; }
+#snow-plan-map .leaflet-top { top: max(4px,env(safe-area-inset-top,0px)); }
+#snow-plan-map .leaflet-bottom { bottom:max(4px,env(safe-area-inset-bottom,0px)); }
+@media(max-width:820px) {
+  .snow-plan-layout { grid-template-columns:minmax(0,1fr); }
+  #snow-plan-map { height:min(49dvh,440px); min-height:300px; }
+  #snow-plan-stops { max-height:none; overflow:visible; }
+  .snow-plan-heading button { width:100%; }
+}
+@media(max-width:480px) {
+  #snow-plan-home-btn { font-size:11px; }
+  .snow-plan-panel { padding:12px 8px; }
+  .snow-plan-stop-buttons button { flex:1 1 calc(33% - 6px); }
+  .snow-plan-map-legend { font-size:10px; }
+}

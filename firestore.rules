@@ -197,6 +197,33 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Avanzamento giornaliero dei percorsi neve: il personale autorizzato
+    // può registrare SOLO il proprio intervento; tutti possono vedere il
+    // riepilogo delle squadre. Le commesse ufficiali restano solo admin.
+    match /snowRouteWork/{recordId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(["uid", "dayKey", "stopKey", "cleared", "salted", "state", "updatedAt"])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.dayKey is string
+        && request.resource.data.dayKey.matches("^20[0-9]{2}-[0-9]{2}-[0-9]{2}$")
+        && request.resource.data.stopKey is string
+        && request.resource.data.stopKey.matches("^cm[1-4]-[0-9]{2}$")
+        && request.resource.data.cleared is bool
+        && request.resource.data.salted is bool
+        && request.resource.data.state in ["todo", "in_progress", "blocked", "done"];
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.dayKey == resource.data.dayKey
+        && request.resource.data.stopKey == resource.data.stopKey
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["cleared", "salted", "state", "updatedAt"])
+        && request.resource.data.cleared is bool
+        && request.resource.data.salted is bool
+        && request.resource.data.state in ["todo", "in_progress", "blocked", "done"];
+      allow delete: if isAdmin();
+    }
+
     match /neve_commesse/{docId} {
       allow read: if signedIn();
       allow write: if isAdmin();

@@ -1,0 +1,41 @@
+name: Check Castel Maggiore Snow Routes
+on:
+  push:
+    branches:
+      - main
+      - feature/neve-castel-maggiore-20261122
+    paths:
+      - 'snow-castel-maggiore-catalog.js'
+      - 'snow-plan-operations.js'
+      - 'snow-plan-operations.css'
+      - 'app-snow.js'
+      - 'index.html'
+      - 'firestore.rules'
+      - 'scripts/check-snow-castel-maggiore.js'
+      - '.github/workflows/check-snow-castel-maggiore.yml'
+  pull_request:
+    paths:
+      - 'snow-castel-maggiore-catalog.js'
+      - 'snow-plan-operations.js'
+      - 'snow-plan-operations.css'
+      - 'app-snow.js'
+      - 'index.html'
+      - 'firestore.rules'
+      - 'scripts/check-snow-castel-maggiore.js'
+      - '.github/workflows/check-snow-castel-maggiore.yml'
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          node --check snow-castel-maggiore-catalog.js
+          node --check snow-plan-operations.js
+          node --check app-snow.js
+          node --check sw.js
+      - name: Check route integrity and safety
+        run: node scripts/check-snow-castel-maggiore.js

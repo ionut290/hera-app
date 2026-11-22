@@ -203,12 +203,13 @@ service cloud.firestore {
     match /snowRouteWork/{recordId} {
       allow read: if signedIn();
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(["uid", "dayKey", "stopKey", "cleared", "salted", "state", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["uid", "dayKey", "stopKey", "runId", "cleared", "salted", "state", "updatedAt"])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.dayKey is string
         && request.resource.data.dayKey.matches("^20[0-9]{2}-[0-9]{2}-[0-9]{2}$")
         && request.resource.data.stopKey is string
         && request.resource.data.stopKey.matches("^cm[1-4]-[0-9]{2}$")
+        && (!request.resource.data.keys().hasAny(["runId"]) || (request.resource.data.runId is string && request.resource.data.runId.matches("^[A-Za-z0-9_-]{1,80}$")))
         && request.resource.data.cleared is bool
         && request.resource.data.salted is bool
         && request.resource.data.state in ["todo", "in_progress", "blocked", "done"];
@@ -222,6 +223,33 @@ service cloud.firestore {
         && request.resource.data.salted is bool
         && request.resource.data.state in ["todo", "in_progress", "blocked", "done"];
       allow delete: if isAdmin();
+    }
+
+    // Geometrie permanenti dei percorsi: solo admin può modificarle, nessuna cancellazione.
+    match /snowRouteGeometry/{stopKey} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin()
+        && stopKey.matches("^cm[1-4]-[0-9]{2}$")
+        && request.resource.data.keys().hasOnly(["stopKey", "parts", "updatedAt", "updatedBy"])
+        && request.resource.data.stopKey == stopKey
+        && request.resource.data.parts is list
+        && request.resource.data.parts.size() > 0
+        && request.resource.data.updatedBy is string;
+      allow delete: if false;
+    }
+
+    // L'avvio di un nuovo giro crea una nuova sessione; i vecchi stati restano storici.
+    match /snowRouteRuns/{runKey} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(["groupId", "dayKey", "runId", "updatedAt", "updatedBy"])
+        && request.resource.data.groupId in ["neve-castel-maggiore-1", "neve-castel-maggiore-2", "neve-castel-maggiore-3"]
+        && request.resource.data.dayKey is string
+        && request.resource.data.dayKey.matches("^20[0-9]{2}-[0-9]{2}-[0-9]{2}$")
+        && request.resource.data.runId is string
+        && request.resource.data.runId.matches("^[A-Za-z0-9_-]{1,80}$")
+        && request.resource.data.updatedBy is string;
+      allow delete: if false;
     }
 
     match /neve_commesse/{docId} {

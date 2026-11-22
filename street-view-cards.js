@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.5.1';
+  const VERSION = '2.5.2';
   if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === VERSION) return;
 
   const SEARCH_RADII = [50, 100, 250, 500, 1000];

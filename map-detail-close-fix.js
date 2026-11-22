@@ -112,7 +112,7 @@
 
         #${PAGE_ID} #${BACK_ID} {
           position: fixed !important;
-          top: calc(env(safe-area-inset-top, 0px) + 18px) !important;
+          top: calc(var(--varga-ios-safe-top, env(safe-area-inset-top, 0px)) + 18px) !important;
           left: 20px !important;
           z-index: 1620 !important;
           width: 54px !important;
@@ -135,7 +135,7 @@
         }
 
         #${PAGE_ID} .leaflet-top.leaflet-right {
-          top: calc(env(safe-area-inset-top, 0px) + 18px) !important;
+          top: calc(var(--varga-ios-safe-top, env(safe-area-inset-top, 0px)) + 18px) !important;
           right: 20px !important;
           z-index: 1610 !important;
         }
@@ -158,7 +158,7 @@
 
         #${PAGE_ID} #${SEARCH_FORM_ID} {
           position: fixed !important;
-          top: calc(env(safe-area-inset-top, 0px) + 92px) !important;
+          top: calc(var(--varga-ios-safe-top, env(safe-area-inset-top, 0px)) + 92px) !important;
           left: 20px !important;
           right: 20px !important;
           z-index: 1590 !important;

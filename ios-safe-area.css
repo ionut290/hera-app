@@ -1,3 +1,8 @@
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 /*
  * Native iOS safe areas: one common top inset for the main screen and
  * independent full-screen overlays. Only Capacitor iOS gets the fallback.
@@ -10,6 +15,22 @@ html.varga-ios-native-safe-area {
   html.varga-ios-native-safe-area {
     --varga-ios-safe-top: max(56px, env(safe-area-inset-top, 0px));
   }
+}
+
+/* Landscape iPhones keep a small top inset even when WKWebView reports zero. */
+@media (orientation: landscape) and (max-height: 560px) {
+  html.varga-ios-native-safe-area {
+    --varga-ios-safe-top: max(20px, env(safe-area-inset-top, 0px));
+  }
+}
+
+/* Street View owns a full-screen dialog and must start below the status bar. */
+html.varga-ios-native-safe-area .hera-sv-dialog {
+  top: var(--varga-ios-safe-top) !important;
+  right: 0 !important;
+  bottom: env(safe-area-inset-bottom, 0px) !important;
+  left: 0 !important;
+  height: auto !important;
 }
 
 /* Regular pages are children of main.container; don't add the inset twice. */

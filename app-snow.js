@@ -133,15 +133,41 @@
     ).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
   }
   api.getSnowRoadPath = getSnowRoadPath;
-  function addSnowRoadPolylineToLayer(impianto, targetLayer, targetMap) {
+  // I 45 tratti del piano neve hanno spesso rami separati (due marciapiedi,
+  // accessi e corselli). Non unirli con una falsa linea di collegamento.
+  function getSnowRoadParts(impianto) {
+    const key = String(impianto?.snowPlanStopKey || "");
+    const catalog = window.VARGA_SNOW_CM_CATALOG;
+    if (key && catalog?.sections) {
+      for (const section of catalog.sections) {
+        const stop = section.stops?.find((item) => item.key === key);
+        if (stop) return (stop.parts || [])
+          .filter((part) => Array.isArray(part.coords) && part.coords.length >= 2)
+          .map((part) => ({ path: part.coords, matched: part.matched === true }));
+      }
+    }
     const path = getSnowRoadPath(impianto);
-    if (!impianto?.snowRoad || path.length < 2) return null;
-    const color = impianto.done ? "#16a34a" : "#2563eb";
-    const line = L.polyline(path, { color, weight: 6, opacity: 0.9, lineCap: "round", lineJoin: "round" });
-    if (targetMap !== fullscreenMap) line.bindPopup(buildImpiantoMapPopup(impianto, impianto.tipoManutenzione || "Via neve"));
-    line.on("click", () => selectImpiantoForMapDetail(impianto));
-    line.addTo(targetLayer);
-    return line;
+    return path.length >= 2 ? [{ path, matched: true }] : [];
+  }
+  api.getSnowRoadParts = getSnowRoadParts;
+  function addSnowRoadPolylineToLayer(impianto, targetLayer, targetMap) {
+    if (!impianto?.snowRoad) return null;
+    const parts = getSnowRoadParts(impianto);
+    if (!parts.length) return null;
+    const snowStatus = impianto.snowPlanStopKey ? window.VargaSnowPlanUI?.aggregate?.(impianto.snowPlanStopKey) : "";
+    const color = impianto.done || snowStatus === "done" ? "#16a34a"
+      : snowStatus === "active" ? "#f59e0b"
+      : snowStatus === "blocked" ? "#dc2626" : "#2563eb";
+    let firstLine = null;
+    parts.forEach((part) => {
+      const line = L.polyline(part.path, { color, weight: 6, opacity: .9,
+        dashArray: part.matched ? null : "6 6", lineCap: "round", lineJoin: "round" });
+      if (targetMap !== fullscreenMap) line.bindPopup(buildImpiantoMapPopup(impianto, impianto.tipoManutenzione || "Via neve"));
+      line.on("click", () => selectImpiantoForMapDetail(impianto));
+      line.addTo(targetLayer);
+      if (!firstLine) firstLine = line;
+    });
+    return firstLine;
   }
   api.addSnowRoadPolylineToLayer = addSnowRoadPolylineToLayer;
   function distanceMetersToSnowRoad(impianto, position) {
@@ -152,7 +178,9 @@
   api.distanceMetersToSnowRoad = distanceMetersToSnowRoad;
   async function autoCompletePassedSnowRoads() {
     if (!isSnowServiceContext() || !selectedCommessaId || !currentUserPos) return;
-    const passed = currentImpianti.filter((impianto) => impianto?.snowRoad && !impianto.done && distanceMetersToSnowRoad(impianto, currentUserPos) <= 25);
+    // Mai completare automaticamente i tratti ufficiali solo per il passaggio GPS:
+    // pulizia e salatura sono interventi distinti, confermati dall'operatore.
+    const passed = currentImpianti.filter((impianto) => impianto?.snowRoad && !impianto.snowPlanStopKey && !impianto.done && distanceMetersToSnowRoad(impianto, currentUserPos) <= 25);
     if (!passed.length) return;
     await setImpiantoDone(selectedCommessaId, passed.map((impianto) => impianto.id).filter(Boolean), true, { doneBy: currentUser?.displayName || currentUser?.email || "Operatore neve" });
   }
@@ -162,8 +190,10 @@
   }
   api.isSnowServiceContext = isSnowServiceContext;
   function openSnowServicePage() {
-    if (!canManageData()) {
-      alert("Solo l'admin può accedere al Servizio Neve.");
+    // La consultazione del piano deve essere disponibile a tutti gli utenti
+    // autorizzati. Creazione e modifica delle commesse restano solo admin.
+    if (!currentUser) {
+      alert("Accedi per consultare il Servizio Neve.");
       return;
     }
     document.body.classList.add("snow-management-context");

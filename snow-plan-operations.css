@@ -52,3 +52,10 @@
 #impianti-page > .snow-plan-panel.hidden { display:none !important; }
 #impianti-page > .snow-plan-panel { margin-top:14px; }
 #snow-plan-group:disabled { opacity:1; cursor:default; }
+
+.snow-plan-editor { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:12px 0; padding:10px; border:1px solid var(--border,#cbd5e1); border-radius:10px; background:var(--surface,#fff); }
+.snow-plan-editor button,.snow-plan-editor select { min-height:44px; }
+.snow-plan-editor label { display:flex; flex:1 1 140px; flex-direction:column; gap:4px; font-weight:600; }
+.snow-plan-editor span { flex:1 1 100%; font-size:13px; line-height:1.4; }
+#snow-plan-edit-delete-part { border-color:#dc2626; color:#b91c1c; }
+@media(max-width:480px) { .snow-plan-editor button { flex:1 1 calc(50% - 8px); white-space:normal; } }

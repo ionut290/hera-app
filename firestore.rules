@@ -233,7 +233,6 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(["stopKey", "parts", "updatedAt", "updatedBy"])
         && request.resource.data.stopKey == stopKey
         && request.resource.data.parts is list
-        && request.resource.data.parts.size() > 0
         && request.resource.data.updatedBy is string;
       allow delete: if false;
     }

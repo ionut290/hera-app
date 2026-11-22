@@ -10,7 +10,7 @@
   const admin = () => typeof canManageData === "function" && !!canManageData();
   const sectionsFor = (group) => group.indices.flatMap((sectionIndex) => C.sections[sectionIndex].stops.map((stop) => ({...stop, sectionIndex, sectionName:C.sections[sectionIndex].name})));
   const today = () => { const d=new Date(); return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-"); };
-  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, subscriptionKey:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null, activeCommessaId:null, geometries:{}, geometryUnlisten:null, runId:"initial", runUnlisten:null, runSubscriptionKey:null, editing:false, editParts:[], editPartIndex:0, editLayers:[]};
+  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, subscriptionKey:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null, activeCommessaId:null, geometries:{}, geometryUnlisten:null, runId:"initial", runUnlisten:null, runSubscriptionKey:null, editing:false, editParts:[], editPartIndex:0, editLayers:[], editSelectedSegment:-1, drawingLine:false, insertingPoint:false};
   const normalPageVisible = () => {
     const page=id("impianti-page");
     return !!page && !page.hidden && !page.classList.contains("hidden") && !document.body.classList.contains("snow-management-context");
@@ -42,7 +42,7 @@
     if(!id("snow-plan-panel")){
       const section=document.createElement("section");
       section.id="snow-plan-panel";section.className="card snow-plan-panel hidden";section.setAttribute("aria-hidden","true");
-      section.innerHTML='<div class="snow-plan-heading"><div><h2>🗺️ Percorsi neve Castel Maggiore</h2><p class="muted">3 commesse · 4 sottopercorsi · 45 interventi. Tratti di strada, marciapiedi, ciclabili e accessi.</p></div></div><div id="snow-plan-editor" class="snow-plan-editor hidden"><button id="snow-plan-edit-start" type="button">✏️ Correggi tracciato</button><label>Tratto <select id="snow-plan-edit-part"></select></label><button id="snow-plan-edit-undo" type="button">Annulla ultimo punto</button><button id="snow-plan-edit-save" type="button">Salva mappa</button><button id="snow-plan-edit-cancel" type="button">Annulla modifica</button><span id="snow-plan-edit-hint">Seleziona un intervento per correggerlo.</span></div><button id="snow-plan-new-run" type="button" class="btn">🔄 Nuovo giro · azzera stati</button><p id="snow-plan-feedback" role="status" aria-live="polite" class="muted"></p><div class="snow-plan-filters"><label>Commessa<select id="snow-plan-group"></select></label><label>Giorno<input type="date" id="snow-plan-day"></label></div><p class="snow-plan-rules">⚠️ Piano operativo: attivazione oltre 5 cm di neve a terra. I punti prioritari sono evidenziati; verificare sul posto marciapiedi, accessi e geometrie. Ogni intervento prevede passaggi pedonali e salatura.</p><p id="snow-plan-resources" class="snow-plan-resources"></p><div class="snow-plan-summary" id="snow-plan-summary"></div><div class="snow-plan-layout"><div class="snow-plan-map-wrap"><div id="snow-plan-map" role="application" aria-label="Mappa dei percorsi neve"></div><div class="snow-plan-map-legend"><span>🔵 Da fare</span><span>🟠 In corso</span><span>🟢 Completato</span><span>🔴 Problema</span></div></div><div class="snow-plan-details"><h3 id="snow-plan-list-title">Interventi da pulire</h3><div id="snow-plan-stops"></div></div></div><p class="muted snow-plan-source">Tracce ricostruite da OSM / DBTR e ortofoto, da confermare sul posto. © OpenStreetMap contributors (ODbL), Regione Emilia-Romagna (CC BY 4.0). Il percorso di trasferimento stradale non equivale al tratto da pulire.</p>';
+      section.innerHTML='<div class="snow-plan-heading"><div><h2>🗺️ Percorsi neve Castel Maggiore</h2><p class="muted">3 commesse · 4 sottopercorsi · 45 interventi. Tratti di strada, marciapiedi, ciclabili e accessi.</p></div></div><div id="snow-plan-editor" class="snow-plan-editor hidden"><button id="snow-plan-edit-start" type="button">✏️ Correggi tracciato</button><button id="snow-plan-edit-new-part" type="button">✏️ Traccia linea</button><button id="snow-plan-edit-insert-point" type="button">➕ Inserisci punto</button><label>Tratto <select id="snow-plan-edit-part"></select></label><button id="snow-plan-edit-delete-part" type="button">🗑 Elimina piccolo pezzo</button><button id="snow-plan-edit-undo" type="button">Annulla ultimo punto</button><button id="snow-plan-edit-save" type="button">Salva mappa</button><button id="snow-plan-edit-cancel" type="button">Annulla modifica</button><span id="snow-plan-edit-hint">Seleziona un intervento per correggerlo.</span></div><button id="snow-plan-new-run" type="button" class="btn">🔄 Nuovo giro · azzera stati</button><p id="snow-plan-feedback" role="status" aria-live="polite" class="muted"></p><div class="snow-plan-filters"><label>Commessa<select id="snow-plan-group"></select></label><label>Giorno<input type="date" id="snow-plan-day"></label></div><p class="snow-plan-rules">⚠️ Piano operativo: attivazione oltre 5 cm di neve a terra. I punti prioritari sono evidenziati; verificare sul posto marciapiedi, accessi e geometrie. Ogni intervento prevede passaggi pedonali e salatura.</p><p id="snow-plan-resources" class="snow-plan-resources"></p><div class="snow-plan-summary" id="snow-plan-summary"></div><div class="snow-plan-layout"><div class="snow-plan-map-wrap"><div id="snow-plan-map" role="application" aria-label="Mappa dei percorsi neve"></div><div class="snow-plan-map-legend"><span>🔵 Da fare</span><span>🟠 In corso</span><span>🟢 Completato</span><span>🔴 Problema</span></div></div><div class="snow-plan-details"><h3 id="snow-plan-list-title">Interventi da pulire</h3><div id="snow-plan-stops"></div></div></div><p class="muted snow-plan-source">Tracce ricostruite da OSM / DBTR e ortofoto, da confermare sul posto. © OpenStreetMap contributors (ODbL), Regione Emilia-Romagna (CC BY 4.0). Il percorso di trasferimento stradale non equivale al tratto da pulire.</p>';
       const mapCard=page.querySelector("#commessa-operational-card");
       if(mapCard)mapCard.insertAdjacentElement("afterend",section);else page.appendChild(section);
       id("snow-plan-group").innerHTML=C.groups.map((g,i)=>'<option value="'+i+'">'+esc(g.name)+'</option>').join("");
@@ -51,6 +51,9 @@
       id("snow-plan-day").addEventListener("change",(e)=>{state.dayKey=e.target.value||today();watchRun();watch();});
       id("snow-plan-edit-start").addEventListener("click",startEdit);
       id("snow-plan-edit-undo").addEventListener("click",undoEditPoint);
+      id("snow-plan-edit-new-part").addEventListener("click",newEditPart);
+      id("snow-plan-edit-insert-point").addEventListener("click",toggleInsertPoint);
+      id("snow-plan-edit-delete-part").addEventListener("click",deleteEditSegment);
       id("snow-plan-edit-save").addEventListener("click",saveEdit);
       id("snow-plan-edit-cancel").addEventListener("click",cancelEdit);
       id("snow-plan-edit-part").addEventListener("change",changeEditPart);
@@ -84,14 +87,15 @@
     stops.forEach((stop)=>{
       const status=aggregate(stop.key),color=colors[status],lines=[];
       const saved=state.geometries[stop.key];
-      const parts=saved?.parts?.length?saved.parts.map(coords=>({coords,matched:true})):stop.parts||[];
-      parts.forEach((part)=>{
+      const editingParts=state.editing&&state.selected===stop.key?state.editParts:null;
+      const parts=editingParts!==null?editingParts.map(coords=>({coords,matched:true})):(saved&&Array.isArray(saved.parts)?saved.parts.map(coords=>({coords,matched:true})):stop.parts||[]);
+      parts.forEach((part,partIndex)=>{
         const coords=(part.coords||[]).filter((p)=>Array.isArray(p)&&p.length===2&&Number.isFinite(+p[0])&&Number.isFinite(+p[1]));
         if(coords.length<2)return;
         bounds.push(...coords);
         const uncertain=part.matched!==true || !/verified|dbtr/i.test(stop.geometryStatus||"");
         const line=L.polyline(coords,{color,weight:status==="done"?6:5,opacity:.92,dashArray:uncertain?"6 6":null,lineCap:"round"});
-        line.on("click",()=>{if(!state.editing)select(stop.key,true)});line.bindTooltip((stop.priority?"★ PRIORITÀ · ":"")+stop.sectionName+" · "+stop.number,{sticky:true});
+        line.on("click",event=>{if(state.editing&&state.drawingLine){event.originalEvent?.stopPropagation?.();onEditMapClick(event)}else if(state.editing&&state.insertingPoint){event.originalEvent?.stopPropagation?.();insertEditPoint(stop.key,partIndex,event.latlng)}else if(state.editing)selectEditSegment(stop.key,partIndex,event.latlng);else select(stop.key,true)});line.bindTooltip((stop.priority?"★ PRIORITÀ · ":"")+stop.sectionName+" · "+stop.number,{sticky:true});
         line.addTo(state.paths);lines.push(line);
       });
       if(stop.marker?.length===2){
@@ -262,43 +266,130 @@
     if(!admin())return message("Solo un amministratore può correggere la mappa.");
     const stop=currentStop();if(!stop)return message("Seleziona prima un intervento dall’elenco.");
     const saved=state.geometries[stop.key];
-    state.editParts=(saved?.parts?.length?saved.parts:stop.parts.map(p=>p.coords||[])).map(p=>p.map(x=>[+x[0],+x[1]]));
-    state.editPartIndex=0;state.editing=true;
-    const selectPart=id("snow-plan-edit-part");selectPart.innerHTML=state.editParts.map((_,i)=>'<option value="'+i+'">Tratto '+(i+1)+'</option>').join("");
-    id("snow-plan-edit-hint").textContent="Tocca la mappa per aggiungere punti; trascina i punti per spostarli.";
+    state.editParts=(saved&&Array.isArray(saved.parts)?saved.parts:stop.parts.map(p=>p.coords||[])).map(p=>p.map(x=>[+x[0],+x[1]]));
+    state.editPartIndex=state.editParts.length?0:-1;state.editSelectedSegment=-1;state.drawingLine=false;state.insertingPoint=false;state.editing=true;
+    renderEditPartOptions();
+    id("snow-plan-edit-hint").textContent="Traccia linea aggiunge un pezzo. Inserisci punto divide una linea: inserisci due punti ai bordi del tratto, poi tocca il piccolo segmento rosso e cancellalo.";
     if(state.map){state.map.off("click",onEditMapClick);state.map.on("click",onEditMapClick);}
     drawEditPreview();message("Modifica attiva per "+stop.sectionName+" · "+stop.number+".");
   }
+  function renderEditPartOptions(){
+    const select=id("snow-plan-edit-part");if(!select)return;
+    select.innerHTML=state.editParts.length?state.editParts.map((_,i)=>'<option value="'+i+'">Linea '+(i+1)+'</option>').join(""):'<option value="-1">Nessuna linea</option>';
+    select.value=String(state.editPartIndex);
+    id("snow-plan-edit-delete-part").disabled=!state.editing||state.editPartIndex<0||state.editSelectedSegment<0;
+    id("snow-plan-edit-undo").disabled=!state.editing||!state.drawingLine||state.editPartIndex<0||!state.editParts[state.editPartIndex]?.length;
+    id("snow-plan-edit-new-part").textContent=state.drawingLine?"✅ Fine linea":"✏️ Traccia linea";
+    id("snow-plan-edit-insert-point").textContent=state.insertingPoint?"✅ Tocca una linea":"➕ Inserisci punto";
+  }
   function onEditMapClick(e){
-    if(!state.editing)return;
+    if(!state.editing||!state.drawingLine)return;
+    if(state.editPartIndex<0||!state.editParts[state.editPartIndex])return;
     state.editParts[state.editPartIndex].push([e.latlng.lat,e.latlng.lng]);drawEditPreview();
   }
   function clearEditLayers(){state.editLayers.forEach(x=>state.map?.removeLayer(x));state.editLayers=[];}
   function drawEditPreview(){
     clearEditLayers();if(!state.map||!state.editing)return;
+    mapDraw(sectionsFor(C.groups[state.group]));
     const points=state.editParts[state.editPartIndex]||[];
-    const line=L.polyline(points,{color:"#f97316",weight:6,dashArray:"8 5"}).addTo(state.map);state.editLayers.push(line);
-    points.forEach((point,index)=>{
-      const marker=L.marker(point,{draggable:true}).addTo(state.map);
-      marker.on("drag",e=>{const p=e.target.getLatLng();points[index]=[p.lat,p.lng];line.setLatLngs(points);});
-      state.editLayers.push(marker);
-    });
+    if(points.length){
+      const line=L.polyline(points,{color:"#f97316",weight:7,dashArray:"8 5"}).addTo(state.map);state.editLayers.push(line);
+      points.forEach((point,index)=>{
+        const marker=L.marker(point,{draggable:true}).addTo(state.map);
+        marker.on("drag",e=>{const p=e.target.getLatLng();points[index]=[p.lat,p.lng];line.setLatLngs(points);});
+        state.editLayers.push(marker);
+      });
+    }
+    if(state.editSelectedSegment>=0&&points[state.editSelectedSegment+1]){
+      const highlight=L.polyline([points[state.editSelectedSegment],points[state.editSelectedSegment+1]],{color:"#dc2626",weight:11,opacity:.95}).addTo(state.map);
+      state.editLayers.push(highlight);
+    }
+    renderEditPartOptions();
   }
-  function undoEditPoint(){if(!state.editing)return;state.editParts[state.editPartIndex].pop();drawEditPreview();}
-  function changeEditPart(e){if(!state.editing)return;state.editPartIndex=Number(e.target.value)||0;drawEditPreview();}
+  function closestSegmentIndex(points,latlng){
+    if(!Array.isArray(points)||points.length<2||!state.map)return -1;
+    const p=state.map.latLngToLayerPoint(latlng);let best=-1,bestDistance=Infinity;
+    for(let i=0;i<points.length-1;i++){
+      const a=state.map.latLngToLayerPoint(points[i]),b=state.map.latLngToLayerPoint(points[i+1]);
+      const dx=b.x-a.x,dy=b.y-a.y,lengthSquared=dx*dx+dy*dy;
+      const t=lengthSquared?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/lengthSquared)):0;
+      const ex=p.x-(a.x+t*dx),ey=p.y-(a.y+t*dy),distance=ex*ex+ey*ey;
+      if(distance<bestDistance){bestDistance=distance;best=i;}
+    }
+    return best;
+  }
+  function selectEditSegment(stopKey,partIndex,latlng){
+    if(!state.editing)return;
+    if(stopKey!==state.selected)return message("Chiudi o annulla la modifica corrente prima di selezionare un altro intervento.");
+    if(partIndex<0||partIndex>=state.editParts.length)return;
+    state.editPartIndex=partIndex;state.editSelectedSegment=closestSegmentIndex(state.editParts[partIndex],latlng);
+    state.drawingLine=false;state.insertingPoint=false;drawEditPreview();
+    message(state.editSelectedSegment>=0?"Piccolo pezzo selezionato. Premi “Elimina piccolo pezzo” per toglierlo.":"Linea selezionata.");
+  }
+  function toggleInsertPoint(){
+    if(!admin()||!state.editing)return;
+    state.drawingLine=false;state.insertingPoint=!state.insertingPoint;state.editSelectedSegment=-1;
+    drawEditPreview();
+    message(state.insertingPoint?"Modalità attiva: tocca la linea nel punto in cui vuoi aggiungere un vertice.":"Inserimento punto terminato.");
+  }
+  function insertEditPoint(stopKey,partIndex,latlng){
+    if(!admin()||!state.editing||!state.insertingPoint||stopKey!==state.selected)return;
+    const points=state.editParts[partIndex];if(!Array.isArray(points)||points.length<2)return;
+    const nearest=closestSegmentIndex(points,latlng);if(nearest<0)return;
+    points.splice(nearest+1,0,[latlng.lat,latlng.lng]);
+    state.editPartIndex=partIndex;state.editSelectedSegment=-1;state.insertingPoint=false;
+    drawEditPreview();message("Punto aggiunto. Inserisci il secondo bordo e cancella solo il pezzetto.");
+  }
+  function newEditPart(){
+    if(!admin()||!state.editing)return;
+    if(state.drawingLine){
+      const current=state.editParts[state.editPartIndex]||[];
+      state.drawingLine=false;
+      if(current.length<2){state.editParts.splice(state.editPartIndex,1);state.editPartIndex=state.editParts.length?state.editParts.length-1:-1;}
+      state.editSelectedSegment=-1;drawEditPreview();
+      message(current.length<2?"Linea vuota rimossa.":"Linea terminata.");
+      return;
+    }
+    state.editParts.push([]);state.editPartIndex=state.editParts.length-1;state.editSelectedSegment=-1;state.insertingPoint=false;state.drawingLine=true;drawEditPreview();
+    message("Tocca la mappa per aggiungere punti; premi Fine linea quando hai finito.");
+  }
+  function deleteEditSegment(){
+    if(!admin()||!state.editing||state.editPartIndex<0||state.editSelectedSegment<0)return;
+    if(!window.confirm("Eliminare solo il piccolo pezzo selezionato dalla mappa?"))return;
+    const partIndex=state.editPartIndex,segmentIndex=state.editSelectedSegment,points=state.editParts[partIndex]||[];
+    if(!points[segmentIndex+1])return;
+    const left=points.slice(0,segmentIndex+1),right=points.slice(segmentIndex+1),replacement=[];
+    if(left.length>=2)replacement.push(left);
+    if(right.length>=2)replacement.push(right);
+    state.editParts.splice(partIndex,1,...replacement);
+    state.editPartIndex=state.editParts.length?Math.min(partIndex,state.editParts.length-1):-1;
+    state.editSelectedSegment=-1;state.drawingLine=false;drawEditPreview();
+    message("Piccolo pezzo rimosso dalla modifica. Premi Salva mappa per confermare.");
+  }
+  function undoEditPoint(){
+    if(!state.editing||!state.drawingLine||state.editPartIndex<0)return;
+    state.editParts[state.editPartIndex].pop();drawEditPreview();
+  }
+  function changeEditPart(e){
+    if(!state.editing)return;
+    state.editPartIndex=Number(e.target.value);state.editSelectedSegment=-1;state.drawingLine=false;state.insertingPoint=false;
+    drawEditPreview();
+  }
   function cancelEdit(){
-    state.editing=false;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();
-    const hint=id("snow-plan-edit-hint");if(hint)hint.textContent="Seleziona un intervento per correggerlo.";
+    state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();
+    const hint=id("snow-plan-edit-hint");if(hint)hint.textContent="Seleziona un intervento per correggerlo.";if(normalPageVisible()&&activeGroup()>=0)draw();
   }
   async function saveEdit(){
     if(!admin()||!state.editing)return;
     const stop=currentStop();if(!stop)return;
-    if(state.editParts[state.editPartIndex].length<2)return message("Aggiungi almeno due punti al tratto prima di salvare.");
+    if(state.editParts.some(part=>part.length<2))return message("Completa ogni linea con almeno due punti o rimuovi il tratto vuoto.");
     try{
+      const savedParts=state.editParts.map(p=>p.map(x=>[Number(x[0]),Number(x[1])]));
       await db.collection("snowRouteGeometry").doc(stop.key).set({
-        stopKey:stop.key,parts:state.editParts.map(p=>p.map(x=>[Number(x[0]),Number(x[1])])),
+        stopKey:stop.key,parts:savedParts,
         updatedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedBy:currentUser?.email||""
       },{merge:true});
+      state.geometries[stop.key]={stopKey:stop.key,parts:savedParts};
       cancelEdit();message("Percorso salvato in modo permanente."); 
     }catch(error){message("Salvataggio mappa non riuscito: "+(error.code||error.message));}
   }

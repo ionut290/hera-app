@@ -204,7 +204,7 @@
           const marker=stop.marker||stop.parts?.[0]?.coords?.[0]||null;
           const first=stop.parts.find(p=>p.coords?.length>1);
           const data={
-            denominazione:stop.note.split(":")[0].slice(0,120),
+            denominazione:(stop.sectionName+" · "+stop.number+" · "+stop.note).slice(0,140),
             indirizzo:stop.note,
             descrizioneVia:stop.note,
             noteOperative:stop.note,

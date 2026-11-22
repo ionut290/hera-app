@@ -1,0 +1,185 @@
+{
+  "version": "2026-11-22",
+  "stops": {
+    "cm1-01": {
+      "note": "via Bondanello: passaggi pedonali su entrambi i lati e semaforo con viale della Repubblica",
+      "priority": false
+    },
+    "cm1-02": {
+      "note": "via Bondanello: marciapiede lato sinistro verso scuole medie, ingresso scuole e corsello Bondanello-distretto sanitario",
+      "priority": false
+    },
+    "cm1-03": {
+      "note": "distretto sanitario, compresa rampa disabili",
+      "priority": true
+    },
+    "cm1-04": {
+      "note": "Centro Bucaneve - scuole Donini Pelagalli, lato ingresso principale",
+      "priority": true
+    },
+    "cm1-05": {
+      "note": "fermata scuolabus via Neruda - scuole Donini Pelagalli, lato Neruda",
+      "priority": true
+    },
+    "cm1-06": {
+      "note": "Comune piazza Amendola: due varchi porticata negozi-comune, accesso via Nenni, accessi via Parri e accesso Vigili",
+      "priority": true
+    },
+    "cm1-07": {
+      "note": "Centro Diurno via Ungaretti - centro infanzia Bondanello",
+      "priority": false
+    },
+    "cm1-08": {
+      "note": "corsello via Moro - parcheggio retro Galleria del Centro - Posta, compreso camminamento portico-Keynes",
+      "priority": false
+    },
+    "cm1-09": {
+      "note": "nuova Biblioteca",
+      "priority": false
+    },
+    "cm1-10": {
+      "note": "terminare marciapiedi Bondanello",
+      "priority": false
+    },
+    "cm1-11": {
+      "note": "laterali via Repubblica dalla rotonda Lirone al semaforo Bondanello",
+      "priority": false
+    },
+    "cm1-12": {
+      "note": "via Lirone: lato destro e piccolo corsello zona bocciofila",
+      "priority": false
+    },
+    "cm1-13": {
+      "note": "marciapiedi via Costituzione",
+      "priority": false
+    },
+    "cm1-14": {
+      "note": "marciapiede e pista ciclabile via La Pira, compreso corsello parco via La Pira",
+      "priority": false
+    },
+    "cm2-01": {
+      "note": "Nuova Scuola via Loi: marciapiede rotonda viale Europa e scuola",
+      "priority": false
+    },
+    "cm2-02": {
+      "note": "via Gramsci dalla rotonda Vancini alla rotonda via Galliera, compreso corsello Gramsci-parcheggio Curiel-ingresso elementari Curiel",
+      "priority": false
+    },
+    "cm2-03": {
+      "note": "piste ciclabili viale della Repubblica",
+      "priority": false
+    },
+    "cm2-04": {
+      "note": "corsello Centro Anziani Pertini - collegamento scuole Curiel",
+      "priority": false
+    },
+    "cm2-05": {
+      "note": "Matteotti dal sottopasso alla rotonda, passaggi pedonali di accesso superiore al sottopasso e posti auto mezzi comunali",
+      "priority": true
+    },
+    "cm2-06": {
+      "note": "accesso Comune via Matteotti, passaggio Piazza Pace",
+      "priority": true
+    },
+    "cm2-07": {
+      "note": "scuole Filippo Bassi",
+      "priority": true
+    },
+    "cm2-08": {
+      "note": "marciapiedi via Gramsci direzione Funo, compresi ingresso stazione FS e corsello quartiere Zama",
+      "priority": false
+    },
+    "cm2-09": {
+      "note": "scuole Einaudi: semaforo pedonale e accessi via Costituzione e via Einaudi",
+      "priority": true
+    },
+    "cm2-10": {
+      "note": "via Gramsci dalla rotonda via Galliera alla rotonda via Matteotti",
+      "priority": false
+    },
+    "cm2-11": {
+      "note": "via Rimembranze - via Roma - Carabinieri",
+      "priority": false
+    },
+    "cm2-12": {
+      "note": "Galleria del Centro: corsello fino a parcheggio retro-piazza e corsello Gramsci-Kennedy",
+      "priority": false
+    },
+    "cm2-13": {
+      "note": "via Manzoni",
+      "priority": false
+    },
+    "cm2-14": {
+      "note": "entrata centro giovanile via Amendola",
+      "priority": false
+    },
+    "cm2-15": {
+      "note": "via Amendola fino alla stazione",
+      "priority": false
+    },
+    "cm2-16": {
+      "note": "via Carati",
+      "priority": false
+    },
+    "cm2-17": {
+      "note": "via XX Settembre",
+      "priority": false
+    },
+    "cm2-18": {
+      "note": "corsello parco Montale",
+      "priority": false
+    },
+    "cm2-19": {
+      "note": "corsello comparto 7: via Noce-via Chiesa",
+      "priority": false
+    },
+    "cm3-01": {
+      "note": "via Lame da via di Corticella a via Resistenza, compreso marciapiede verso centro commerciale ex stazione",
+      "priority": false
+    },
+    "cm3-02": {
+      "note": "Scuola Bonfiglioli in via Conti",
+      "priority": true
+    },
+    "cm3-03": {
+      "note": "via Resistenza-Scuole-Posta: marciapiede fino a via Risorgimento e pista ciclabile",
+      "priority": false
+    },
+    "cm3-04": {
+      "note": "via Lame tra via Resistenza e via Risorgimento",
+      "priority": false
+    },
+    "cm3-05": {
+      "note": "Farmacia comunale; via Fosse Ardeatine, pulire la strada; via Goldoni; via Caduti di Cefalonia",
+      "priority": true
+    },
+    "cm3-06": {
+      "note": "pista ciclabile via di Corticella, rotonda Torres-via Conti",
+      "priority": false
+    },
+    "cm4-01": {
+      "note": "Scuole materna",
+      "priority": false
+    },
+    "cm4-02": {
+      "note": "via Galliera da via 1 Maggio a via Quasimodo",
+      "priority": false
+    },
+    "cm4-03": {
+      "note": "ingresso Villa Salina da via 1 Maggio",
+      "priority": false
+    },
+    "cm4-04": {
+      "note": "via Quasimodo",
+      "priority": false
+    },
+    "cm4-05": {
+      "note": "pista ciclabile che congiunge 1 Maggio a Castel Maggiore",
+      "priority": false
+    },
+    "cm4-06": {
+      "note": "ex Scuola Elementare",
+      "priority": false
+    }
+  }
+}

@@ -129,11 +129,11 @@ jobs:
           data = json.loads(path.read_text(encoding="utf-8"))
           target = "it.vargacantieri.hera"
           play_client = {
-              "client_id": "645390631375-kmmt53chsud1mh035deetb3bk3iiev2b.apps.googleusercontent.com",
+              "client_id": "645390631375-276apibanbkc7359mejp24rudhssgk9j.apps.googleusercontent.com",
               "client_type": 1,
               "android_info": {
                   "package_name": target,
-                  "certificate_hash": "E551CD8F62EE6C1D07BDA3F3F9F1230FB56698E5"
+                  "certificate_hash": "5EBDC020EFC21C073E2BA35031BE7D64EB77B8C7"
               }
           }
           for client in data.get("client", []):

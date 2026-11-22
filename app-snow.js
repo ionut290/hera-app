@@ -337,7 +337,9 @@
   }
   api.syncSnowWeatherPanel = syncSnowWeatherPanel;
   function configureSnowSideMenu(isSnow) {
-    const allowed = new Set(["open-panel-commesse", "open-panel-squadre", "open-panel-personale", "open-panel-mezzi", "open-panel-utenti", "open-hours-btn"]);
+    const allowed = canManageData()
+      ? new Set(["open-panel-commesse", "open-panel-squadre", "open-panel-personale", "open-panel-mezzi", "open-panel-utenti", "open-hours-btn"])
+      : new Set(["open-hours-btn"]);
     document.body.classList.toggle("snow-management-context", Boolean(isSnow));
     document.querySelectorAll("#side-menu .menu-title-btn").forEach((button) => {
       button.classList.toggle("hidden", Boolean(isSnow) && !allowed.has(button.id));

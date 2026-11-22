@@ -10,7 +10,7 @@
   const admin = () => typeof canManageData === "function" && !!canManageData();
   const sectionsFor = (group) => group.indices.flatMap((sectionIndex) => C.sections[sectionIndex].stops.map((stop) => ({...stop, sectionIndex, sectionName:C.sections[sectionIndex].name})));
   const today = () => { const d=new Date(); return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-"); };
-  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, docs:new Map(), selected:null, busy:false};
+  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null};
   const stopByKey = (key) => C.sections.flatMap((s,i)=>s.stops.map((x)=>({...x,sectionIndex:i}))).find((s)=>s.key===key);
   function targetGroup(stop){ return C.groups.findIndex((g)=>g.indices.includes(stop.sectionIndex)); }
   function aggregate(stopKey){
@@ -79,7 +79,7 @@
       }
       state.lineLayers.push({key:stop.key,lines});
     });
-    if(bounds.length)state.map.fitBounds(bounds,{padding:[24,24],maxZoom:16,animate:false});
+    if(bounds.length && state.lastFitGroup !== state.group){state.map.fitBounds(bounds,{padding:[24,24],maxZoom:16,animate:false});state.lastFitGroup=state.group;}
   }
   function select(key,center){
     const stop=stopByKey(key);
@@ -114,7 +114,7 @@
     id("snow-plan-summary").textContent=completed+" / "+stops.length+" interventi completati · "+begun+" avviati · "+(stops.length-completed)+" ancora da completare";
     const list=id("snow-plan-stops");list.replaceChildren();
     stops.forEach((stop)=>{
-      const st=aggregate(stop.key),rec=state.records.find(r=>r.uid===currentUser?.uid&&r.stopKey===stop.key);
+      const st=aggregate(stop.key),userId=userReady()?currentUser.uid:null,rec=state.records.find(r=>r.uid===userId&&r.stopKey===stop.key);
       const article=document.createElement("article");article.className="snow-plan-stop"+(state.selected===stop.key?" selected":"");article.dataset.stopKey=stop.key;
       article.innerHTML='<div class="snow-plan-stop-head"><strong>'+(stop.priority?'🔴 PRIORITÀ · ':'')+esc(stop.sectionName)+' · '+stop.number+'</strong><span style="color:'+colors[st]+'">'+esc(labels[st])+'</span></div><p>'+esc(stop.note)+'</p><div class="snow-plan-stop-buttons"><button type="button" data-action="view">📍 Mappa</button><button type="button" data-action="navigate">🧭 Naviga</button><button type="button" data-action="start">▶ Inizia</button><button type="button" data-action="clear">'+(rec?.cleared?'✓ Pulito':'✓ Pulizia')+'</button><button type="button" data-action="salt">'+(rec?.salted?'✓ Salato':'🧂 Salatura')+'</button><button type="button" data-action="problem">⚠ Problema</button></div><small>Tratto '+(stop.parts?.length?"presente in cartografia":"non disponibile")+' · Verificare accessi e lati dei marciapiedi sul posto.</small>';
       article.querySelectorAll("button").forEach((button)=>button.addEventListener("click",()=>{
@@ -183,14 +183,14 @@
             indirizzo:stop.note,
             descrizioneVia:stop.note,
             noteOperative:stop.note,
-            comune:stop.sectionIndex===2?"Trebbo di Reno":"Castel Maggiore",
+            comune:"Castel Maggiore",localita:stop.sectionName,
             tipologiaImpianto:"Via neve",
             codicePrezzo:"NEVE-STRADA",
             snowRoad:true,snowPlanStopKey:stop.key,snowPlanSection:stop.sectionIndex,
             snowPriority:!!stop.priority,snowPlanSource:C.version,
             routePath:(first?.coords||[]).map(p=>({lat:p[0],lng:p[1]})),
             roadStatus:"todo",done:false,doneAt:null,doneBy:"",
-            sortOrder:stop.number,createdAt:firebase.firestore.FieldValue.serverTimestamp(),createdBy:currentUser?.email||""
+            sortOrder:stop.sectionIndex===3?6+stop.number:stop.number,createdAt:firebase.firestore.FieldValue.serverTimestamp(),createdBy:currentUser?.email||""
           };
           if(marker){data.latitudine=marker[0];data.longitudine=marker[1];data.lat=marker[0];data.lng=marker[1];}
           pending.push({ref:root.collection("impianti").doc(docId),data});

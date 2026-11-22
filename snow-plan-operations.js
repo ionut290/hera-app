@@ -342,7 +342,7 @@
     if(!window.confirm("Eliminare solo il piccolo pezzo selezionato dalla mappa?"))return;
     const partIndex=state.editPartIndex,segmentIndex=state.editSelectedSegment,points=state.editParts[partIndex]||[];
     if(!points[segmentIndex+1])return;
-    const left=points.slice(0,segmentIndex+1),right=points.slice(segmentIndex+2),replacement=[];
+    const left=points.slice(0,segmentIndex+1),right=points.slice(segmentIndex+1),replacement=[];
     if(left.length>=2)replacement.push(left);
     if(right.length>=2)replacement.push(right);
     state.editParts.splice(partIndex,1,...replacement);
@@ -361,17 +361,19 @@
   }
   function cancelEdit(){
     state.editing=false;state.drawingLine=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();
-    const hint=id("snow-plan-edit-hint");if(hint)hint.textContent="Seleziona un intervento per correggerlo.";
+    const hint=id("snow-plan-edit-hint");if(hint)hint.textContent="Seleziona un intervento per correggerlo.";if(normalPageVisible()&&activeGroup()>=0)draw();
   }
   async function saveEdit(){
     if(!admin()||!state.editing)return;
     const stop=currentStop();if(!stop)return;
     if(state.editParts.some(part=>part.length<2))return message("Completa ogni linea con almeno due punti o rimuovi il tratto vuoto.");
     try{
+      const savedParts=state.editParts.map(p=>p.map(x=>[Number(x[0]),Number(x[1])]));
       await db.collection("snowRouteGeometry").doc(stop.key).set({
-        stopKey:stop.key,parts:state.editParts.map(p=>p.map(x=>[Number(x[0]),Number(x[1])])),
+        stopKey:stop.key,parts:savedParts,
         updatedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedBy:currentUser?.email||""
       },{merge:true});
+      state.geometries[stop.key]={stopKey:stop.key,parts:savedParts};
       cancelEdit();message("Percorso salvato in modo permanente."); 
     }catch(error){message("Salvataggio mappa non riuscito: "+(error.code||error.message));}
   }

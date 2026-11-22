@@ -35,12 +35,12 @@ assert.ok(rules.includes("match /snowRouteWork/{recordId}"),"progress rules miss
 // The requested 3 groups must use normal Varga Cantieri commesse, never the
 // dedicated snow-service Firestore collection or its separated page.
 const operations=fs.readFileSync("snow-plan-operations.js","utf8");
-assert.match(operations,/db\\.collection\\("commesse"\\)/,"snow jobs must be ordinary commesse");
-assert.doesNotMatch(operations,/db\\.collection\\("neve_commesse"\\)/,"unexpected separate snow collection");
-assert.match(operations,/id\\("impianti-page"\\)/,"snow route map must be in ordinary commessa detail");
-assert.match(operations,/id\\("panel-commesse"\\)/,"import button must be in ordinary commesse management");
-assert.doesNotMatch(operations,/id\\("snow-service-page"\\)/,"legacy isolated snow page selected");
-assert.match(operations,/normalPageVisible\\(\\)/,"normal route page guard missing");
-assert.match(operations,/snowPlanStopKey/,"missing stable per-stop ID");
 
+assert.ok(operations.includes('db.collection("commesse")'),"must import into normal commesse");
+assert.ok(!operations.includes('db.collection("neve_commesse")'),"must not import into separate neve_commesse");
+assert.ok(operations.includes('id("impianti-page")'),"route map must be on normal commessa page");
+assert.ok(operations.includes('id("panel-commesse")'),"admin import button belongs in ordinary commesse management");
+assert.ok(!operations.includes('id("snow-service-page")'),"separate snow page must not host these routes");
+assert.ok(operations.includes("normalPageVisible()"),"ordinary detail page guard missing");
+assert.ok(operations.includes("snowPlanStopKey"),"stable stop IDs required");
 console.log("OK: Castel Maggiore 3 commesse, 4 sections, 45 route stops, normal commesse, map and progress checks");

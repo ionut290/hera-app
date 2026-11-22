@@ -301,7 +301,7 @@
     renderEditPartOptions();
     id("snow-plan-edit-hint").textContent="Traccia linea aggiunge un pezzo. Inserisci punto divide una linea: inserisci due punti ai bordi del tratto, poi tocca il piccolo segmento rosso e cancellalo.";
     if(state.map){state.map.off("click",onEditMapClick);state.map.on("click",onEditMapClick);}
-    drawEditPreview();message("Modifica attiva per "+stop.sectionName+" · "+stop.number+".");
+    openEditorPage(stop);drawEditPreview();message("Editor mappa aperto per "+stop.sectionName+" · "+stop.number+".");
   }
   function renderEditPartOptions(){
     const select=id("snow-plan-edit-part");if(!select)return;

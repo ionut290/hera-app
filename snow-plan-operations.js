@@ -42,7 +42,7 @@
     if(!id("snow-plan-panel")){
       const section=document.createElement("section");
       section.id="snow-plan-panel";section.className="card snow-plan-panel hidden";section.setAttribute("aria-hidden","true");
-      section.innerHTML='<div class="snow-plan-heading"><div><h2>🗺️ Percorsi neve Castel Maggiore</h2><p class="muted">3 commesse · 4 sottopercorsi · 45 interventi. Tratti di strada, marciapiedi, ciclabili e accessi.</p></div></div><div id="snow-plan-editor" class="snow-plan-editor hidden"><button id="snow-plan-edit-start" type="button">✏️ Correggi tracciato</button><button id="snow-plan-edit-new-part" type="button">✏️ Traccia linea</button><button id="snow-plan-edit-insert-point" type="button">➕ Inserisci punto</button><label>Tratto <select id="snow-plan-edit-part"></select></label><button id="snow-plan-edit-delete-part" type="button">🗑 Elimina piccolo pezzo</button><button id="snow-plan-edit-undo" type="button">Annulla ultimo punto</button><button id="snow-plan-edit-save" type="button">Salva mappa</button><button id="snow-plan-edit-cancel" type="button">Annulla modifica</button><span id="snow-plan-edit-hint">Seleziona un intervento per correggerlo.</span></div><button id="snow-plan-new-run" type="button" class="btn">🔄 Nuovo giro · azzera stati</button><p id="snow-plan-feedback" role="status" aria-live="polite" class="muted"></p><div class="snow-plan-filters"><label>Commessa<select id="snow-plan-group"></select></label><label>Giorno<input type="date" id="snow-plan-day"></label></div><p class="snow-plan-rules">⚠️ Piano operativo: attivazione oltre 5 cm di neve a terra. I punti prioritari sono evidenziati; verificare sul posto marciapiedi, accessi e geometrie. Ogni intervento prevede passaggi pedonali e salatura.</p><p id="snow-plan-resources" class="snow-plan-resources"></p><div class="snow-plan-summary" id="snow-plan-summary"></div><div class="snow-plan-layout"><div class="snow-plan-map-wrap"><div id="snow-plan-map" role="application" aria-label="Mappa dei percorsi neve"></div><div class="snow-plan-map-legend"><span>🔵 Da fare</span><span>🟠 In corso</span><span>🟢 Completato</span><span>🔴 Problema</span></div></div><div class="snow-plan-details"><h3 id="snow-plan-list-title">Interventi da pulire</h3><div id="snow-plan-stops"></div></div></div><p class="muted snow-plan-source">Tracce ricostruite da OSM / DBTR e ortofoto, da confermare sul posto. © OpenStreetMap contributors (ODbL), Regione Emilia-Romagna (CC BY 4.0). Il percorso di trasferimento stradale non equivale al tratto da pulire.</p>';
+      section.innerHTML='<div class="snow-plan-heading"><div><h2>🗺️ Percorsi neve Castel Maggiore</h2><p class="muted">3 commesse · 4 sottopercorsi · 45 interventi. Tratti di strada, marciapiedi, ciclabili e accessi.</p></div></div><div id="snow-plan-editor" class="snow-plan-editor hidden"><button id="snow-plan-edit-start" type="button">🗺️ Apri editor mappa</button><button id="snow-plan-edit-new-part" type="button">✏️ Traccia linea</button><button id="snow-plan-edit-insert-point" type="button">➕ Inserisci punto</button><label>Tratto <select id="snow-plan-edit-part"></select></label><button id="snow-plan-edit-delete-part" type="button">🗑 Elimina piccolo pezzo</button><button id="snow-plan-edit-undo" type="button">Annulla ultimo punto</button><button id="snow-plan-edit-save" type="button">Salva mappa</button><button id="snow-plan-edit-cancel" type="button">Annulla modifica</button><span id="snow-plan-edit-hint">Seleziona un intervento per correggerlo.</span></div><button id="snow-plan-new-run" type="button" class="btn">🔄 Nuovo giro · azzera stati</button><p id="snow-plan-feedback" role="status" aria-live="polite" class="muted"></p><div class="snow-plan-filters"><label>Commessa<select id="snow-plan-group"></select></label><label>Giorno<input type="date" id="snow-plan-day"></label></div><p class="snow-plan-rules">⚠️ Piano operativo: attivazione oltre 5 cm di neve a terra. I punti prioritari sono evidenziati; verificare sul posto marciapiedi, accessi e geometrie. Ogni intervento prevede passaggi pedonali e salatura.</p><p id="snow-plan-resources" class="snow-plan-resources"></p><div class="snow-plan-summary" id="snow-plan-summary"></div><div class="snow-plan-layout"><div class="snow-plan-map-wrap"><div id="snow-plan-map" role="application" aria-label="Mappa dei percorsi neve"></div><div class="snow-plan-map-legend"><span>🔵 Da fare</span><span>🟠 In corso</span><span>🟢 Completato</span><span>🔴 Problema</span></div></div><div class="snow-plan-details"><h3 id="snow-plan-list-title">Interventi da pulire</h3><div id="snow-plan-stops"></div></div></div><p class="muted snow-plan-source">Tracce ricostruite da OSM / DBTR e ortofoto, da confermare sul posto. © OpenStreetMap contributors (ODbL), Regione Emilia-Romagna (CC BY 4.0). Il percorso di trasferimento stradale non equivale al tratto da pulire.</p>';
       const mapCard=page.querySelector("#commessa-operational-card");
       if(mapCard)mapCard.insertAdjacentElement("afterend",section);else page.appendChild(section);
       id("snow-plan-group").innerHTML=C.groups.map((g,i)=>'<option value="'+i+'">'+esc(g.name)+'</option>').join("");
@@ -262,6 +262,36 @@
     },error=>message("Giro non sincronizzato: "+(error.code||error.message)));
   }
   function currentStop(){return stopByKey(state.selected);}
+  function openEditorPage(stop){
+    let page=id("snow-plan-dedicated-editor");
+    if(!page){
+      page=document.createElement("section");
+      page.id="snow-plan-dedicated-editor";
+      page.className="snow-map-editor-page";
+      page.hidden=true;
+      page.setAttribute("role","dialog");
+      page.setAttribute("aria-modal","true");
+      page.setAttribute("aria-label","Editor dedicato della mappa");
+      page.innerHTML='<header class="snow-map-editor-header"><button id="snow-map-editor-back" type="button" aria-label="Torna alla mappa della commessa">← Indietro</button><div><h1>Modifica mappa</h1><p id="snow-map-editor-route"></p></div><span class="snow-map-editor-admin">Solo admin</span></header><div class="snow-map-editor-controls"></div><main class="snow-map-editor-canvas"></main>';
+      document.body.appendChild(page);
+      id("snow-map-editor-back").addEventListener("click",cancelEdit);
+    }
+    id("snow-map-editor-route").textContent=stop.sectionName+" · intervento "+stop.number;
+    const editor=id("snow-plan-editor"),mapWrap=id("snow-plan-map")?.closest(".snow-plan-map-wrap");
+    if(editor&&!page.contains(editor))page.querySelector(".snow-map-editor-controls").appendChild(editor);
+    if(mapWrap&&!page.contains(mapWrap))page.querySelector(".snow-map-editor-canvas").appendChild(mapWrap);
+    page.hidden=false;
+    document.body.classList.add("snow-map-editor-open");
+    requestAnimationFrame(()=>setTimeout(()=>state.map?.invalidateSize(),80));
+  }
+  function closeEditorPage(){
+    const page=id("snow-plan-dedicated-editor"),panel=id("snow-plan-panel"),editor=id("snow-plan-editor"),mapWrap=id("snow-plan-map")?.closest(".snow-plan-map-wrap"),layout=panel?.querySelector(".snow-plan-layout");
+    if(editor&&panel)panel.insertBefore(editor,id("snow-plan-new-run"));
+    if(mapWrap&&layout)layout.prepend(mapWrap);
+    if(page)page.hidden=true;
+    document.body.classList.remove("snow-map-editor-open");
+    requestAnimationFrame(()=>setTimeout(()=>state.map?.invalidateSize(),80));
+  }
   function startEdit(){
     if(!admin())return message("Solo un amministratore può correggere la mappa.");
     const stop=currentStop();if(!stop)return message("Seleziona prima un intervento dall’elenco.");
@@ -271,7 +301,7 @@
     renderEditPartOptions();
     id("snow-plan-edit-hint").textContent="Traccia linea aggiunge un pezzo. Inserisci punto divide una linea: inserisci due punti ai bordi del tratto, poi tocca il piccolo segmento rosso e cancellalo.";
     if(state.map){state.map.off("click",onEditMapClick);state.map.on("click",onEditMapClick);}
-    drawEditPreview();message("Modifica attiva per "+stop.sectionName+" · "+stop.number+".");
+    openEditorPage(stop);drawEditPreview();message("Editor mappa aperto per "+stop.sectionName+" · "+stop.number+".");
   }
   function renderEditPartOptions(){
     const select=id("snow-plan-edit-part");if(!select)return;
@@ -376,7 +406,7 @@
     drawEditPreview();
   }
   function cancelEdit(){
-    state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();
+    state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();closeEditorPage();
     const hint=id("snow-plan-edit-hint");if(hint)hint.textContent="Seleziona un intervento per correggerlo.";if(normalPageVisible()&&activeGroup()>=0)draw();
   }
   async function saveEdit(){

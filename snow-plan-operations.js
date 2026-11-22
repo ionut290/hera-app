@@ -253,7 +253,9 @@
     // La verifica leggera non invia richieste se la commessa non cambia.
     let oldId=null,wasVisible=false;
     setInterval(()=>{
-      const visible=normalPageVisible(),active=visible?selectedCommessaId:null;
+      const importButton=id("snow-plan-import");
+      if(importButton)importButton.hidden=!admin();
+      const visible=normalPageVisible(),active=visible && typeof selectedCommessaId!=="undefined" ? selectedCommessaId : null;
       if(visible!==wasVisible || active!==oldId){wasVisible=visible;oldId=active;show();}
     },900);
     show();

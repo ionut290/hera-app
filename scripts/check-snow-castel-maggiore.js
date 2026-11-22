@@ -12,6 +12,18 @@ assert.equal(catalog.sections.length,4);
 assert.deepEqual(Array.from(catalog.sections,x=>x.stops.length),[14,19,6,6]);
 assert.deepEqual(Array.from(catalog.groups,g=>Array.from(g.indices)),[[0],[1],[2,3]]);
 assert.deepEqual(Array.from(catalog.groups,g=>g.name),["Castel Maggiore 1","Castel Maggiore 2","Castel Maggiore 3"]);
+const expectedPriority=[[3,4,5,6,7],[2,5,6,7,9],[2,3,5],[]];
+assert.deepEqual(Array.from(catalog.sections,s=>Array.from(s.stops.filter(x=>x.priority),x=>x.number)),expectedPriority,
+  "red-priority numbers must match the original PDF");
+assert.ok(catalog.sections[0].stops[8].note.includes("Ilaria Alpi"),"biblioteca park reference must be preserved");
+assert.ok(catalog.sections[3].name.includes("1° Maggio"),"keep original 1° Maggio area label");
+assert.equal(catalog.groups[0].people,"3+1");
+assert.equal(catalog.groups[1].people,"3");
+assert.equal(catalog.groups[2].people,"3");
+assert.ok(catalog.groups.every(g=>Array.isArray(g.equipment)&&g.equipment.length>=3),"equipment from PDF must be present");
+assert.ok(catalog.groups[0].equipment.some(x=>x.includes("spandisale")),"shared spandisale must be listed");
+assert.equal(catalog.activationRule.minSnowOnGroundCmExclusive,5);
+assert.ok(catalog.sourceNotice.includes("indicative"),"geometry must not be represented as certified");
 const all=catalog.sections.flatMap(x=>x.stops);
 assert.equal(all.length,45);
 const keys=all.map(x=>x.key);

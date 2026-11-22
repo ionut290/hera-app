@@ -5,6 +5,10 @@ on:
     paths:
       - "scripts/seed-castel-maggiore-normal.cjs"
       - ".github/workflows/seed-castel-maggiore-normal.yml"
+  pull_request:
+    paths:
+      - "scripts/seed-castel-maggiore-normal.cjs"
+      - ".github/workflows/seed-castel-maggiore-normal.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,7 +16,22 @@ concurrency:
   group: snow-castel-maggiore-normal-commesse-import
   cancel-in-progress: false
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate catalog without credentials or writes
+        run: |
+          node --check scripts/seed-castel-maggiore-normal.cjs
+          node scripts/seed-castel-maggiore-normal.cjs --validate
+          node scripts/check-snow-castel-maggiore.js
   import-normal-commesse:
+    needs: validate
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -22,11 +41,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Validate catalog and JS before production access
-        run: |
-          node --check scripts/seed-castel-maggiore-normal.cjs
-          node scripts/seed-castel-maggiore-normal.cjs --validate
-          node scripts/check-snow-castel-maggiore.js
       - name: Install pinned Firebase Admin SDK
         run: npm ci --prefix functions --omit=dev --no-audit --no-fund --ignore-scripts
       - name: Authenticate to Firebase project

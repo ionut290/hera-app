@@ -94,7 +94,7 @@
         bounds.push(...coords);
         const uncertain=part.matched!==true || !/verified|dbtr/i.test(stop.geometryStatus||"");
         const line=L.polyline(coords,{color,weight:status==="done"?6:5,opacity:.92,dashArray:uncertain?"6 6":null,lineCap:"round"});
-        line.on("click",event=>{if(state.editing)selectEditSegment(stop.key,partIndex,event.latlng);else select(stop.key,true)});line.bindTooltip((stop.priority?"★ PRIORITÀ · ":"")+stop.sectionName+" · "+stop.number,{sticky:true});
+        line.on("click",event=>{if(state.editing&&state.drawingLine){event.originalEvent?.stopPropagation?.();onEditMapClick(event)}else if(state.editing)selectEditSegment(stop.key,partIndex,event.latlng);else select(stop.key,true)});line.bindTooltip((stop.priority?"★ PRIORITÀ · ":"")+stop.sectionName+" · "+stop.number,{sticky:true});
         line.addTo(state.paths);lines.push(line);
       });
       if(stop.marker?.length===2){

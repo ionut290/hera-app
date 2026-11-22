@@ -302,7 +302,7 @@
     state.editParts=(saved&&Array.isArray(saved.parts)?saved.parts:stop.parts.map(p=>p.coords||[])).map(p=>p.map(x=>[+x[0],+x[1]]));
     state.editPartIndex=state.editParts.length?0:-1;state.editSelectedSegment=-1;state.drawingLine=false;state.insertingPoint=false;state.editing=true;
     renderEditPartOptions();
-    id("snow-plan-edit-hint").textContent="Traccia linea aggiunge un pezzo. Inserisci punto divide una linea: inserisci due punti ai bordi del tratto, poi tocca il piccolo segmento rosso e cancellalo.";
+    id("snow-plan-edit-hint").textContent="Traccia linea aggiunge un pezzo. Inserisci punto divide una linea: inserisci due punti ai bordi del tratto, poi tocca il piccolo segmento rosso e cancellalo. Da PC puoi esportare o importare KML per lavorare in Google Earth o QGIS; salva qui solo dopo aver controllato la mappa.";
     if(state.map){state.map.off("click",onEditMapClick);state.map.on("click",onEditMapClick);}
     openEditorPage(stop);drawEditPreview();message("Editor mappa aperto per "+stop.sectionName+" · "+stop.number+".");
   }

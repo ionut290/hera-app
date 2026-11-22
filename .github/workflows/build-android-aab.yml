@@ -123,6 +123,28 @@ jobs:
           fi
           echo "$ANDROID_GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
           python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("android/app/google-services.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          target = "it.vargacantieri.hera"
+          play_client = {
+              "client_id": "645390631375-kmmt53chsud1mh035deetb3bk3iiev2b.apps.googleusercontent.com",
+              "client_type": 1,
+              "android_info": {
+                  "package_name": target,
+                  "certificate_hash": "E551CD8F62EE6C1D07BDA3F3F9F1230FB56698E5"
+              }
+          }
+          for client in data.get("client", []):
+              if client.get("client_info", {}).get("android_client_info", {}).get("package_name") == target:
+                  oauth = client.setdefault("oauth_client", [])
+                  if not any(x.get("client_id") == play_client["client_id"] for x in oauth):
+                      oauth.append(play_client)
+                  break
+          path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+          PY
+          python3 - <<'PY'
           from pathlib import Path
 
           path = Path("android/variables.gradle")

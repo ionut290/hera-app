@@ -42,7 +42,7 @@
     if(!id("snow-plan-panel")){
       const section=document.createElement("section");
       section.id="snow-plan-panel";section.className="card snow-plan-panel hidden";section.setAttribute("aria-hidden","true");
-      section.innerHTML='<div class="snow-plan-heading"><div><h2>🗺️ Percorsi neve Castel Maggiore</h2><p class="muted">3 commesse · 4 sottopercorsi · 45 interventi. Tratti di strada, marciapiedi, ciclabili e accessi.</p></div></div><div id="snow-plan-editor" class="snow-plan-editor hidden"><button id="snow-plan-edit-start" type="button">🗺️ Apri editor mappa</button><button id="snow-plan-edit-new-part" type="button">✏️ Traccia linea</button><button id="snow-plan-edit-insert-point" type="button">➕ Inserisci punto</button><label>Tratto <select id="snow-plan-edit-part"></select></label><button id="snow-plan-edit-delete-part" type="button">🗑 Elimina piccolo pezzo</button><button id="snow-plan-edit-undo" type="button">Annulla ultimo punto</button><button id="snow-plan-edit-save" type="button">Salva mappa</button><button id="snow-plan-edit-cancel" type="button">Annulla modifica</button><span id="snow-plan-edit-hint">Seleziona un intervento per correggerlo.</span></div><button id="snow-plan-new-run" type="button" class="btn">🔄 Nuovo giro · azzera stati</button><p id="snow-plan-feedback" role="status" aria-live="polite" class="muted"></p><div class="snow-plan-filters"><label>Commessa<select id="snow-plan-group"></select></label><label>Giorno<input type="date" id="snow-plan-day"></label></div><p class="snow-plan-rules">⚠️ Piano operativo: attivazione oltre 5 cm di neve a terra. I punti prioritari sono evidenziati; verificare sul posto marciapiedi, accessi e geometrie. Ogni intervento prevede passaggi pedonali e salatura.</p><p id="snow-plan-resources" class="snow-plan-resources"></p><div class="snow-plan-summary" id="snow-plan-summary"></div><div class="snow-plan-layout"><div class="snow-plan-map-wrap"><div id="snow-plan-map" role="application" aria-label="Mappa dei percorsi neve"></div><div class="snow-plan-map-legend"><span>🔵 Da fare</span><span>🟠 In corso</span><span>🟢 Completato</span><span>🔴 Problema</span></div></div><div class="snow-plan-details"><h3 id="snow-plan-list-title">Interventi da pulire</h3><div id="snow-plan-stops"></div></div></div><p class="muted snow-plan-source">Tracce ricostruite da OSM / DBTR e ortofoto, da confermare sul posto. © OpenStreetMap contributors (ODbL), Regione Emilia-Romagna (CC BY 4.0). Il percorso di trasferimento stradale non equivale al tratto da pulire.</p>';
+      section.innerHTML='<div class="snow-plan-heading"><div><h2>🗺️ Percorsi neve Castel Maggiore</h2><p class="muted">3 commesse · 4 sottopercorsi · 45 interventi. Tratti di strada, marciapiedi, ciclabili e accessi.</p></div></div><div id="snow-plan-editor" class="snow-plan-editor hidden"><button id="snow-plan-edit-start" type="button">🗺️ Apri editor mappa</button><button id="snow-plan-edit-new-part" type="button">✏️ Traccia linea</button><button id="snow-plan-edit-insert-point" type="button">➕ Inserisci punto</button><label>Tratto <select id="snow-plan-edit-part"></select></label><button id="snow-plan-edit-delete-part" type="button">🗑 Elimina piccolo pezzo</button><button id="snow-plan-edit-undo" type="button">Annulla ultimo punto</button><button id="snow-plan-edit-save" type="button">Salva mappa</button><button id="snow-plan-edit-export-kml" type="button">Esporta KML</button><button id="snow-plan-edit-import-kml" type="button">Importa KML</button><input id="snow-plan-edit-kml-file" type="file" accept=".kml,application/vnd.google-earth.kml+xml" hidden><button id="snow-plan-edit-cancel" type="button">Annulla modifica</button><span id="snow-plan-edit-hint">Seleziona un intervento per correggerlo.</span></div><button id="snow-plan-new-run" type="button" class="btn">🔄 Nuovo giro · azzera stati</button><p id="snow-plan-feedback" role="status" aria-live="polite" class="muted"></p><div class="snow-plan-filters"><label>Commessa<select id="snow-plan-group"></select></label><label>Giorno<input type="date" id="snow-plan-day"></label></div><p class="snow-plan-rules">⚠️ Piano operativo: attivazione oltre 5 cm di neve a terra. I punti prioritari sono evidenziati; verificare sul posto marciapiedi, accessi e geometrie. Ogni intervento prevede passaggi pedonali e salatura.</p><p id="snow-plan-resources" class="snow-plan-resources"></p><div class="snow-plan-summary" id="snow-plan-summary"></div><div class="snow-plan-layout"><div class="snow-plan-map-wrap"><div id="snow-plan-map" role="application" aria-label="Mappa dei percorsi neve"></div><div class="snow-plan-map-legend"><span>🔵 Da fare</span><span>🟠 In corso</span><span>🟢 Completato</span><span>🔴 Problema</span></div></div><div class="snow-plan-details"><h3 id="snow-plan-list-title">Interventi da pulire</h3><div id="snow-plan-stops"></div></div></div><p class="muted snow-plan-source">Tracce ricostruite da OSM / DBTR e ortofoto, da confermare sul posto. © OpenStreetMap contributors (ODbL), Regione Emilia-Romagna (CC BY 4.0). Il percorso di trasferimento stradale non equivale al tratto da pulire.</p>';
       const mapCard=page.querySelector("#commessa-operational-card");
       if(mapCard)mapCard.insertAdjacentElement("afterend",section);else page.appendChild(section);
       id("snow-plan-group").innerHTML=C.groups.map((g,i)=>'<option value="'+i+'">'+esc(g.name)+'</option>').join("");
@@ -55,6 +55,9 @@
       id("snow-plan-edit-insert-point").addEventListener("click",toggleInsertPoint);
       id("snow-plan-edit-delete-part").addEventListener("click",deleteEditSegment);
       id("snow-plan-edit-save").addEventListener("click",saveEdit);
+      id("snow-plan-edit-export-kml").addEventListener("click",exportKml);
+      id("snow-plan-edit-import-kml").addEventListener("click",()=>id("snow-plan-edit-kml-file").click());
+      id("snow-plan-edit-kml-file").addEventListener("change",importKml);
       id("snow-plan-edit-cancel").addEventListener("click",cancelEdit);
       id("snow-plan-edit-part").addEventListener("change",changeEditPart);
       id("snow-plan-new-run").addEventListener("click",resetRun);
@@ -408,6 +411,45 @@
   function cancelEdit(){
     state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();closeEditorPage();
     const hint=id("snow-plan-edit-hint");if(hint)hint.textContent="Seleziona un intervento per correggerlo.";if(normalPageVisible()&&activeGroup()>=0)draw();
+  }
+  function exportKml(){
+    const stop=currentStop();if(!stop)return message("Seleziona un intervento prima di esportare.");
+    const saved=state.editing?state.editParts:(state.geometries[stop.key]?.parts||stop.parts.map(p=>p.coords||[]));
+    const lines=saved.filter(part=>Array.isArray(part)&&part.length>=2);
+    if(!lines.length)return message("Questo intervento non ha linee da esportare.");
+    const placemarks=lines.map((part,index)=>{
+      const coordinates=part.map(point=>Number(point[1])+","+Number(point[0])+",0").join(" ");
+      return "<Placemark><name>"+esc(stop.sectionName+" · "+stop.number+" · Linea "+(index+1))+"</name><LineString><tessellate>1</tessellate><coordinates>"+coordinates+"</coordinates></LineString></Placemark>";
+    }).join("");
+    const xml='<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>'+esc(stop.sectionName+" · intervento "+stop.number)+'</name>'+placemarks+'</Document></kml>';
+    const blob=new Blob([xml],{type:"application/vnd.google-earth.kml+xml;charset=utf-8"}),url=URL.createObjectURL(blob),link=document.createElement("a");
+    link.href=url;link.download=(stop.key||"percorso-neve").replace(/[^a-z0-9_-]+/gi,"-")+".kml";
+    document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    message("KML esportato. Aprilo in Google Earth Pro, Google Earth Web o QGIS.");
+  }
+  async function importKml(event){
+    const input=event.target,file=input.files?.[0];if(!file)return;
+    try{
+      if(!state.editing||!admin())return message("Apri prima l’editor dedicato come amministratore.");
+      const textContent=await file.text(),xml=new DOMParser().parseFromString(textContent,"application/xml");
+      if(xml.querySelector("parsererror"))throw new Error("Il file KML non è valido.");
+      let lineStrings=Array.from(xml.getElementsByTagNameNS("*","LineString"));
+      if(!lineStrings.length)lineStrings=Array.from(xml.getElementsByTagName("LineString"));
+      const imported=lineStrings.map(line=>{
+        let node=line.getElementsByTagNameNS("*","coordinates")[0]||line.getElementsByTagName("coordinates")[0];
+        if(!node)return [];
+        return (node.textContent||"").trim().split(/\s+/).map(token=>{
+          const values=token.split(",").map(Number);
+          return values.length>=2&&Number.isFinite(values[0])&&Number.isFinite(values[1])?[values[1],values[0]]:null;
+        }).filter(Boolean);
+      }).filter(part=>part.length>=2);
+      if(!imported.length)throw new Error("Nel KML non ho trovato linee con almeno due punti.");
+      if(!window.confirm("Caricare "+imported.length+" linea/e KML al posto delle linee attualmente in modifica? Le modifiche diventano permanenti solo dopo “Salva mappa”."))return;
+      state.editParts=imported;state.editPartIndex=0;state.editSelectedSegment=-1;state.drawingLine=false;state.insertingPoint=false;
+      renderEditPartOptions();drawEditPreview();
+      message(imported.length+" linee importate in anteprima. Controlla la mappa e premi “Salva mappa” per conservarle.");
+    }catch(error){message("Importazione KML non riuscita: "+(error.message||error));}
+    finally{input.value="";}
   }
   async function saveEdit(){
     if(!admin()||!state.editing)return;

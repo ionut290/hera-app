@@ -251,12 +251,15 @@
     window.addEventListener("focus",show);
     // Le pagine commessa vengono aperte senza cambiare sempre l'hash.
     // La verifica leggera non invia richieste se la commessa non cambia.
-    let oldId=null,wasVisible=false;
+    let oldId=null,oldGroup=-2,oldSignedIn=false,wasVisible=false;
     setInterval(()=>{
       const importButton=id("snow-plan-import");
       if(importButton)importButton.hidden=!admin();
       const visible=normalPageVisible(),active=visible && typeof selectedCommessaId!=="undefined" ? selectedCommessaId : null;
-      if(visible!==wasVisible || active!==oldId){wasVisible=visible;oldId=active;show();}
+      const group=visible?activeGroup():-1,signedIn=userReady();
+      if(visible!==wasVisible || active!==oldId || group!==oldGroup || signedIn!==oldSignedIn){
+        wasVisible=visible;oldId=active;oldGroup=group;oldSignedIn=signedIn;show();
+      }
     },900);
     show();
   }

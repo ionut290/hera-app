@@ -44,3 +44,11 @@
   .snow-plan-stop-buttons button { flex:1 1 calc(33% - 6px); }
   .snow-plan-map-legend { font-size:10px; }
 }
+
+/* Import action is in the normal Gestione > Commesse toolbar, not the NEVE section. */
+.snow-normal-import-wrap { display:flex; flex-direction:column; align-items:flex-start; gap:3px; min-width:0; max-width:100%; }
+.snow-normal-import-wrap .btn { min-height:44px; max-width:100%; white-space:normal; text-align:left; }
+.snow-normal-import-wrap p { margin:0; font-size:12px; overflow-wrap:anywhere; }
+#impianti-page > .snow-plan-panel.hidden { display:none !important; }
+#impianti-page > .snow-plan-panel { margin-top:14px; }
+#snow-plan-group:disabled { opacity:1; cursor:default; }

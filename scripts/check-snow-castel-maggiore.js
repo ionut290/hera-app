@@ -32,4 +32,15 @@ assert.ok(snow.includes("getSnowRoadParts(impianto)"),"multipath render not inst
 assert.ok(snow.includes("!impianto.snowPlanStopKey"),"official stops must not be GPS auto-completed");
 const rules=fs.readFileSync("firestore.rules","utf8");
 assert.ok(rules.includes("match /snowRouteWork/{recordId}"),"progress rules missing");
-console.log("OK: Castel Maggiore 3 commesse, 4 sections, 45 route stops, map and progress checks");
+// The requested 3 groups must use normal Varga Cantieri commesse, never the
+// dedicated snow-service Firestore collection or its separated page.
+const operations=fs.readFileSync("snow-plan-operations.js","utf8");
+
+assert.ok(operations.includes('db.collection("commesse")'),"must import into normal commesse");
+assert.ok(!operations.includes('db.collection("neve_commesse")'),"must not import into separate neve_commesse");
+assert.ok(operations.includes('id("impianti-page")'),"route map must be on normal commessa page");
+assert.ok(operations.includes('id("panel-commesse")'),"admin import button belongs in ordinary commesse management");
+assert.ok(!operations.includes('id("snow-service-page")'),"separate snow page must not host these routes");
+assert.ok(operations.includes("normalPageVisible()"),"ordinary detail page guard missing");
+assert.ok(operations.includes("snowPlanStopKey"),"stable stop IDs required");
+console.log("OK: Castel Maggiore 3 commesse, 4 sections, 45 route stops, normal commesse, map and progress checks");

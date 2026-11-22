@@ -48,7 +48,13 @@
       id("snow-plan-group").innerHTML=C.groups.map((g,i)=>'<option value="'+i+'">'+esc(g.name)+'</option>').join("");
       id("snow-plan-group").disabled=true;
       id("snow-plan-day").value=state.dayKey;
-      id("snow-plan-day").addEventListener("change",(e)=>{state.dayKey=e.target.value||today();watchRun();watch();});\n      id("snow-plan-edit-start").addEventListener("click",startEdit);\n      id("snow-plan-edit-undo").addEventListener("click",undoEditPoint);\n      id("snow-plan-edit-save").addEventListener("click",saveEdit);\n      id("snow-plan-edit-cancel").addEventListener("click",cancelEdit);\n      id("snow-plan-edit-part").addEventListener("change",changeEditPart);\n      id("snow-plan-new-run").addEventListener("click",resetRun);
+      id("snow-plan-day").addEventListener("change",(e)=>{state.dayKey=e.target.value||today();watchRun();watch();});
+      id("snow-plan-edit-start").addEventListener("click",startEdit);
+      id("snow-plan-edit-undo").addEventListener("click",undoEditPoint);
+      id("snow-plan-edit-save").addEventListener("click",saveEdit);
+      id("snow-plan-edit-cancel").addEventListener("click",cancelEdit);
+      id("snow-plan-edit-part").addEventListener("change",changeEditPart);
+      id("snow-plan-new-run").addEventListener("click",resetRun);
 
     }
     // Importazione delle 3 commesse dall'elenco ordinario di Gestione commesse.
@@ -77,7 +83,9 @@
     const bounds=[];
     stops.forEach((stop)=>{
       const status=aggregate(stop.key),color=colors[status],lines=[];
-      (stop.parts||[]).forEach((part)=>{
+      const saved=state.geometries[stop.key];
+      const parts=saved?.parts?.length?saved.parts.map(coords=>({coords,matched:true})):stop.parts||[];
+      parts.forEach((part)=>{
         const coords=(part.coords||[]).filter((p)=>Array.isArray(p)&&p.length===2&&Number.isFinite(+p[0])&&Number.isFinite(+p[1]));
         if(coords.length<2)return;
         bounds.push(...coords);
@@ -152,7 +160,7 @@
     state.records=[];if(key)draw();
     if(!key)return;
     state.unlisten=db.collection("snowRouteWork").where("dayKey","==",state.dayKey).onSnapshot((snapshot)=>{
-      state.records=snapshot.docs.map(d=>({id:d.id,...d.data()}));
+      state.records=snapshot.docs.map(d=>({id:d.id,...d.data()})).filter(r=>(r.runId||"initial")===state.runId);
       draw();
     },(error)=>message("Impossibile sincronizzare gli interventi: "+(error.code||error.message)));
   }
@@ -313,11 +321,15 @@
       if(state.activeCommessaId!==selectedCommessaId || state.group!==index){
         state.activeCommessaId=selectedCommessaId;state.group=index;state.selected=null;state.lastFitGroup=null;
       }
+      watchGeometry();watchRun();
       draw();watch();
       requestAnimationFrame(()=>setTimeout(()=>state.map?.invalidateSize(),180));
     }else{
       state.activeCommessaId=null;state.lastFitGroup=null;
       if(state.unlisten){state.unlisten();state.unlisten=null;state.subscriptionKey=null;}
+      if(state.geometryUnlisten){state.geometryUnlisten();state.geometryUnlisten=null;}
+      if(state.runUnlisten){state.runUnlisten();state.runUnlisten=null;state.runSubscriptionKey=null;}
+      cancelEdit();
     }
   }
   function init(){
@@ -330,7 +342,10 @@
     let oldId=null,oldGroup=-2,oldSignedIn=false,wasVisible=false;
     setInterval(()=>{
       const importButton=id("snow-plan-import");
-      if(importButton)importButton.hidden=!admin();\n      const editBox=id("snow-plan-editor"),runButton=id("snow-plan-new-run");\n      if(editBox)editBox.classList.toggle("hidden",!admin());\n      if(runButton)runButton.hidden=!admin();
+      if(importButton)importButton.hidden=!admin();
+      const editBox=id("snow-plan-editor"),runButton=id("snow-plan-new-run");
+      if(editBox)editBox.classList.toggle("hidden",!admin());
+      if(runButton)runButton.hidden=!admin();
       const visible=normalPageVisible(),active=visible && typeof selectedCommessaId!=="undefined" ? selectedCommessaId : null;
       const group=visible?activeGroup():-1,signedIn=userReady();
       if(visible!==wasVisible || active!==oldId || group!==oldGroup || signedIn!==oldSignedIn){

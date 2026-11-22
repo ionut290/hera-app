@@ -65,10 +65,11 @@
     if (!impiantoId) return;
     await db.collection("neve_commesse").doc(selectedCommessaId).collection("impianti").doc(impiantoId).set({
       routePath: path,
+      snowPathOverride: !!selectedImpiantoData.snowPlanStopKey,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: currentUser?.email || ""
     }, { merge: true });
-    selectedImpiantoData = { ...selectedImpiantoData, routePath: path };
+    selectedImpiantoData = { ...selectedImpiantoData, routePath: path, snowPathOverride: !!selectedImpiantoData.snowPlanStopKey };
     setFullscreenFeedback("Tracciato via neve salvato: la linea diventerà verde quando l’operatore passa sulla strada.");
     renderMap();
   }
@@ -136,6 +137,8 @@
   // I 45 tratti del piano neve hanno spesso rami separati (due marciapiedi,
   // accessi e corselli). Non unirli con una falsa linea di collegamento.
   function getSnowRoadParts(impianto) {
+    const manual = getSnowRoadPath(impianto);
+    if (impianto?.snowPathOverride && manual.length >= 2) return [{ path: manual, matched: true }];
     const key = String(impianto?.snowPlanStopKey || "");
     const catalog = window.VARGA_SNOW_CM_CATALOG;
     if (key && catalog?.sections) {

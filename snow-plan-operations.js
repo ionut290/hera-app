@@ -224,7 +224,6 @@
       }
       state.docs=new Map(C.groups.map((g,i)=>[g.id,refs[i].id]));
       message("COMMESSE NORMALI: "+C.groups.length+" commesse pronte, "+created+" interventi creati, "+existing+" già presenti. Nessun lavoro precedente sovrascritto.");
-      if(typeof subscribeCommesse==="function")subscribeCommesse();
       show();
     }catch(error){console.error("Importazione piano neve",error);message("Creazione non completata: "+(error.message||error)+". Riprova: la procedura evita i duplicati.");}
     finally{state.busy=false;btn.disabled=false}

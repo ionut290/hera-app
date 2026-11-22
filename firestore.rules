@@ -208,7 +208,8 @@ service cloud.firestore {
         && request.resource.data.dayKey is string
         && request.resource.data.dayKey.matches("^20[0-9]{2}-[0-9]{2}-[0-9]{2}$")
         && request.resource.data.stopKey is string
-        && request.resource.data.stopKey.matches("^cm[1-4]-[0-9]{2}$")\n        && (!request.resource.data.keys().hasAny(["runId"]) || (request.resource.data.runId is string && request.resource.data.runId.matches("^[A-Za-z0-9_-]{1,80}$")))
+        && request.resource.data.stopKey.matches("^cm[1-4]-[0-9]{2}$")
+        && (!request.resource.data.keys().hasAny(["runId"]) || (request.resource.data.runId is string && request.resource.data.runId.matches("^[A-Za-z0-9_-]{1,80}$")))
         && request.resource.data.cleared is bool
         && request.resource.data.salted is bool
         && request.resource.data.state in ["todo", "in_progress", "blocked", "done"];

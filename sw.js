@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v243";
+const CACHE_NAME = "varga-cantieri-shell-v244";
 const CACHE_RESET_VERSION = "20261120-password-selfservice1";
 const APP_SHELL = [
   "./",
@@ -28,6 +28,36 @@ const APP_SHELL = [
   "./salatura-strada-routes.js?v=20261123-1",
   "./salatura-strada-integration.js?v=20261123-1",
   "./salatura-strada-integration.css?v=20261123-1",
+  "./piano-neve/index.html",
+  "./piano-neve/app.js",
+  "./piano-neve/style.css",
+  "./piano-neve/snow-config.js",
+  "./piano-neve/snow-auth-bridge.js",
+  "./piano-neve/offline-outbox.js",
+  "./piano-neve/major-network.js",
+  "./piano-neve/major-network-shard-01.js",
+  "./piano-neve/major-network-shard-02.js",
+  "./piano-neve/major-network-shard-03.js",
+  "./piano-neve/major-network-shard-04.js",
+  "./piano-neve/major-network-shard-05.js",
+  "./piano-neve/major-network-shard-06.js",
+  "./piano-neve/major-network-shard-07.js",
+  "./piano-neve/major-network-shard-08.js",
+  "./piano-neve/major-network-shard-09.js",
+  "./piano-neve/major-network-shard-10.js",
+  "./piano-neve/major-network-shard-11.js",
+  "./piano-neve/major-offline-nav.js",
+  "./piano-neve/major-routes.js",
+  "./piano-neve/major-parking.js",
+  "./piano-neve/routes-rebuilt.js",
+  "./piano-neve/routes-instructions.js",
+  "./piano-neve/navigation-heading.js",
+  "./piano-neve/screen-awake.js",
+  "./piano-neve/pdf-importer.js",
+  "./piano-neve/commesse/territory.js",
+  "./piano-neve/commesse/osm-boundaries.js",
+  "./piano-neve/commesse/territory-ui.js",
+  "./piano-neve/vendor/leaflet-rotate-0.2.8.js",
   "./snow-plan-operations.css?v=20261122-kml1",
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260928-maps-waze-direct1",
@@ -216,6 +246,8 @@ const networkFirstForDocument = async (request) => {
     }
     return response;
   } catch (_) {
+    if (new URL(request.url).pathname.endsWith("/piano-neve/index.html"))
+      return (await caches.match(request)) || caches.match("./piano-neve/index.html") || caches.match("./index.html");
     return (await caches.match(request)) || caches.match("./index.html");
   }
 };

@@ -1,7 +1,7 @@
 /* Three salatura commesse are idempotent and never overwrite KML commesse. */
 "use strict";
 const fs=require("node:fs"),vm=require("node:vm"),assert=require("node:assert/strict");
-const window={},document={readyState:"loading",addEventListener:()=>{},getElementById:()=>null};
+const window={},document={baseURI:"https://varga.example/index.html",readyState:"loading",addEventListener:()=>{},getElementById:()=>null};
 vm.runInNewContext(fs.readFileSync("salatura-strada-routes.js","utf8"),{window});
 const routes=window.VARGA_SALATURA_STRADA_ROUTES;
 assert.equal(routes.length,3);
@@ -32,13 +32,13 @@ const db={
 const firebase={firestore:{FieldValue:{serverTimestamp:()=>"now"}}};
 vm.runInNewContext(fs.readFileSync("salatura-strada-integration.js","utf8"),
   {window,document,db,firebase,currentUser:{uid:"admin",email:"test@example.com"},
-    canManageData:()=>true,console,Intl,Number,setInterval:()=>0});
+    canManageData:()=>true,console,Intl,Number,URL,setInterval:()=>0});
 const integration=window.VargaSalaturaStrada;
 assert.ok(module&&typeof integration.seed==="function");
 (async()=>{
-  assert.equal(integration.url(0),"https://ionut290.github.io/Varga-piano-neve/?vargaMajorRoute=0");
-  assert.equal(integration.url(1),"https://ionut290.github.io/Varga-piano-neve/?vargaMajorRoute=1");
-  assert.equal(integration.url(2),"https://ionut290.github.io/Varga-piano-neve/?vargaMajorRoute=2");
+  assert.equal(integration.url(0),"https://varga.example/piano-neve/index.html?vargaMajorRoute=0");
+  assert.equal(integration.url(1),"https://varga.example/piano-neve/index.html?vargaMajorRoute=1");
+  assert.equal(integration.url(2),"https://varga.example/piano-neve/index.html?vargaMajorRoute=2");
   await integration.seed();
   assert.equal(docs.size,4);
   assert.equal(docs.get("existing-minor").valuable,"KEEP");
@@ -53,11 +53,13 @@ assert.ok(module&&typeof integration.seed==="function");
   const html=fs.readFileSync("index.html","utf8");
   assert.ok(html.includes("snow-castel-maggiore-kml-real.js?v=20261123-viabilita-minore1"));
   assert.ok(html.includes("salatura-strada-routes.js?v=20261123-1"));
-  assert.ok(html.includes("salatura-strada-integration.js?v=20261123-1"));
+  assert.ok(html.includes("salatura-strada-integration.js?v=20261123-unified1"));
   assert.ok(html.indexOf("salatura-strada-routes.js")<html.indexOf("salatura-strada-integration.js"));
   const sw=fs.readFileSync("sw.js","utf8");
-  assert.ok(sw.includes("salatura-strada-integration.js?v=20261123-1"));
+  assert.ok(sw.includes("salatura-strada-integration.js?v=20261123-unified1"));
   const source=fs.readFileSync("salatura-strada-integration.js","utf8");
+  assert.ok(source.includes('new URL("./piano-neve/index.html"'),"same-origin embedded Piano Neve missing");
+  assert.ok(!source.includes("https://ionut290.github.io"),"must not direct users to another login");
   assert.ok(!source.includes('collection("snowRouteGeometry")'),"do not modify VIABILITA MINORE KML");
   assert.ok(!source.includes('collection("pianoNeveStreetWork")'),"do not duplicate original Piano Neve progress");
   console.log("OK: Salatura Strada 1, 2, 3, 102 streets, idempotent commesse, safe deep links.");

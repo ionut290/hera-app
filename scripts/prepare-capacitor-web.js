@@ -19,7 +19,7 @@ for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
   fs.copyFileSync(path.join(root, entry.name), path.join(output, entry.name));
 }
 
-for (const directory of ["icons"]) {
+for (const directory of ["icons", "piano-neve"]) {
   fs.cpSync(path.join(root, directory), path.join(output, directory), { recursive: true });
 }
 
@@ -58,7 +58,12 @@ const requiredFiles = [
   "today-summary-interactions.js",
   "update-app-feature.js",
   "sw.js",
-  "icons/varga-cantieri-512.png"
+  "icons/varga-cantieri-512.png",
+  "piano-neve/index.html",
+  "piano-neve/app.js",
+  "piano-neve/snow-auth-bridge.js",
+  "piano-neve/major-network.js",
+  "piano-neve/major-network-shard-11.js"
 ];
 for (const relativePath of requiredFiles) {
   const target = path.join(output, relativePath);

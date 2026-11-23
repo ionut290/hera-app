@@ -8,6 +8,8 @@ on:
       - 'scripts/check-salatura-strada.cjs'
       - 'scripts/check-salatura-unified.cjs'
       - 'scripts/prepare-capacitor-web.js'
+      - 'scripts/prepare-netlify-web.cjs'
+      - 'scripts/check-netlify-public-build.cjs'
       - 'firestore.rules'
       - 'piano-neve/**'
       - 'index.html'
@@ -22,6 +24,8 @@ on:
       - 'scripts/check-salatura-strada.cjs'
       - 'scripts/check-salatura-unified.cjs'
       - 'scripts/prepare-capacitor-web.js'
+      - 'scripts/prepare-netlify-web.cjs'
+      - 'scripts/check-netlify-public-build.cjs'
       - 'firestore.rules'
       - 'piano-neve/**'
       - '.github/workflows/check-salatura-strada.yml'
@@ -48,5 +52,10 @@ jobs:
         run: node scripts/check-salatura-strada.cjs
       - name: Verify shared Firebase Auth and complete offline GPS road network
         run: node scripts/check-salatura-unified.cjs
+      - name: Verify real Netlify production build (including offline Piano Neve)
+        run: |
+          node scripts/prepare-capacitor-web.js
+          node scripts/prepare-netlify-web.cjs
+          node scripts/check-netlify-public-build.cjs
       - name: Preserve Castel Maggiore KML snow routing
         run: node scripts/check-snow-castel-maggiore.js

@@ -71,10 +71,12 @@
         weight: isSidewalk ? 3.5 : 2, opacity: .67,
         dashArray: isSidewalk ? null : "4 6", interactive: false
       }).addTo(s.osmLayer);
-      // Aggancio automatico SOLO alle geometrie esplicitamente marcate
-      // come marciapiedi. Attraversamenti e percorsi generici sono
-      // visualizzati come riferimento, ma non attirano i vertici.
-      if (isSidewalk) for (let i = 1; i < path.length && s.lines.length < 10000; i++)
+      // Il tracciamento può utilizzare anche percorsi pedonali OSM non
+      // etichettati come sidewalk: molte geometrie dei marciapiedi sono
+      // classificate footway, pedestrian oppure path con accesso pedonale.
+      // Gli attraversamenti restano visibili come riferimento separato.
+      const isPedestrianPath = !isCrossing && (item.tags?.highway === "footway" || item.tags?.highway === "pedestrian" || (item.tags?.highway === "path" && item.tags?.foot !== "no"));
+      if (isPedestrianPath) for (let i = 1; i < path.length && s.lines.length < 10000; i++)
         s.lines.push([path[i-1], path[i]]);
       count++;
       if (isSidewalk) sidewalks++;
@@ -82,7 +84,7 @@
     if (!s.map.hasLayer(s.osmLayer)) s.osmLayer.addTo(s.map);
     s.alignButton.disabled = !s.lines.length;
     if (!count) setStatus("Nessun percorso pedonale OSM separato: usa DBTR e satellite per correggere manualmente.");
-    else setStatus(count+" percorsi pedonali OSM ("+sidewalks+" marcati come marciapiedi). Azzurro = marciapiedi, arancione = attraversamenti, grigio = altri percorsi. Controlla sempre il lato.");
+    else setStatus(count+" percorsi pedonali OSM ("+sidewalks+" marcati come marciapiedi). Azzurro = marciapiedi, grigio = altri percorsi pedonali usabili per aggancio, arancione = attraversamenti. Controlla sempre il lato.");
   }
 
   async function loadOSM(s, stop, parts) {

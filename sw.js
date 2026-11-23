@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v244";
+const CACHE_NAME = "varga-cantieri-shell-v245";
 const CACHE_RESET_VERSION = "20261120-password-selfservice1";
 const APP_SHELL = [
   "./",
@@ -24,7 +24,7 @@ const APP_SHELL = [
   "./administrative-calendar.js?v=20260829-admin-hours1",
   "./snow-castel-maggiore-catalog.js?v=20261122-pdf-audit1",
   "./app-snow.js?v=20261122-cm-routes1",
-  "./snow-plan-operations.js?v=20261122-kml1",
+  "./snow-plan-operations.js?v=20261123-snow-ux1",
   "./salatura-strada-routes.js?v=20261123-1",
   "./salatura-strada-integration.js?v=20261123-unified1",
   "./salatura-strada-integration.css?v=20261123-unified1",
@@ -58,7 +58,7 @@ const APP_SHELL = [
   "./piano-neve/commesse/osm-boundaries.js",
   "./piano-neve/commesse/territory-ui.js",
   "./piano-neve/vendor/leaflet-rotate-0.2.8.js",
-  "./snow-plan-operations.css?v=20261122-kml1",
+  "./snow-plan-operations.css?v=20261123-snow-ux1",
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260928-maps-waze-direct1",
   "./green-assistant.css?v=20260830-brave-manuals3",

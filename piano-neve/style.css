@@ -1,0 +1,298 @@
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:system-ui,-apple-system,sans-serif;background:#08131d;color:#eef6fb}body{overflow:hidden}header{height:64px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:#08131d}header b{display:block;font-size:17px}header small{display:block;color:#8fa6b6;margin-top:2px}button{border:0;border-radius:14px;padding:13px 15px;font-weight:850;background:#dfe8ee;color:#0b1720}header button{font-size:22px;padding:7px 13px}main{height:calc(100% - 64px);position:relative}#map{height:100%;width:100%;background:#cfd9df}#panel{position:absolute;z-index:1000;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));background:rgba(8,19,29,.97);padding:12px;border-radius:22px;box-shadow:0 10px 40px #0008;max-height:64vh;overflow:auto}.tabs{display:flex;gap:7px;margin-bottom:10px;position:sticky;top:0;z-index:3}.tab{flex:1;padding:10px 5px;font-size:12px;background:#172936;color:#b9cad5}.tab.active{background:#eef6fb;color:#07131c}.status{display:flex;justify-content:space-between;gap:12px;align-items:center}.status span{color:#9db0bc;font-size:12px}.status b{text-align:right;font-size:14px;max-width:75%}.metrics{display:flex;justify-content:space-between;text-align:center;margin:12px 0}.metrics div{flex:1}.metrics b,.metrics small{display:block}.metrics small{font-size:10px;color:#91a6b3}#hint,#minor p{font-size:12px;color:#b5c5cf;margin:8px 0}.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.compact button{padding:9px}.go{background:#24b95d;color:white}.pause{background:#f2ad32}.danger{background:#d94a4a;color:white}.doneBtn{background:#20bd62;color:#fff}button:disabled{opacity:.35}.progress{margin:2px 0 10px}.progress>b{font-size:13px}.progress>span{float:right;font-weight:900}.progress>div{height:6px;background:#263a47;border-radius:9px;margin-top:5px;overflow:hidden}.progress i{display:block;height:100%;width:0;background:#20bd62;border-radius:9px;transition:.25s}#navBanner{margin:8px 0;padding:7px 10px;border-radius:10px;background:#182b38;font-size:11px;font-weight:900;text-align:center}#stops{max-height:132px;overflow:auto;margin:8px 0;display:grid;gap:6px}.stopItem{display:flex;align-items:center;gap:8px;padding:8px;border-radius:12px;background:#132532;color:#eef6fb;font-size:11px;font-weight:750;text-align:left}.stopItem.active{outline:2px solid #fff}.stopNo{min-width:25px;height:25px;border-radius:50%;display:grid;place-items:center;background:#d83f3f;color:#fff}.stopItem.done .stopNo{background:#20b95d}.stopItem.done{opacity:.68}.stopText{line-height:1.2}.primaryActions{display:grid;grid-template-columns:1fr 1.35fr;gap:8px}.primaryActions button{min-height:52px}.primaryActions .doneBtn{grid-column:1/-1}.secondaryActions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:7px}.secondaryActions button{padding:9px 4px;font-size:10px}.leaflet-control-attribution{font-size:8px}.routePin{background:transparent!important;border:0!important}.routePin span{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#d83f3f;color:#fff;border:3px solid #fff;font-weight:900;box-shadow:0 2px 7px #0008}.routePin.done span{background:#20bd62}.routePin.active span{background:#1976d2;transform:scale(1.18)}@media(min-width:800px){#panel{left:auto;width:440px;right:20px;bottom:20px}}
+
+.surfaceLegend{display:grid;gap:6px;margin:12px 0;font-size:14px;color:#c3d2dc}.surfaceLegend label{display:flex;align-items:center;gap:8px}.surfaceLegend input{width:18px;height:18px}.surfaceLegend small{font-size:13px;line-height:1.4}
+
+.workInstruction{margin:12px 0;line-height:1.45}.workInstruction b{color:#eef6fb}.workInstruction p{margin:5px 0}#routeChecksDetails{margin:12px 0;line-height:1.45}#routeChecksDetails summary{cursor:pointer;font-weight:600}#routeChecks{padding-left:22px}#routeChecks li{margin:8px 0}
+
+.streetViewBtn{width:100%;padding:9px;margin:4px 0;font-size:12px;background:#243c4d;color:#eef6fb}
+
+/* Mobile: privilegia la mappa durante la viabilità minore */
+@media(max-width:799px){
+  #panel{max-height:42vh;padding:9px 10px;border-radius:18px;overflow:auto}
+  .tabs{margin-bottom:6px}
+  .tab{padding:8px 4px}
+  #minor .progress{margin-bottom:6px}
+  #minor .workInstruction,
+  #minor #routeChecksDetails,
+  #minor #routeInfo,
+  #minor #officialInfo,
+  #minor .surfaceLegend,
+  #minor #streetView{display:none}
+  #minor #stops{max-height:72px;margin:6px 0}
+  #minor .stopItem{padding:6px}
+  #minor .primaryActions button{min-height:44px;padding:9px 6px}
+  #minor .secondaryActions{margin-top:5px}
+  #minor .secondaryActions button{padding:7px 3px}
+  #minor #navBanner{margin:5px 0;padding:5px 8px}
+  #minor .actions.compact{display:none}
+  #minor .status{margin-bottom:2px}
+}
+
+#majorStreets{max-height:150px;overflow:auto;margin:8px 0;display:grid;gap:6px}
+#majorStreets .stopText{display:flex;justify-content:space-between;gap:8px;width:100%}
+#majorStreets .streetMeters{white-space:nowrap;color:#9fb4c1;font-weight:800}
+#major .majorService{margin-top:12px;padding-top:10px;border-top:1px solid #28404f}
+#majorRouteInfo{font-size:12px;color:#b5c5cf;margin:8px 0}
+@media(max-width:799px){#majorStreets{max-height:92px}#majorRouteInfo{font-size:11px;margin:5px 0}#major .majorService{margin-top:8px;padding-top:7px}}
+
+.majorArrow{background:transparent!important;border:0!important}.majorArrow span{display:block;font-size:24px;line-height:24px;text-shadow:0 1px 3px #fff,0 0 4px #fff;font-weight:900}.streetMeters{font-size:10px}
+
+.majorLaneLegend{display:flex;justify-content:space-between;gap:8px;margin:6px 0;font-size:10px;font-weight:800;color:#b8c9d3;flex-wrap:wrap}.majorLaneLegend span:last-child{opacity:.82}
+
+.brand{min-width:0}.headerMetrics{display:flex;align-items:center;gap:6px}.headerMetrics>span{min-width:58px;padding:5px 7px;border-radius:10px;background:#122430;text-align:center}.headerMetrics>span b,.headerMetrics>span small{display:block;line-height:1.05}.headerMetrics>span b{font-size:11px}.headerMetrics>span small{font-size:8px;color:#8fa6b6;margin-top:2px}.headerMetrics button{margin-left:1px}
+.routeChooser{position:fixed;inset:0;z-index:5000;background:rgba(4,12,18,.88);display:grid;place-items:center;padding:20px}.routeChooser[hidden]{display:none}.routeChooserCard{width:min(420px,100%);background:#0c1c27;border:1px solid #294150;border-radius:22px;padding:18px;display:grid;gap:10px;box-shadow:0 18px 55px #0009}.routeChooserCard>b{font-size:20px}.routeChooserCard>small{color:#91a6b3;margin-bottom:4px}.routePick{min-height:54px;color:#fff;text-align:left;font-size:14px}.redPick{background:#9f2f35}.bluePick{background:#1765a3}.yellowPick{background:#9b7a00}.chooserCancel{background:#223541;color:#dce8ef}
+.majorTop{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start}.majorTop .progress{margin:2px 0 6px}.routeChangeBtn{padding:7px 9px;border-radius:10px;font-size:10px;background:#213743;color:#d9e7ee;white-space:nowrap}
+#major .status{margin:2px 0}.majorService{font-size:11px}#major #hint{margin:5px 0;font-size:10px}
+@media(max-width:799px){header{height:56px;padding:7px 10px}main{height:calc(100% - 56px)}header b{font-size:14px}.headerMetrics{gap:4px}.headerMetrics>span{min-width:52px;padding:4px 5px}.headerMetrics>span b{font-size:10px}.headerMetrics>span small{font-size:7px}header button{font-size:18px;padding:6px 10px}#panel{max-height:38vh}.routeChooserCard{padding:16px;border-radius:18px}.routePick{min-height:50px}.majorLaneLegend{font-size:9px}.majorTop .progress>b{font-size:11px}.routeChangeBtn{font-size:9px;padding:6px 8px}#majorStreets{max-height:76px}.primaryActions button{min-height:44px}#major .actions button{padding:10px 7px}}
+
+.majorOnlyDone{grid-template-columns:1fr}.majorOnlyDone .doneBtn{grid-column:1;min-height:44px}
+
+.majorNavHud{position:absolute;z-index:1200;top:12px;left:50%;transform:translateX(-50%);width:min(620px,calc(100% - 28px));display:grid;grid-template-columns:64px minmax(0,1fr) 48px;gap:12px;align-items:center;padding:12px 14px;border-radius:18px;background:rgba(8,19,29,.96);color:#fff;border:1px solid #28404f;box-shadow:0 8px 28px #0008;pointer-events:auto}
+.majorNavHud[hidden]{display:none}.majorNavIcon{width:58px;height:58px;border-radius:15px;display:grid;place-items:center;background:#1677ff;font-size:38px;font-weight:900;line-height:1}.majorNavText{min-width:0;display:grid;gap:2px}.majorNavText b{font-size:19px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.majorNavText span{font-size:22px;font-weight:950}.majorNavText small{font-size:11px;color:#b8c9d3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.majorVoiceBtn{width:44px;height:44px;padding:0;border-radius:50%;font-size:20px;background:#213743;color:#fff}
+@media(max-width:799px){.majorNavHud{top:8px;width:calc(100% - 18px);grid-template-columns:50px minmax(0,1fr) 42px;gap:8px;padding:9px 10px;border-radius:15px}.majorNavIcon{width:46px;height:46px;border-radius:12px;font-size:30px}.majorNavText b{font-size:15px}.majorNavText span{font-size:18px}.majorNavText small{font-size:9px}.majorVoiceBtn{width:38px;height:38px;font-size:17px}}
+
+.majorVehicleIcon{background:transparent!important;border:0!important}.majorVehicleIcon span{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#1677ff;color:#fff;border:4px solid #fff;font-size:22px;font-weight:950;box-shadow:0 3px 12px #0008;transform-origin:50% 50%}
+
+#major{position:relative}.majorTopButtons{display:flex;align-items:center;gap:6px}.majorMoreBtn{width:34px;height:34px;padding:0;border-radius:10px;background:#213743;color:#fff;font-size:22px;line-height:1}.majorMoreBtn.active{background:#315062}.majorMoreMenu{position:absolute;z-index:1600;top:42px;right:0;width:min(300px,92%);display:grid;gap:8px;padding:10px;border:1px solid #2d4655;border-radius:14px;background:rgba(8,20,29,.98);box-shadow:0 12px 32px #0008}.majorMoreMenu[hidden]{display:none!important}.majorMoreMenu button{width:100%;min-height:42px}.majorMoreMenu #hint{margin:0;font-size:10px}.majorMoreMenu .majorService{margin:0;padding:0;border:0}.majorStateAction{margin-top:10px}.majorStateAction button{width:100%;min-height:52px;font-size:15px;font-weight:900}.majorStateAction button[hidden]{display:none!important}
+@media(max-width:799px){.majorTopButtons{gap:4px}.routeChangeBtn{padding:6px 7px}.majorMoreBtn{width:30px;height:30px;font-size:20px}.majorMoreMenu{top:36px;width:min(280px,94%);padding:9px}.majorStateAction{margin-top:8px}.majorStateAction button{min-height:50px}}
+
+.updateAppBtn{background:#263b47;color:#dce9ef}.appBuild{display:block;text-align:center;color:#78909c;font-size:9px;margin-top:2px}
+
+.startupCard>div{display:grid;gap:10px}.startupCard>div[hidden]{display:none!important}.startupCard .routePick{min-height:58px;font-size:15px}.chooserBack{justify-self:start;background:#213743;color:#dce8ef;padding:8px 12px;min-height:38px}.startupCard>b,.startupCard>div>b{font-size:21px}.startupCard small{color:#91a6b3}
+@media(max-width:799px){.startupCard .routePick{min-height:54px;font-size:14px}.startupCard>div{gap:9px}}
+
+/* Build 38: pannello operativo minimale. I dettagli restano dietro ⋯ */
+#major{position:relative;padding-top:2px}
+#major>.operatorMoreBtn{position:absolute;right:0;top:-48px;z-index:1700;width:42px;height:42px;padding:0;border-radius:13px;background:#213743;color:#fff;font-size:25px;line-height:1}
+#major>.operatorMoreBtn[aria-expanded="true"]{background:#315062}
+#major>.majorStateAction{margin:0}
+#major>.majorMoreMenu{position:absolute;right:0;bottom:64px;top:auto;width:min(430px,calc(100vw - 28px));max-height:min(68vh,620px);overflow:auto;display:grid;gap:9px;padding:12px;border:1px solid #2d4655;border-radius:16px;background:rgba(8,20,29,.985);box-shadow:0 14px 38px #000a;z-index:1800}
+#major>.majorMoreMenu[hidden]{display:none!important}
+#major>.majorMoreMenu .majorTop{display:block}
+#major>.majorMoreMenu .progress{margin:0 0 8px}
+#major>.majorMoreMenu #majorStreets{max-height:220px}
+#major>.majorMoreMenu button{width:100%;min-height:42px}
+#panel:has(#major:not([hidden])){padding:10px;background:rgba(8,19,29,.94);overflow:visible}
+@media(max-width:799px){
+  #panel:has(#major:not([hidden])){max-height:none;padding:8px;border-radius:18px}
+  #major>.operatorMoreBtn{top:-44px;width:38px;height:38px;font-size:23px}
+  #major>.majorMoreMenu{bottom:58px;width:calc(100vw - 36px);max-height:62vh;padding:10px}
+  #major>.majorMoreMenu #majorStreets{max-height:150px}
+}
+
+/* Build 39: menu dettagli maggiore come overlay pulito */
+.tabs[hidden]{display:none!important}
+#panel:has(#major:not([hidden])){background:transparent!important;box-shadow:none!important;padding:0 12px!important;overflow:visible!important;max-height:none!important}
+#major>.operatorMoreBtn{position:fixed!important;top:72px!important;right:12px!important;left:auto!important;z-index:1900!important;width:42px!important;height:42px!important;border-radius:13px!important;background:#213743!important;color:#fff!important;font-size:25px!important}
+#major>.majorMoreMenu{position:fixed!important;left:12px!important;right:12px!important;top:120px!important;bottom:92px!important;width:auto!important;max-height:none!important;overflow:auto!important;padding:14px!important;border:1px solid #2d4655!important;border-radius:18px!important;background:rgba(8,20,29,.985)!important;box-shadow:0 14px 38px #000a!important;z-index:1850!important}
+#major>.majorMoreMenu[hidden]{display:none!important}
+.majorMenuHeader{position:sticky;top:-14px;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-14px -14px 10px;padding:12px 14px;background:#0a1b26;border-bottom:1px solid #29414f}
+.majorMenuHeader>b{font-size:15px}.majorMoreClose{width:38px!important;min-height:38px!important;height:38px;padding:0!important;border-radius:50%!important;background:#213743!important;color:#fff!important;font-size:18px!important}
+#major>.majorStateAction{margin:0!important}
+#major>.majorStateAction button{width:100%!important;min-height:56px!important}
+@media(max-width:799px){
+  #major>.operatorMoreBtn{top:64px!important;right:10px!important;width:38px!important;height:38px!important;font-size:23px!important}
+  #major>.majorMoreMenu{left:10px!important;right:10px!important;top:108px!important;bottom:82px!important;padding:11px!important;border-radius:16px!important}
+  .majorMenuHeader{top:-11px;margin:-11px -11px 9px;padding:10px 11px}
+  #major>.majorStateAction button{min-height:54px!important;font-size:16px!important}
+}
+
+
+/* Build 43: auth wrapper must preserve the full-screen map layout on iOS/PWA */
+#snowApp{height:100%;min-height:100%;width:100%;position:relative;overflow:hidden}
+#snowApp[hidden]{display:none!important}
+body.auth-loading #snowApp{display:none!important}
+@supports (height:100dvh){
+  html,body,#snowApp{height:100dvh}
+}
+@media(max-width:799px){
+  #snowApp>header{padding-top:max(7px,env(safe-area-inset-top));height:calc(56px + env(safe-area-inset-top))}
+  #snowApp>main{height:calc(100% - 56px - env(safe-area-inset-top))}
+  #map{min-height:100%}
+}
+
+
+/* Build 44: login/auth screen must always be visible while access is being resolved */
+.login-screen{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:max(24px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom));background:#08131d;color:#eef6fb}
+.login-screen[hidden]{display:none!important}
+.login-card{width:min(420px,100%);display:grid;gap:12px;padding:22px;border:1px solid #294150;border-radius:22px;background:#0c1c27;box-shadow:0 18px 55px #0009}
+.login-card>b{font-size:18px}.login-card h2{margin:4px 0 0}.login-card p{margin:0;color:#9db0bc;font-size:13px}
+.login-card input{width:100%;min-height:50px;border:1px solid #385263;border-radius:13px;padding:12px 14px;background:#102532;color:#fff;font-size:16px;outline:none}
+.login-card button{width:100%;min-height:50px}.login-card #loginButton{background:#24b95d;color:#fff}
+#loginMessage{min-height:18px;color:#ffca72;font-size:12px;font-weight:700}
+body.auth-ready #loginScreen{display:none!important}
+body.auth-locked #loginScreen,body.auth-loading #loginScreen{display:grid}
+
+/* Build 49: admin archive action + stable Leaflet sizing on iOS */
+.adminArchiveBtn{background:#7b4cc9!important;color:#fff!important}
+#map,.leaflet-container{position:relative;overflow:hidden}
+.leaflet-map-pane,.leaflet-tile-pane{will-change:transform}
+
+/* Mobile: keep the three-dot operator menu above the pause/status banner. */
+@media(max-width:799px){#major>.operatorMoreBtn{top:calc(64px + env(safe-area-inset-top))!important;right:10px!important;z-index:2500!important}.majorPauseBanner,.pauseBanner,#pauseBanner{z-index:1800!important}}
+
+/* Build 50: menu button lives in the header area, never under navigation/pause HUD. */
+#major>.operatorMoreBtn{position:fixed!important;top:calc(env(safe-area-inset-top) + 12px)!important;right:72px!important;z-index:9999!important;display:block!important;visibility:visible!important;opacity:1!important}
+
+/* Build 51: place operator menu in the free header slot between title and metrics. */
+#major>.operatorMoreBtn{position:fixed!important;top:calc(env(safe-area-inset-top) + 15px)!important;right:calc(50% - 55px)!important;z-index:9999!important;width:42px!important;height:42px!important;display:block!important}
+@media(max-width:390px){#major>.operatorMoreBtn{right:calc(50% - 48px)!important;width:38px!important;height:38px!important}}
+
+/* Build 52: move operator menu left so it does not overlap header metrics. */
+#major>.operatorMoreBtn{left:calc(50% - 28px)!important;right:auto!important}
+@media(max-width:390px){#major>.operatorMoreBtn{left:calc(50% - 24px)!important;right:auto!important}}
+
+.routeEditor{position:fixed;inset:0;z-index:12000;background:#0008;display:grid;align-items:end}.routeEditor[hidden]{display:none!important}.routeEditorCard{background:#08131df7;border-radius:22px 22px 0 0;padding:16px max(14px,env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));display:grid;gap:10px;box-shadow:0 -10px 35px #0008}.routeEditorHead{display:flex;align-items:center;justify-content:space-between}.routeEditorHead b{font-size:18px}.routeEditorHead button{padding:8px 12px}.routeEditorCard p,#routeEditorStatus{font-size:12px;color:#b5c5cf;margin:0}.routeEditorActions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.routeEditorActions #routeAddStreet{grid-column:1/-1}.routeEditorActions button,#routeEditorSave{min-height:48px}.routeEditVertex{background:#fff;border:3px solid #1677ff;border-radius:50%;width:18px;height:18px}
+
+.adminRoutePopup{margin-top:10px;padding-top:9px;border-top:1px solid #ccd5da}.adminRoutePopup>b{font-size:12px}.adminRoutePopup>div{display:flex;gap:7px;margin-top:7px}.adminRoutePopup button{border:0;border-radius:9px;padding:9px 10px;font-weight:800;font-size:11px}.adminRoutePopup [data-edit]{background:#1677ff;color:white}.adminRoutePopup [data-del]{background:#c62828;color:white}
+
+/* Build 57: high-contrast startup choices on iPhone */
+.startupCard .routePick{background:#173348!important;color:#fff!important;border:2px solid #3d6076!important;font-weight:850!important;text-shadow:none!important;opacity:1!important;-webkit-text-fill-color:#fff!important;touch-action:manipulation}
+.startupCard .routePick:active{transform:scale(.985);background:#24506c!important}
+.startupCard>b{color:#fff!important}.startupCard>small,#startupModeStep>small{color:#a9bfcc!important}
+
+/* Build 59 startup buttons: force readable dark controls */
+#startupModeStep .routePick{background:#17394d!important;color:#fff!important;-webkit-text-fill-color:#fff!important;border:2px solid #4e7185!important;opacity:1!important;font-weight:900!important}
+
+/* Keep route colours distinct and choices above operator controls. */
+#startupChooser{z-index:10000}
+.startupCard .redPick{background:#9f2f35!important}
+.startupCard .bluePick{background:#1765a3!important}
+.startupCard .yellowPick{background:#765c00!important}
+#startupMajorRoutes,#startupMinorRoutes{display:grid;gap:10px}
+#startupMajorRoutes[hidden],#startupMinorRoutes[hidden]{display:none!important}
+
+/* Build 63: sale stimato durante il giro neve */
+.saltSetupCard label{font-size:13px;font-weight:800;color:#dce8ef;margin-bottom:-6px}
+.saltSetupCard input,.saltSetupCard select{width:100%;min-height:50px;border:1px solid #385263;border-radius:13px;padding:12px 14px;background:#102532;color:#fff;font-size:18px;font-weight:750}
+.saltSetupCard p{margin:0;color:#a9bfcc;font-size:12px;line-height:1.45}
+.saltSetupCard button{min-height:48px}
+.saltEstimate{margin:0 0 8px;padding:8px 11px;border:1px solid #3b5a4b;border-radius:12px;background:#133126;color:#65e697;text-align:center;font-size:13px;font-weight:950;letter-spacing:.2px}
+.saltEstimate[hidden]{display:none!important}
+.saltEstimate.lowSalt{border-color:#ff5555;background:#5b1c21;color:#fff}
+
+/* Build 64: tap the salt estimate to record a refill */
+.saltEstimate{cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
+.saltEstimate:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.saltEstimate:active{filter:brightness(1.2)}
+.saltAddDialog{z-index:11000}
+.saltAddDialog[hidden]{display:none!important}
+
+/* Build 67: modalità navigatore a tutto schermo per viabilità maggiore */
+.majorNavMetrics{display:none}
+body.major-navigation #snowApp>header{display:none!important}
+body.major-navigation #snowApp>main{position:fixed!important;inset:0!important;height:100%!important}
+body.major-navigation #map{position:absolute!important;inset:0!important;height:100%!important;width:100%!important}
+body.major-navigation .majorNavHud{position:fixed!important;top:calc(env(safe-area-inset-top) + 10px)!important;z-index:3200!important;width:min(650px,calc(100% - 20px))!important;border-radius:20px!important;background:rgba(18,33,43,.97)!important}
+body.major-navigation .majorNavMetrics{position:fixed;z-index:3150;top:calc(env(safe-area-inset-top) + 92px);left:50%;transform:translateX(-50%);width:min(520px,calc(100% - 92px));display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:6px;border-radius:14px;background:rgba(8,19,29,.91);box-shadow:0 5px 18px #0006;color:#fff}
+body.major-navigation .majorNavMetrics[hidden]{display:none!important}
+body.major-navigation .majorNavMetrics span{display:grid;gap:1px;text-align:center;padding:4px 5px;border-radius:10px;background:rgba(31,55,69,.82)}
+body.major-navigation .majorNavMetrics b{font-size:13px;line-height:1.05}
+body.major-navigation .majorNavMetrics small{font-size:8px;color:#a9bdc9;text-transform:uppercase;letter-spacing:.45px}
+body.major-navigation #panel:has(#major:not([hidden])){position:fixed!important;left:10px!important;right:10px!important;bottom:max(10px,env(safe-area-inset-bottom))!important;width:auto!important;z-index:3100!important;padding:0!important}
+body.major-navigation #major>.majorStateAction{margin:0!important}
+body.major-navigation #major>.majorStateAction button{min-height:62px!important;border-radius:20px!important;font-size:18px!important;box-shadow:0 8px 24px #0008!important}
+body.major-navigation #saltEstimate{display:none!important}
+body.major-navigation #major>.operatorMoreBtn{top:calc(env(safe-area-inset-top) + 94px)!important;right:10px!important;left:auto!important;z-index:3250!important;background:rgba(8,19,29,.94)!important}
+body.major-navigation #major>.majorMoreMenu{top:calc(env(safe-area-inset-top) + 142px)!important;bottom:calc(env(safe-area-inset-bottom) + 84px)!important;z-index:3300!important}
+body.major-navigation .leaflet-top.leaflet-right{top:145px}
+body.major-navigation .leaflet-control-zoom{display:none}
+body.major-navigation .majorVehicleIcon span{width:44px;height:44px;border-width:4px;font-size:25px;box-shadow:0 4px 16px #0009}
+@media(max-width:799px){
+ body.major-navigation .majorNavHud{grid-template-columns:52px minmax(0,1fr) 40px!important;padding:10px!important}
+ body.major-navigation .majorNavMetrics{top:calc(env(safe-area-inset-top) + 84px);width:calc(100% - 76px)}
+ body.major-navigation #major>.operatorMoreBtn{top:calc(env(safe-area-inset-top) + 86px)!important}
+ body.major-navigation #major>.majorMoreMenu{top:calc(env(safe-area-inset-top) + 132px)!important}
+}
+
+
+
+.followPosition{position:absolute;right:12px;top:160px;z-index:1250;padding:12px 16px;border-radius:24px;background:#102d40;color:#fff;box-shadow:0 3px 12px #0006;font-size:13px;min-height:44px;touch-action:manipulation}
+.followPosition[aria-pressed="false"]{background:#1677ff}
+body.major-navigation .followPosition{position:fixed;top:calc(env(safe-area-inset-top) + 150px);z-index:3250}
+
+
+/* Varga Piano Neve — Command Center UI v1 */
+:root{
+  --snow-ink:#102d3d;
+  --snow-deep:#071d2b;
+  --snow-blue:#176b91;
+  --snow-ice:#edf7fb;
+  --snow-card:#ffffffee;
+  --snow-green:#18a957;
+  --snow-orange:#e98b24;
+  --snow-red:#d94a4a;
+}
+html,body{background:linear-gradient(145deg,#eaf5f8 0%,#f7fbfc 48%,#e7f2f6 100%);color:var(--snow-ink)}
+body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.login-screen{background:
+ radial-gradient(circle at 18% 18%,#4e9bb833 0 2px,transparent 3px),
+ radial-gradient(circle at 82% 28%,#ffffff55 0 2px,transparent 3px),
+ linear-gradient(135deg,#061724 0%,#0b3145 52%,#176b91 100%);
+ background-size:180px 180px,230px 230px,100% 100%;
+}
+.login-screen:before{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,#ffffff0b 35%,#ffffff0b 36%,transparent 36%);pointer-events:none}
+.login-card{position:relative;width:min(460px,100%);padding:32px;border:1px solid #ffffff30;border-radius:28px;background:#092433eb;box-shadow:0 28px 80px #0008;backdrop-filter:blur(18px)}
+.login-card>b{display:flex;align-items:center;gap:10px;font-size:19px;letter-spacing:.3px;color:#f4fbff}
+.login-card>b:first-letter{font-size:26px}
+.login-card h2{font-size:30px;letter-spacing:-1px;color:#fff;margin-top:18px}
+.login-card p{color:#b7ced9}
+.login-card input{min-height:54px;border:1px solid #4b7182;background:#0c2c3d;color:#fff;transition:.2s}
+.login-card input:focus{border-color:#68c8ee;box-shadow:0 0 0 4px #68c8ee2b}
+.login-card #loginButton{background:linear-gradient(135deg,#20bd62,#128d68);box-shadow:0 8px 20px #128d6844}
+.login-card #loginGoogleButton{background:#f6fbfd;color:#102d3d}
+header{height:72px;padding:12px 18px;background:linear-gradient(115deg,#071d2b,#0c4057 60%,#176b91);box-shadow:0 8px 24px #0b354522;border-bottom:1px solid #ffffff20}
+header b{font-size:18px;letter-spacing:.2px;color:#f5fbff}
+header small{color:#a9c6d3}
+.headerMetrics>span{background:#ffffff12;border:1px solid #ffffff1c;backdrop-filter:blur(8px)}
+.headerMetrics>span b{color:#fff}
+.headerMetrics button{background:#ffffff18;color:#fff;border:1px solid #ffffff30}
+#map{background:#dbeaf0}
+#panel{background:#f9fcfdf2;border:1px solid #cfe1e8;box-shadow:0 16px 42px #0d30431c;border-radius:24px;color:var(--snow-ink)}
+.status span,#hint,#minor p{color:#607d8b}
+.status b{color:#173b4d}
+.progress>div{background:#d7e7ed}
+.progress i{background:linear-gradient(90deg,#0f9a70,#27c86e)}
+.go{background:linear-gradient(135deg,#17a968,#0c8d6f);box-shadow:0 7px 16px #0c8d6f2b}
+.doneBtn{background:linear-gradient(135deg,#1b9dca,#176b91)}
+.pause{background:#f2a528;color:#fff}
+.danger{background:#c94242}
+.routeChooser{background:#061a28aa;backdrop-filter:blur(8px)}
+.routeChooserCard{background:#f8fcfe;border:1px solid #c7e0e9;box-shadow:0 22px 70px #06283c45;color:#123344}
+.routeChooserCard>b{color:#123344}
+.routeChooserCard>small,.startupCard small{color:#607d8b}
+.routePick{background:#e8f4f8;color:#123344;box-shadow:0 3px 12px #0e4c6612}
+.startupCard .routePick,#startupModeStep .routePick{background:#e7f4f8!important;color:#123344!important;-webkit-text-fill-color:#123344!important;border:1px solid #b7d6e1!important;text-shadow:none!important}
+.startupCard .routePick:active{background:#cfeaf3!important}
+.startupCard .redPick{background:#fff0ef!important;color:#a33333!important}
+.startupCard .bluePick{background:#eaf4ff!important;color:#14598b!important}
+.startupCard .yellowPick{background:#fff7d9!important;color:#765a00!important}
+.chooserCancel{background:#e8f0f3;color:#345463}
+.majorNavHud{background:#092c3eeF;border:1px solid #ffffff32;box-shadow:0 12px 34px #06233366}
+.majorNavIcon{background:linear-gradient(135deg,#1b87c4,#176b91)}
+.majorNavMetrics{background:#092c3eeF}
+.followPosition{background:#fff;color:#176b91;border:1px solid #b7d6e1;box-shadow:0 6px 18px #1e5b7126}
+.followPosition[aria-pressed="false"]{background:#176b91;color:#fff}
+.streetViewBtn,.updateAppBtn{background:#e6f1f5;color:#176b91;border:1px solid #c1dce5}
+.surfaceLegend{color:#607d8b}
+#navBanner{background:#eaf4f7;color:#176b91;border:1px solid #c9e0e8}
+#major>.operatorMoreBtn{background:#fff!important;color:#176b91!important;border:1px solid #c3dfe8!important;box-shadow:0 5px 16px #16495d22}
+#major>.majorMoreMenu{background:#f8fcfe!important;border-color:#c7e0e9!important;box-shadow:0 18px 44px #123b4c38!important}
+.majorMenuHeader{background:#eef7fa;border-color:#cfe1e8}
+.majorMenuHeader>b{color:#123344}
+.majorMoreClose{background:#dfeef3!important;color:#176b91!important}
+#major>.majorStateAction button{box-shadow:0 8px 22px #11435422}
+.appBuild{color:#7897a5}
+@media(max-width:799px){
+  header{height:62px;padding:8px 11px}
+  header b{font-size:15px}
+  #panel{border-radius:20px}
+  .login-card{padding:25px;border-radius:24px}
+}
+
+/* Importazione rapida del piano neve da PDF */
+.pdfImportDialog{position:fixed;inset:0;z-index:14000;display:grid;place-items:center;padding:16px;background:#061724aa;backdrop-filter:blur(8px)}
+.pdfImportDialog[hidden]{display:none!important}.pdfImportCard{width:min(720px,100%);max-height:min(88vh,760px);overflow:auto;padding:20px;border:1px solid #c5dfe9;border-radius:24px;background:#f8fcfe;color:#123344;box-shadow:0 24px 80px #06233366}
+.pdfImportHead{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}.pdfImportHead b{font-size:21px;display:block}.pdfImportHead small{display:block;color:#607d8b;margin-top:5px}.pdfImportHead button{width:38px;height:38px;border:0;border-radius:50%;background:#e1eff4;color:#176b91;font-weight:900}
+.pdfDropzone{min-height:190px;border:2px dashed #83b7c8;border-radius:18px;background:#edf8fb;display:grid;place-items:center;align-content:center;gap:8px;text-align:center;cursor:pointer;padding:24px}.pdfDropzone strong{font-size:20px;color:#176b91}.pdfDropzone span{color:#607d8b}.pdfDropzone input{display:none}.pdfImportNote,.pdfImportStatus{font-size:12px;color:#607d8b;line-height:1.5}.pdfImportSummary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}.pdfImportSummary span{display:grid;gap:3px;padding:12px;border-radius:14px;background:#e6f4f7;text-align:center}.pdfImportSummary b{font-size:24px;color:#176b91}.pdfImportSummary small{font-size:11px;color:#607d8b}.pdfImportLabel{font-size:12px;font-weight:800;display:block;margin:10px 0 5px}.pdfImportStep input:not([type=file]){width:100%;min-height:44px;border:1px solid #b7d6e1;border-radius:12px;padding:10px 12px;background:#fff;color:#123344}.pdfImportPreview{margin-top:12px;max-height:330px;overflow:auto;border:1px solid #d1e4ea;border-radius:14px;background:#fff;padding:12px;font:12px/1.55 ui-monospace,SFMono-Regular,monospace;white-space:pre-wrap}.pdfImportActions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}.pdfImportActions button{min-height:44px;padding:10px 14px;border:0;border-radius:11px;font-weight:800;background:#e5f0f4;color:#176b91}.pdfImportActions .go{color:#fff;background:linear-gradient(135deg,#17a968,#0c8d6f)}.pdfImportStatus.ok{color:#087b4b;font-weight:800}
+@media(max-width:600px){.pdfImportCard{padding:14px;border-radius:20px}.pdfImportHead b{font-size:18px}.pdfImportActions{display:grid;grid-template-columns:1fr}.pdfImportActions button{width:100%}}

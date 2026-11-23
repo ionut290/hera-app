@@ -102,3 +102,170 @@ body.snow-map-editor-open { overflow:hidden; }
   #snow-plan-dedicated-editor .snow-plan-editor button { flex:1 1 calc(50% - 6px); min-height:42px; }
   #snow-plan-dedicated-editor .snow-plan-editor label { flex:1 1 100%; }
 }
+
+
+/* Dashboard neve 2026-11-23: i comandi operativi sono separati dall'editor. */
+#impianti-page .snow-plan-panel {
+  padding:clamp(12px,2vw,20px);
+  border-radius:18px;
+}
+#impianti-page .snow-plan-heading h2 {
+  font-size:clamp(19px,3vw,24px);
+  line-height:1.2;
+  margin-bottom:4px;
+}
+#impianti-page .snow-plan-heading p {
+  font-size:13px;
+  line-height:1.45;
+  color:var(--muted,#657084);
+}
+.snow-plan-quick-actions {
+  margin:14px 0;
+  padding:14px;
+  display:grid;
+  gap:10px;
+  border:1px solid var(--border,#e0e5ec);
+  border-radius:14px;
+  background:var(--surface,#f8fafc);
+  min-width:0;
+}
+.snow-plan-quick-actions .snow-plan-summary {
+  margin:0;
+  font-size:15px;
+  line-height:1.35;
+}
+.snow-plan-progress {
+  display:block;
+  width:100%;
+  height:9px;
+  border:0;
+  overflow:hidden;
+  border-radius:999px;
+  background:#dfe6ee;
+  accent-color:#16a34a;
+}
+.snow-plan-progress::-webkit-progress-bar { background:#dfe6ee; border-radius:999px; }
+.snow-plan-progress::-webkit-progress-value { background:#16a34a; border-radius:999px; }
+.snow-plan-progress::-moz-progress-bar { background:#16a34a; border-radius:999px; }
+.snow-plan-quick-actions .snow-plan-filters { margin:0; }
+.snow-plan-quick-actions .snow-plan-filters label:first-child { display:none; }
+.snow-plan-quick-actions .snow-plan-filters label {
+  min-width:0;
+  font-size:13px;
+  gap:5px;
+}
+#impianti-page .snow-plan-quick-actions .snow-plan-editor {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:end;
+  gap:8px;
+  margin:0;
+  padding:10px 0 0;
+  border:0;
+  border-top:1px solid var(--border,#e0e5ec);
+  border-radius:0;
+  background:transparent;
+  min-width:0;
+}
+#impianti-page .snow-plan-quick-actions .snow-plan-editor > :not(.snow-plan-pick-label):not(#snow-plan-edit-start) {
+  display:none !important;
+}
+#impianti-page .snow-plan-quick-actions .snow-plan-pick-label {
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  font-size:13px;
+  font-weight:650;
+  min-width:0;
+}
+#impianti-page #snow-plan-edit-stop {
+  width:100%;
+  min-height:46px;
+  border:1px solid var(--border,#cbd5e1);
+  border-radius:10px;
+  background:var(--card,#fff);
+  color:inherit;
+  font-size:16px;
+  padding:8px 10px;
+}
+#impianti-page #snow-plan-edit-start {
+  margin:0;
+  min-height:46px;
+  min-width:145px;
+  padding:9px 13px;
+  border:1px solid #16a34a;
+  border-radius:10px;
+  background:#e9f7ef;
+  color:#146c3b;
+  font-weight:750;
+  cursor:pointer;
+}
+#impianti-page #snow-plan-feedback:empty { display:none; }
+#impianti-page #snow-plan-feedback:not(:empty) {
+  padding:8px 10px;
+  border-radius:8px;
+  background:var(--surface,#f1f5f9);
+  font-size:13px;
+}
+#impianti-page .snow-plan-layout { margin-top:12px; }
+.snow-plan-info {
+  margin-top:14px;
+  border:1px solid var(--border,#d9e0e7);
+  border-radius:12px;
+  overflow:hidden;
+}
+.snow-plan-info summary {
+  cursor:pointer;
+  min-height:46px;
+  padding:12px 14px;
+  display:list-item;
+  font-weight:650;
+  font-size:14px;
+}
+.snow-plan-info[open] summary { border-bottom:1px solid var(--border,#e0e5ec); }
+.snow-plan-info-content { display:grid; gap:10px; padding:12px 14px; }
+.snow-plan-info-content .snow-plan-rules,
+.snow-plan-info-content .snow-plan-source,
+.snow-plan-info-content .snow-plan-resources { margin:0; font-size:12px; line-height:1.55; }
+.snow-plan-info-content #snow-plan-new-run {
+  justify-self:start;
+  min-height:44px;
+  border:1px solid #cbd5e1;
+}
+#snow-plan-dedicated-editor #snow-plan-edit-start,
+#snow-plan-dedicated-editor .snow-plan-pick-label { display:none !important; }
+#snow-plan-dedicated-editor .snow-plan-editor {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:stretch;
+  gap:8px;
+}
+#snow-plan-dedicated-editor .snow-plan-editor > button {
+  min-width:0;
+  min-height:46px;
+  border-radius:10px;
+  font-weight:650;
+}
+#snow-plan-dedicated-editor .snow-plan-editor > label,
+#snow-plan-dedicated-editor #snow-plan-edit-hint,
+#snow-plan-dedicated-editor #snow-plan-edit-save { grid-column:1 / -1; }
+#snow-plan-dedicated-editor #snow-plan-edit-save {
+  background:#167a49;
+  color:white;
+  border-color:#167a49;
+  font-weight:800;
+}
+#snow-plan-dedicated-editor #snow-plan-edit-cancel {
+  background:var(--surface,#f1f5f9);
+}
+@media(max-width:600px){
+  #impianti-page .snow-plan-panel { padding:12px 10px; }
+  #impianti-page .snow-plan-quick-actions { padding:12px; }
+  #impianti-page .snow-plan-quick-actions .snow-plan-editor { grid-template-columns:minmax(0,1fr); }
+  #impianti-page #snow-plan-edit-start { width:100%; }
+  #snow-plan-dedicated-editor .snow-map-editor-controls {
+    max-height:42dvh;
+    overscroll-behavior:contain;
+  }
+  #snow-plan-dedicated-editor #snow-plan-edit-hint { font-size:12px; }
+}

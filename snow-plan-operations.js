@@ -10,7 +10,7 @@
   const admin = () => typeof canManageData === "function" && !!canManageData();
   const sectionsFor = (group) => group.indices.flatMap((sectionIndex) => C.sections[sectionIndex].stops.map((stop) => ({...stop, sectionIndex, sectionName:C.sections[sectionIndex].name})));
   const today = () => { const d=new Date(); return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-"); };
-  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, subscriptionKey:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null, activeCommessaId:null, geometries:{}, geometryUnlisten:null, runId:"initial", runUnlisten:null, runSubscriptionKey:null, editing:false, editParts:[], editPartIndex:0, editLayers:[], editSelectedSegment:-1, drawingLine:false, insertingPoint:false};
+  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, subscriptionKey:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null, activeCommessaId:null, geometries:{}, geometryUnlisten:null, runId:"initial", runUnlisten:null, runSubscriptionKey:null, editing:false, editParts:[], editPartIndex:0, editLayers:[], editSelectedSegment:-1, drawingLine:false, insertingPoint:false, autoPrecisionStarted:false};
   const normalPageVisible = () => {
     const page=id("impianti-page");
     return !!page && !page.hidden && !page.classList.contains("hidden") && !document.body.classList.contains("snow-management-context");
@@ -96,7 +96,7 @@
         const coords=(part.coords||[]).filter((p)=>Array.isArray(p)&&p.length===2&&Number.isFinite(+p[0])&&Number.isFinite(+p[1]));
         if(coords.length<2)return;
         bounds.push(...coords);
-        const uncertain=part.matched!==true || !/verified|dbtr/i.test(stop.geometryStatus||"");
+        const uncertain=part.matched!==true || !/verified|dbtr|source-original-mymaps-kml/i.test(stop.geometryStatus||"");
         const line=L.polyline(coords,{color,weight:status==="done"?6:5,opacity:.92,dashArray:uncertain?"6 6":null,lineCap:"round"});
         line.on("click",event=>{if(state.editing&&state.drawingLine){event.originalEvent?.stopPropagation?.();onEditMapClick(event)}else if(state.editing&&state.insertingPoint){event.originalEvent?.stopPropagation?.();insertEditPoint(stop.key,partIndex,event.latlng)}else if(state.editing)selectEditSegment(stop.key,partIndex,event.latlng);else select(stop.key,true)});line.bindTooltip((stop.priority?"★ PRIORITÀ · ":"")+stop.sectionName+" · "+stop.number,{sticky:true});
         line.addTo(state.paths);lines.push(line);
@@ -250,6 +250,16 @@
     state.geometryUnlisten=db.collection("snowRouteGeometry").onSnapshot((snapshot)=>{
       const next={};snapshot.docs.forEach(d=>{const data=d.data();if(Array.isArray(data.parts))next[d.id]=data;});
       state.geometries=next;draw();
+      // Un amministratore autorizzato avvia automaticamente il riallineamento
+      // conservativo una volta per sessione. Nessun intervento esistente
+      // viene sostituito senza una corrispondenza OSM molto vicina.
+      if(!state.autoPrecisionStarted && admin() && window.VargaSnowAutomaticSidewalks){
+        state.autoPrecisionStarted=true;
+        window.VargaSnowAutomaticSidewalks.run({
+          db,admin:admin(),uid:currentUser?.uid,existing:next,
+          onProgress:message
+        }).catch(error=>message("Allineamento automatico non riuscito: "+(error.message||error)+". Tracce originali conservate."));
+      }
     },error=>message("Mappa non sincronizzata: "+(error.code||error.message)));
   }
   function watchRun(){
@@ -304,7 +314,9 @@
     renderEditPartOptions();
     id("snow-plan-edit-hint").textContent="Traccia linea aggiunge un pezzo. Inserisci punto divide una linea: inserisci due punti ai bordi del tratto, poi tocca il piccolo segmento rosso e cancellalo. Da PC puoi esportare o importare KML per lavorare in Google Earth o QGIS; salva qui solo dopo aver controllato la mappa.";
     if(state.map){state.map.off("click",onEditMapClick);state.map.on("click",onEditMapClick);}
-    openEditorPage(stop);drawEditPreview();message("Editor mappa aperto per "+stop.sectionName+" · "+stop.number+".");
+    openEditorPage(stop);drawEditPreview();
+    window.VargaSnowPedestrianAssist?.attach?.({map:state.map,stop,parts:state.editParts,getParts:()=>state.editParts,onPreview:parts=>{state.editParts=parts;state.editSelectedSegment=-1;drawEditPreview();}});
+    message("Editor mappa aperto per "+stop.sectionName+" · "+stop.number+".");
   }
   function renderEditPartOptions(){
     const select=id("snow-plan-edit-part");if(!select)return;
@@ -318,7 +330,7 @@
   function onEditMapClick(e){
     if(!state.editing||!state.drawingLine)return;
     if(state.editPartIndex<0||!state.editParts[state.editPartIndex])return;
-    state.editParts[state.editPartIndex].push([e.latlng.lat,e.latlng.lng]);drawEditPreview();
+    state.editParts[state.editPartIndex].push(window.VargaSnowPedestrianAssist?.snap?.([e.latlng.lat,e.latlng.lng]) || [e.latlng.lat,e.latlng.lng]);drawEditPreview();
   }
   function clearEditLayers(){state.editLayers.forEach(x=>state.map?.removeLayer(x));state.editLayers=[];}
   function drawEditPreview(){
@@ -330,6 +342,7 @@
       points.forEach((point,index)=>{
         const marker=L.marker(point,{draggable:true}).addTo(state.map);
         marker.on("drag",e=>{const p=e.target.getLatLng();points[index]=[p.lat,p.lng];line.setLatLngs(points);});
+        marker.on("dragend",e=>{const p=e.target.getLatLng();points[index]=window.VargaSnowPedestrianAssist?.snap?.([p.lat,p.lng]) || [p.lat,p.lng];drawEditPreview();});
         state.editLayers.push(marker);
       });
     }
@@ -369,7 +382,7 @@
     if(!admin()||!state.editing||!state.insertingPoint||stopKey!==state.selected)return;
     const points=state.editParts[partIndex];if(!Array.isArray(points)||points.length<2)return;
     const nearest=closestSegmentIndex(points,latlng);if(nearest<0)return;
-    points.splice(nearest+1,0,[latlng.lat,latlng.lng]);
+    points.splice(nearest+1,0,window.VargaSnowPedestrianAssist?.snap?.([latlng.lat,latlng.lng]) || [latlng.lat,latlng.lng]);
     state.editPartIndex=partIndex;state.editSelectedSegment=-1;state.insertingPoint=false;
     drawEditPreview();message("Punto aggiunto. Inserisci il secondo bordo e cancella solo il pezzetto.");
   }
@@ -409,7 +422,7 @@
     drawEditPreview();
   }
   function cancelEdit(){
-    state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();closeEditorPage();
+    state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();window.VargaSnowPedestrianAssist?.detach?.();closeEditorPage();
     const hint=id("snow-plan-edit-hint");if(hint)hint.textContent="Seleziona un intervento per correggerlo.";if(normalPageVisible()&&activeGroup()>=0)draw();
   }
   function exportKml(){

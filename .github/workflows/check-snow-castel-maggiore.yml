@@ -4,9 +4,13 @@ on:
     branches:
       - main
       - feature/neve-castel-maggiore-20261122
+      - feature/snow-sidewalk-professional-map-20261123
     paths:
       - 'snow-castel-maggiore-catalog.js'
       - 'snow-plan-operations.js'
+      - 'snow-pedestrian-bulk.js'
+      - 'snow-pedestrian-assist.js'
+      - 'scripts/check-snow-pedestrian.js'
       - 'snow-plan-operations.css'
       - 'app-snow.js'
       - 'index.html'
@@ -17,6 +21,9 @@ on:
     paths:
       - 'snow-castel-maggiore-catalog.js'
       - 'snow-plan-operations.js'
+      - 'snow-pedestrian-bulk.js'
+      - 'snow-pedestrian-assist.js'
+      - 'scripts/check-snow-pedestrian.js'
       - 'snow-plan-operations.css'
       - 'app-snow.js'
       - 'index.html'
@@ -35,7 +42,11 @@ jobs:
         run: |
           node --check snow-castel-maggiore-catalog.js
           node --check snow-plan-operations.js
+          node --check snow-pedestrian-bulk.js
+          node --check snow-pedestrian-assist.js
           node --check app-snow.js
           node --check sw.js
       - name: Check route integrity and safety
         run: node scripts/check-snow-castel-maggiore.js
+      - name: Check sidewalk matching safety and admin integration
+        run: node scripts/check-snow-pedestrian.js

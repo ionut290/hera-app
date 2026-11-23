@@ -6,6 +6,10 @@ on:
       - 'salatura-strada-integration.js'
       - 'salatura-strada-integration.css'
       - 'scripts/check-salatura-strada.cjs'
+      - 'scripts/check-salatura-unified.cjs'
+      - 'scripts/prepare-capacitor-web.js'
+      - 'firestore.rules'
+      - 'piano-neve/**'
       - 'index.html'
       - 'sw.js'
       - '.github/workflows/check-salatura-strada.yml'
@@ -16,6 +20,10 @@ on:
       - 'salatura-strada-integration.js'
       - 'salatura-strada-integration.css'
       - 'scripts/check-salatura-strada.cjs'
+      - 'scripts/check-salatura-unified.cjs'
+      - 'scripts/prepare-capacitor-web.js'
+      - 'firestore.rules'
+      - 'piano-neve/**'
       - '.github/workflows/check-salatura-strada.yml'
 permissions:
   contents: read
@@ -34,7 +42,11 @@ jobs:
         run: |
           node --check salatura-strada-routes.js
           node --check salatura-strada-integration.js
+          node --check piano-neve/app.js
+          node --check piano-neve/snow-auth-bridge.js
       - name: Check normal commesse and safe deep links
         run: node scripts/check-salatura-strada.cjs
+      - name: Verify shared Firebase Auth and complete offline GPS road network
+        run: node scripts/check-salatura-unified.cjs
       - name: Preserve Castel Maggiore KML snow routing
         run: node scripts/check-snow-castel-maggiore.js

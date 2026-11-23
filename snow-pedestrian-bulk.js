@@ -153,36 +153,10 @@
     if(snapped<2||fraction<.50)return null;
     const moved=output.filter((p,i)=>metres(p,samples[i])>.6).length;
     if(moved<2)return null;
-    // Non collegare punti lontani con segmenti fittizi: ciascun tratto
-    // deve restare in una geometria plausibile senza tagli trasversali.
-    const safeParts=[];
-    let current=[];
-    for(let i=0;i<output.length;i++){
-      if(covered[i]){
-        if(current.length>0 && metres(current[current.length-1],output[i])>SAMPLE_METERS*2.4){
-          if(current.length>=2)safeParts.push(current);
-          current=[];
-        }
-        current.push(output[i]);
-      }else {
-        if(current.length>=2)safeParts.push(current);
-        current=[];
-      }
-    }
-    if(current.length>=2)safeParts.push(current);
-    // I pezzi mancanti rimangono nel percorso originale e non vengono
-    // inventati. Restituiamo le porzioni allineate e quelle residue.
-    const parts=[];
-    let start=0, isCovered=covered[0];
-    for(let i=1;i<=samples.length;i++){
-      if(i===samples.length || covered[i]!==isCovered){
-        const slice=output.slice(start,i);
-        if(slice.length>=2)parts.push(slice);
-        else if(slice.length===1 && parts.length)parts[parts.length-1].push(slice[0]);
-        start=i;isCovered=covered[i];
-      }
-    }
-    if(!parts.length)return null;
+    // Mantieni tutti i pezzi originali, anche dove manca la mappatura OSM.
+    // I campioni ravvicinati (6 m) evitano salti fra vertici distanti.
+    // Nessun intervento diventa più corto per una corrispondenza parziale.
+    const parts=[output];
     return {original, candidate:output,parts,moved,coverage:fraction,maxShift};
   }
   function boxFor(section) {

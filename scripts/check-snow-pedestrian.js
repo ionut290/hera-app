@@ -35,7 +35,7 @@ const bulk=fs.readFileSync("snow-pedestrian-bulk.js","utf8");
 assert.ok(!bulk.includes("originalParts:"),"no extra Firestore fields are allowed");
 assert.ok(!bulk.includes("autoPrecision:"),"do not write forbidden metadata");
 const js=fs.readFileSync("snow-plan-operations.js","utf8");
-assert.ok(js.includes("VargaSnowAutomaticSidewalks.run"),"admin automation must be connected");
+assert.ok(js.includes("VargaSnowRedFootpaths.persist"),"verified OSM red footpaths must be persisted by admin");
 assert.ok(js.includes("autoPrecisionStarted"),"avoid duplicate session runs");
 assert.ok(js.includes("source-original-mymaps-kml"),"original KML geometry must be solid, not automatically treated as uncertain");
 assert.ok(js.includes("VargaSnowPedestrianAssist?.detach"),"overlays must be cleaned up");
@@ -46,4 +46,4 @@ assert.ok(html.indexOf("snow-castel-maggiore-kml-real.js")<html.indexOf("snow-pe
 assert.ok(html.indexOf("snow-pedestrian-bulk.js")<html.indexOf("snow-plan-operations.js"));
 assert.ok(fs.readFileSync("snow-pedestrian-assist.js","utf8").includes("if (isPedestrianPath) for"),
   "snap must also accept pedestrian paths and not only mapped sidewalks");
-console.log("OK: conservative auto-snap, unchanged originals, no cross-road snapping, admin-only integration.");
+console.log("OK: pedestrian paths, Firestore rules, original-preserving red-path auto-persistence.");

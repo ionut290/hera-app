@@ -185,6 +185,25 @@ service cloud.firestore {
     }
 
 
+    // Piano Neve integrato: utilizza lo STESSO Firebase Auth del gestionale.
+    // Sessioni e giri sono privati per UID. Nessuna apertura a utenti non autorizzati.
+    match /pianoNeveUsers/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+      match /sessions/{sessionId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+      match /giri/{giroId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // Solo gli amministratori possono correggere il tracciato di salatura.
+    // Gli operatori approvati possono visualizzare la geometria aggiornata.
+    match /pianoNeveRouteEdits/{editId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     // Piano Neve: ogni operatore scrive e rilegge solo i propri dati; il registro completo e amministrativo.
     match /pianoNeveStreetWork/{recordId} {
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);

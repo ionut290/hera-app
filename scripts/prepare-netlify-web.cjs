@@ -10,7 +10,7 @@ const allowed = new Set([".js",".css",".html",".webmanifest",".png",".jpg",".jpe
 const unsafe = /^(?:firebase\.json|package(?:-lock)?\.json|google-services\.json|firestore\.indexes\.json)$/i;
 for(const item of fs.readdirSync(out,{withFileTypes:true})){
   if(item.isDirectory()){
-    assert.equal(item.name,"icons","Unexpected directory in web publish: "+item.name);
+    assert.ok(item.name==="icons"||item.name==="piano-neve","Unexpected directory in web publish: "+item.name);
     continue;
   }
   assert.ok(item.isFile(),"Unexpected symlink or file type: "+item.name);
@@ -18,6 +18,26 @@ for(const item of fs.readdirSync(out,{withFileTypes:true})){
     fs.rmSync(path.join(out,item.name));
   }
 }
+// Fail-closed nested bundle: only the original Piano Neve code and the
+// verbatim GPL license for the included leaflet-rotate vendor script.
+const pianoRoot=path.join(out,"piano-neve");
+assert.ok(fs.statSync(pianoRoot).isDirectory(),"Bundled Piano Neve missing");
+function verifyPianoFolder(dir,relative=""){
+  for(const file of fs.readdirSync(dir,{withFileTypes:true})){
+    const rel=relative?relative+"/"+file.name:file.name;
+    if(file.isDirectory()){
+      assert.ok(relative===""&&(file.name==="vendor"||file.name==="commesse"),
+        "Unknown Piano Neve directory: "+rel);
+      verifyPianoFolder(path.join(dir,file.name),rel);
+    }else{
+      assert.ok(file.isFile(),"Unexpected symlink in Piano Neve: "+rel);
+      assert.ok(/\.(?:js|css|html)$/i.test(file.name)
+        || rel==="vendor/leaflet-rotate-LICENSE.txt",
+        "Unexpected Piano Neve public file: "+rel);
+    }
+  }
+}
+verifyPianoFolder(pianoRoot);
 // Root-level icons/fonts used by public web CSS can be copied with safe file
 // extensions; never recurse through arbitrary folders.
 for(const item of fs.readdirSync(root,{withFileTypes:true})){

@@ -7,7 +7,7 @@
   "use strict";
   const WMS = "https://servizigis.regione.emilia-romagna.it/wms/dbtr";
   const OVERPASS = "https://overpass.private.coffee/api/interpreter";
-  const SNAP_LIMIT_METERS = 6;
+  const SNAP_LIMIT_METERS = 12;
   let session = null;
   const cache = new Map();
 
@@ -160,7 +160,7 @@
     toolbar.innerHTML =
       '<strong>🎯 Precisione marciapiedi</strong>'+
       '<button type="button" data-precision="dbtr" aria-pressed="true">DBTR pedonale: ON</button>'+
-      '<label><input type="checkbox" data-precision="snap" checked> Aggancio OSM (6 m)</label>'+
+      '<label><input type="checkbox" data-precision="snap" checked> Aggancio OSM (12 m)</label>'+
       '<button type="button" data-precision="align" disabled>Allinea tracce · anteprima</button>'+
       '<span data-precision="status" role="status" aria-live="polite">Avvio riferimenti...</span>';
     editor.appendChild(toolbar);
@@ -190,7 +190,7 @@
       if (!s.lines.length) return setStatus("Nessun riferimento OSM disponibile per l'allineamento.");
       // Autorizzazione amministratore già concessa: niente popup ripetuti.
       const result = alignPreview(config.getParts());
-      if (!result.moved) return setStatus("Nessun vertice da correggere entro 6 m dai percorsi OSM disponibili.");
+      if (!result.moved) return setStatus("Nessun vertice da correggere entro 12 m dai percorsi OSM disponibili.");
       config.onPreview(result.parts);
       setStatus(result.moved+" vertici spostati in ANTEPRIMA. Controlla con DBTR e satellite; premi Salva mappa solo dopo la verifica.");
     });

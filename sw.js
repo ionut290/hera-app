@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v239";
+const CACHE_NAME = "varga-cantieri-shell-v240";
 const CACHE_RESET_VERSION = "20261120-password-selfservice1";
 const APP_SHELL = [
   "./",
@@ -24,10 +24,10 @@ const APP_SHELL = [
   "./administrative-calendar.js?v=20260829-admin-hours1",
   "./snow-castel-maggiore-catalog.js?v=20261122-pdf-audit1",
   "./snow-castel-maggiore-kml-real.js?v=20261123-viabilita-minore1",
-  "./snow-pedestrian-bulk.js?v=20261123-sidewalk1",
-  "./snow-pedestrian-assist.js?v=20261123-sidewalk1",
+  "./snow-pedestrian-bulk.js?v=20261123-sidewalk2",
+  "./snow-pedestrian-assist.js?v=20261123-sidewalk2",
   "./app-snow.js?v=20261122-cm-routes1",
-  "./snow-plan-operations.js?v=20261123-sidewalk1",
+  "./snow-plan-operations.js?v=20261123-sidewalk2",
   "./snow-plan-operations.css?v=20261123-sidewalk1",
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260928-maps-waze-direct1",

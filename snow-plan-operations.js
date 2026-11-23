@@ -10,7 +10,7 @@
   const admin = () => typeof canManageData === "function" && !!canManageData();
   const sectionsFor = (group) => group.indices.flatMap((sectionIndex) => C.sections[sectionIndex].stops.map((stop) => ({...stop, sectionIndex, sectionName:C.sections[sectionIndex].name})));
   const today = () => { const d=new Date(); return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-"); };
-  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, subscriptionKey:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null, activeCommessaId:null, geometries:{}, geometryUnlisten:null, runId:"initial", runUnlisten:null, runSubscriptionKey:null, editing:false, editParts:[], editPartIndex:0, editLayers:[], editSelectedSegment:-1, drawingLine:false, insertingPoint:false, autoPrecisionStarted:false};
+  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, subscriptionKey:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null, activeCommessaId:null, geometries:{}, geometryUnlisten:null, runId:"initial", runUnlisten:null, runSubscriptionKey:null, editing:false, editParts:[], editPartIndex:0, editLayers:[], editSelectedSegment:-1, drawingLine:false, insertingPoint:false};
   const normalPageVisible = () => {
     const page=id("impianti-page");
     return !!page && !page.hidden && !page.classList.contains("hidden") && !document.body.classList.contains("snow-management-context");
@@ -36,16 +36,6 @@
   }
   const colors={done:"#16a34a",cleared:"#0d9488",salted:"#a855f7",active:"#f59e0b",blocked:"#dc2626",todo:"#2563eb"};
   const labels={done:"Pulizia e salatura completate",cleared:"Pulito · da salare",salted:"Salato · da pulire",active:"In corso",blocked:"Problema segnalato",todo:"Da fare"};
-  function effectiveSnowParts(stop) {
-    const saved=state.geometries[stop.key];
-    const writer=String(saved?.updatedBy||"");
-    // Precedenza alle modifiche manuali; gli snap automatici precedenti
-    // non devono prevalere sulla ricostruzione delle vere linee OSM.
-    const auto=/^(snow-sidewalk-auto|snow-pedestrian-auto|snow-red-rebuild)\//.test(writer);
-    if(saved && Array.isArray(saved.parts) && (!auto || !stop.redFootwayRebuild?.coverage))
-      return saved.parts.map(coords=>({coords,source:"admin-firestore",matched:true}));
-    return stop.parts||[];
-  }
   function ensureDom(){
     const page=id("impianti-page");
     if(!page)return false;
@@ -84,6 +74,15 @@
     if(id("snow-plan-import"))id("snow-plan-import").hidden=!admin();
     return true;
   }
+  // Rollback alla mappa My Maps del 23/11/2026.
+  // Scarta SOLO le geometrie generate dagli allineamenti automatici
+  // successivi all'import KML. Conserva intatte le modifiche manuali.
+  function geometryFromKmlEra(stop) {
+    const saved=state.geometries[stop.key];
+    const author=String(saved?.updatedBy||"");
+    if(/^(snow-sidewalk-auto|snow-pedestrian-auto|snow-red-rebuild)\//.test(author))return null;
+    return saved&&Array.isArray(saved.parts)?saved.parts:null;
+  }
   function mapInit(){
     if(state.map || !window.L || !id("snow-plan-map"))return;
     state.map=L.map("snow-plan-map",{zoomControl:true,preferCanvas:true}).setView([44.576,11.36],13);
@@ -101,13 +100,14 @@
       const status=aggregate(stop.key),color=colors[status],lines=[];
       const saved=state.geometries[stop.key];
       const editingParts=state.editing&&state.selected===stop.key?state.editParts:null;
-      const parts=editingParts!==null?editingParts.map(coords=>({coords,matched:true})):effectiveSnowParts(stop);
+      const originalGeometry=geometryFromKmlEra(stop);
+      const parts=editingParts!==null?editingParts.map(coords=>({coords,matched:true})):(originalGeometry?originalGeometry.map(coords=>({coords,matched:true})):stop.parts||[]);
       parts.forEach((part,partIndex)=>{
         const coords=(part.coords||[]).filter((p)=>Array.isArray(p)&&p.length===2&&Number.isFinite(+p[0])&&Number.isFinite(+p[1]));
         if(coords.length<2)return;
         bounds.push(...coords);
-        const uncertain=stop.geometryStatus==="osm-red-footway-rebuilt" ? part.matched!==true : part.matched!==true || !/verified|dbtr|source-original-mymaps-kml/i.test(stop.geometryStatus||"");
-        const line=L.polyline(coords,{color,weight:uncertain?4:(status==="done"?5:3.5),opacity:uncertain?.84:.64,dashArray:uncertain?"6 6":null,lineCap:"round",lineJoin:"round"});
+        const uncertain=part.matched!==true || !/verified|dbtr/i.test(stop.geometryStatus||"");
+        const line=L.polyline(coords,{color,weight:status==="done"?6:5,opacity:.92,dashArray:uncertain?"6 6":null,lineCap:"round"});
         line.on("click",event=>{if(state.editing&&state.drawingLine){event.originalEvent?.stopPropagation?.();onEditMapClick(event)}else if(state.editing&&state.insertingPoint){event.originalEvent?.stopPropagation?.();insertEditPoint(stop.key,partIndex,event.latlng)}else if(state.editing)selectEditSegment(stop.key,partIndex,event.latlng);else select(stop.key,true)});line.bindTooltip((stop.priority?"★ PRIORITÀ · ":"")+stop.sectionName+" · "+stop.number,{sticky:true});
         line.addTo(state.paths);lines.push(line);
       });
@@ -260,16 +260,6 @@
     state.geometryUnlisten=db.collection("snowRouteGeometry").onSnapshot((snapshot)=>{
       const next={};snapshot.docs.forEach(d=>{const data=d.data();if(Array.isArray(data.parts))next[d.id]=data;});
       state.geometries=next;draw();
-      // La ricostruzione sostituisce l'aggancio generico Overpass.
-      // Salva solo i tratti totalmente riconosciuti; gli altri
-      // mantengono parti tratteggiate da verificare.
-      if(!state.autoPrecisionStarted && admin() && window.VargaSnowRedFootpaths){
-        state.autoPrecisionStarted=true;
-        window.VargaSnowRedFootpaths.persist({
-          db,admin:admin(),uid:currentUser?.uid,existing:next,
-          onProgress:message
-        }).catch(error=>message("Salvataggio marciapiedi non riuscito: "+(error.message||error)));
-      }
     },error=>message("Mappa non sincronizzata: "+(error.code||error.message)));
   }
   function watchRun(){
@@ -319,14 +309,12 @@
     if(!admin())return message("Solo un amministratore può correggere la mappa.");
     const stop=currentStop();if(!stop)return message("Seleziona prima un intervento dall’elenco.");
     const saved=state.geometries[stop.key];
-    state.editParts=effectiveSnowParts(stop).map(p=>(p.coords||[]).map(x=>[+x[0],+x[1]]));
+    state.editParts=(geometryFromKmlEra(stop)||stop.parts.map(p=>p.coords||[])).map(p=>p.map(x=>[+x[0],+x[1]]));
     state.editPartIndex=state.editParts.length?0:-1;state.editSelectedSegment=-1;state.drawingLine=false;state.insertingPoint=false;state.editing=true;
     renderEditPartOptions();
     id("snow-plan-edit-hint").textContent="Traccia linea aggiunge un pezzo. Inserisci punto divide una linea: inserisci due punti ai bordi del tratto, poi tocca il piccolo segmento rosso e cancellalo. Da PC puoi esportare o importare KML per lavorare in Google Earth o QGIS; salva qui solo dopo aver controllato la mappa.";
     if(state.map){state.map.off("click",onEditMapClick);state.map.on("click",onEditMapClick);}
-    openEditorPage(stop);drawEditPreview();
-    window.VargaSnowPedestrianAssist?.attach?.({map:state.map,stop,parts:state.editParts,getParts:()=>state.editParts,onPreview:parts=>{state.editParts=parts;state.editSelectedSegment=-1;drawEditPreview();}});
-    message("Editor mappa aperto per "+stop.sectionName+" · "+stop.number+".");
+    openEditorPage(stop);drawEditPreview();message("Editor mappa aperto per "+stop.sectionName+" · "+stop.number+".");
   }
   function renderEditPartOptions(){
     const select=id("snow-plan-edit-part");if(!select)return;
@@ -340,7 +328,7 @@
   function onEditMapClick(e){
     if(!state.editing||!state.drawingLine)return;
     if(state.editPartIndex<0||!state.editParts[state.editPartIndex])return;
-    state.editParts[state.editPartIndex].push(window.VargaSnowPedestrianAssist?.snap?.([e.latlng.lat,e.latlng.lng]) || [e.latlng.lat,e.latlng.lng]);drawEditPreview();
+    state.editParts[state.editPartIndex].push([e.latlng.lat,e.latlng.lng]);drawEditPreview();
   }
   function clearEditLayers(){state.editLayers.forEach(x=>state.map?.removeLayer(x));state.editLayers=[];}
   function drawEditPreview(){
@@ -352,7 +340,6 @@
       points.forEach((point,index)=>{
         const marker=L.marker(point,{draggable:true}).addTo(state.map);
         marker.on("drag",e=>{const p=e.target.getLatLng();points[index]=[p.lat,p.lng];line.setLatLngs(points);});
-        marker.on("dragend",e=>{const p=e.target.getLatLng();points[index]=window.VargaSnowPedestrianAssist?.snap?.([p.lat,p.lng]) || [p.lat,p.lng];drawEditPreview();});
         state.editLayers.push(marker);
       });
     }
@@ -392,7 +379,7 @@
     if(!admin()||!state.editing||!state.insertingPoint||stopKey!==state.selected)return;
     const points=state.editParts[partIndex];if(!Array.isArray(points)||points.length<2)return;
     const nearest=closestSegmentIndex(points,latlng);if(nearest<0)return;
-    points.splice(nearest+1,0,window.VargaSnowPedestrianAssist?.snap?.([latlng.lat,latlng.lng]) || [latlng.lat,latlng.lng]);
+    points.splice(nearest+1,0,[latlng.lat,latlng.lng]);
     state.editPartIndex=partIndex;state.editSelectedSegment=-1;state.insertingPoint=false;
     drawEditPreview();message("Punto aggiunto. Inserisci il secondo bordo e cancella solo il pezzetto.");
   }
@@ -432,7 +419,7 @@
     drawEditPreview();
   }
   function cancelEdit(){
-    state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();window.VargaSnowPedestrianAssist?.detach?.();closeEditorPage();
+    state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();closeEditorPage();
     const hint=id("snow-plan-edit-hint");if(hint)hint.textContent="Seleziona un intervento per correggerlo.";if(normalPageVisible()&&activeGroup()>=0)draw();
   }
   function exportKml(){

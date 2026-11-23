@@ -33,13 +33,13 @@ const firebase={firestore:{FieldValue:{serverTimestamp:()=>"now"}}};
 vm.runInNewContext(fs.readFileSync("salatura-strada-integration.js","utf8"),
   {window,document,db,firebase,currentUser:{uid:"admin",email:"test@example.com"},
     canManageData:()=>true,console,Intl,Number,setInterval:()=>0});
-const module=window.VargaSalaturaStrada;
-assert.ok(module&&typeof module.seed==="function");
+const integration=window.VargaSalaturaStrada;
+assert.ok(module&&typeof integration.seed==="function");
 (async()=>{
-  assert.equal(module.url(0),"https://ionut290.github.io/Varga-piano-neve/?vargaMajorRoute=0");
-  assert.equal(module.url(1),"https://ionut290.github.io/Varga-piano-neve/?vargaMajorRoute=1");
-  assert.equal(module.url(2),"https://ionut290.github.io/Varga-piano-neve/?vargaMajorRoute=2");
-  await module.seed();
+  assert.equal(integration.url(0),"https://ionut290.github.io/Varga-piano-neve/?vargaMajorRoute=0");
+  assert.equal(integration.url(1),"https://ionut290.github.io/Varga-piano-neve/?vargaMajorRoute=1");
+  assert.equal(integration.url(2),"https://ionut290.github.io/Varga-piano-neve/?vargaMajorRoute=2");
+  await integration.seed();
   assert.equal(docs.size,4);
   assert.equal(docs.get("existing-minor").valuable,"KEEP");
   routes.forEach((route,i)=>{
@@ -48,7 +48,7 @@ assert.ok(module&&typeof module.seed==="function");
     assert.equal(item.codice,route.code);
     assert.equal(item.pianoNeveMajorRouteIndex,i);
   });
-  await module.seed();
+  await integration.seed();
   assert.equal(docs.size,4,"repeat admin import must not create duplicates");
   const html=fs.readFileSync("index.html","utf8");
   assert.ok(html.includes("snow-castel-maggiore-kml-real.js?v=20261123-viabilita-minore1"));

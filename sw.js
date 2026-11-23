@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v241";
+const CACHE_NAME = "varga-cantieri-shell-v242";
 const CACHE_RESET_VERSION = "20261120-password-selfservice1";
 const APP_SHELL = [
   "./",
@@ -23,14 +23,9 @@ const APP_SHELL = [
   "./app-calendar.js?v=20260815-mod1",
   "./administrative-calendar.js?v=20260829-admin-hours1",
   "./snow-castel-maggiore-catalog.js?v=20261122-pdf-audit1",
-  "./snow-footway-source-snapshot.js?v=20261123-red-path1",
-  "./snow-red-footpaths-rebuild.js?v=20261123-red-path1",
-  "./snow-castel-maggiore-kml-real.js?v=20261123-viabilita-minore1",
-  "./snow-pedestrian-bulk.js?v=20261123-sidewalk2",
-  "./snow-pedestrian-assist.js?v=20261123-sidewalk2",
   "./app-snow.js?v=20261122-cm-routes1",
-  "./snow-plan-operations.js?v=20261123-red-path1",
-  "./snow-plan-operations.css?v=20261123-sidewalk1",
+  "./snow-plan-operations.js?v=20261122-kml1",
+  "./snow-plan-operations.css?v=20261122-kml1",
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260928-maps-waze-direct1",
   "./green-assistant.css?v=20260830-brave-manuals3",
@@ -124,13 +119,6 @@ const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", 
 const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/app.js",
-  "/snow-plan-operations.js",
-  "/snow-footway-source-snapshot.js",
-  "/snow-red-footpaths-rebuild.js",
-  "/snow-plan-operations.css",
-  "/snow-pedestrian-bulk.js",
-  "/snow-pedestrian-assist.js",
-  "/snow-castel-maggiore-kml-real.js",
   "/app-pure-utils.js",
   "/verde-bologna.js",
   "/verde-bologna-operativo.js",

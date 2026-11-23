@@ -304,7 +304,9 @@
     renderEditPartOptions();
     id("snow-plan-edit-hint").textContent="Traccia linea aggiunge un pezzo. Inserisci punto divide una linea: inserisci due punti ai bordi del tratto, poi tocca il piccolo segmento rosso e cancellalo. Da PC puoi esportare o importare KML per lavorare in Google Earth o QGIS; salva qui solo dopo aver controllato la mappa.";
     if(state.map){state.map.off("click",onEditMapClick);state.map.on("click",onEditMapClick);}
-    openEditorPage(stop);drawEditPreview();message("Editor mappa aperto per "+stop.sectionName+" · "+stop.number+".");
+    openEditorPage(stop);drawEditPreview();
+    window.VargaSnowPedestrianAssist?.attach?.({map:state.map,stop,parts:state.editParts,getParts:()=>state.editParts,onPreview:parts=>{state.editParts=parts;state.editSelectedSegment=-1;drawEditPreview();}});
+    message("Editor mappa aperto per "+stop.sectionName+" · "+stop.number+".");
   }
   function renderEditPartOptions(){
     const select=id("snow-plan-edit-part");if(!select)return;
@@ -318,7 +320,7 @@
   function onEditMapClick(e){
     if(!state.editing||!state.drawingLine)return;
     if(state.editPartIndex<0||!state.editParts[state.editPartIndex])return;
-    state.editParts[state.editPartIndex].push([e.latlng.lat,e.latlng.lng]);drawEditPreview();
+    state.editParts[state.editPartIndex].push(window.VargaSnowPedestrianAssist?.snap?.([e.latlng.lat,e.latlng.lng]) || [e.latlng.lat,e.latlng.lng]);drawEditPreview();
   }
   function clearEditLayers(){state.editLayers.forEach(x=>state.map?.removeLayer(x));state.editLayers=[];}
   function drawEditPreview(){
@@ -330,6 +332,7 @@
       points.forEach((point,index)=>{
         const marker=L.marker(point,{draggable:true}).addTo(state.map);
         marker.on("drag",e=>{const p=e.target.getLatLng();points[index]=[p.lat,p.lng];line.setLatLngs(points);});
+        marker.on("dragend",e=>{const p=e.target.getLatLng();points[index]=window.VargaSnowPedestrianAssist?.snap?.([p.lat,p.lng]) || [p.lat,p.lng];drawEditPreview();});
         state.editLayers.push(marker);
       });
     }
@@ -369,7 +372,7 @@
     if(!admin()||!state.editing||!state.insertingPoint||stopKey!==state.selected)return;
     const points=state.editParts[partIndex];if(!Array.isArray(points)||points.length<2)return;
     const nearest=closestSegmentIndex(points,latlng);if(nearest<0)return;
-    points.splice(nearest+1,0,[latlng.lat,latlng.lng]);
+    points.splice(nearest+1,0,window.VargaSnowPedestrianAssist?.snap?.([latlng.lat,latlng.lng]) || [latlng.lat,latlng.lng]);
     state.editPartIndex=partIndex;state.editSelectedSegment=-1;state.insertingPoint=false;
     drawEditPreview();message("Punto aggiunto. Inserisci il secondo bordo e cancella solo il pezzetto.");
   }
@@ -409,7 +412,7 @@
     drawEditPreview();
   }
   function cancelEdit(){
-    state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();closeEditorPage();
+    state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();window.VargaSnowPedestrianAssist?.detach?.();closeEditorPage();
     const hint=id("snow-plan-edit-hint");if(hint)hint.textContent="Seleziona un intervento per correggerlo.";if(normalPageVisible()&&activeGroup()>=0)draw();
   }
   function exportKml(){

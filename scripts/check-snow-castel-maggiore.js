@@ -55,4 +55,17 @@ assert.ok(operations.includes('id("panel-commesse")'),"admin import button belon
 assert.ok(!operations.includes('id("snow-service-page")'),"separate snow page must not host these routes");
 assert.ok(operations.includes("normalPageVisible()"),"ordinary detail page guard missing");
 assert.ok(operations.includes("snowPlanStopKey"),"stable stop IDs required");
+// Regression: user-supplied map geometry must not change the 45 official interventions.
+vm.runInNewContext(fs.readFileSync("snow-castel-maggiore-kml-real.js","utf8"),context);
+assert.equal(context.window.VARGA_SNOW_CM_KML_SOURCE.appliedStops,43);
+assert.equal(context.window.VARGA_SNOW_CM_KML_SOURCE.sourcePlacemarks,49);
+assert.equal(catalog.sections.flatMap(s=>s.stops).filter(s=>s.geometryStatus==="source-original-mymaps-kml").length,43);
+assert.notEqual(catalog.sections[1].stops[9].geometryStatus,"source-original-mymaps-kml");
+assert.notEqual(catalog.sections[3].stops[5].geometryStatus,"source-original-mymaps-kml");
+assert.ok(html.includes("snow-castel-maggiore-kml-real.js"));
+for(const stop of catalog.sections.flatMap(s=>s.stops)){
+ if(stop.geometryStatus==="source-original-mymaps-kml"){
+  assert.ok(stop.parts.length>0 && stop.parts.every(p=>p.coords.length>=2 && p.source==="user-mymaps-kml"));
+ }
+}
 console.log("OK: Castel Maggiore 3 commesse, 4 sections, 45 route stops, normal commesse, map and progress checks");

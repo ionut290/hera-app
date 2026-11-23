@@ -36,6 +36,16 @@
   }
   const colors={done:"#16a34a",cleared:"#0d9488",salted:"#a855f7",active:"#f59e0b",blocked:"#dc2626",todo:"#2563eb"};
   const labels={done:"Pulizia e salatura completate",cleared:"Pulito · da salare",salted:"Salato · da pulire",active:"In corso",blocked:"Problema segnalato",todo:"Da fare"};
+  function effectiveSnowParts(stop) {
+    const saved=state.geometries[stop.key];
+    const writer=String(saved?.updatedBy||"");
+    // Precedenza alle modifiche manuali; gli snap automatici precedenti
+    // non devono prevalere sulla ricostruzione delle vere linee OSM.
+    const auto=/^(snow-sidewalk-auto|snow-pedestrian-auto|snow-red-rebuild)\//.test(writer);
+    if(saved && Array.isArray(saved.parts) && (!auto || !stop.redFootwayRebuild?.coverage))
+      return saved.parts.map(coords=>({coords,source:"admin-firestore",matched:true}));
+    return stop.parts||[];
+  }
   function ensureDom(){
     const page=id("impianti-page");
     if(!page)return false;
@@ -91,13 +101,13 @@
       const status=aggregate(stop.key),color=colors[status],lines=[];
       const saved=state.geometries[stop.key];
       const editingParts=state.editing&&state.selected===stop.key?state.editParts:null;
-      const parts=editingParts!==null?editingParts.map(coords=>({coords,matched:true})):(saved&&Array.isArray(saved.parts)?saved.parts.map(coords=>({coords,matched:true})):stop.parts||[]);
+      const parts=editingParts!==null?editingParts.map(coords=>({coords,matched:true})):effectiveSnowParts(stop);
       parts.forEach((part,partIndex)=>{
         const coords=(part.coords||[]).filter((p)=>Array.isArray(p)&&p.length===2&&Number.isFinite(+p[0])&&Number.isFinite(+p[1]));
         if(coords.length<2)return;
         bounds.push(...coords);
-        const uncertain=part.matched!==true || !/verified|dbtr|source-original-mymaps-kml/i.test(stop.geometryStatus||"");
-        const line=L.polyline(coords,{color,weight:status==="done"?6:5,opacity:.92,dashArray:uncertain?"6 6":null,lineCap:"round"});
+        const uncertain=stop.geometryStatus==="osm-red-footway-rebuilt" ? part.matched!==true : part.matched!==true || !/verified|dbtr|source-original-mymaps-kml/i.test(stop.geometryStatus||"");
+        const line=L.polyline(coords,{color,weight:uncertain?4:(status==="done"?5:3.5),opacity:uncertain?.84:.64,dashArray:uncertain?"6 6":null,lineCap:"round",lineJoin:"round"});
         line.on("click",event=>{if(state.editing&&state.drawingLine){event.originalEvent?.stopPropagation?.();onEditMapClick(event)}else if(state.editing&&state.insertingPoint){event.originalEvent?.stopPropagation?.();insertEditPoint(stop.key,partIndex,event.latlng)}else if(state.editing)selectEditSegment(stop.key,partIndex,event.latlng);else select(stop.key,true)});line.bindTooltip((stop.priority?"★ PRIORITÀ · ":"")+stop.sectionName+" · "+stop.number,{sticky:true});
         line.addTo(state.paths);lines.push(line);
       });
@@ -250,15 +260,15 @@
     state.geometryUnlisten=db.collection("snowRouteGeometry").onSnapshot((snapshot)=>{
       const next={};snapshot.docs.forEach(d=>{const data=d.data();if(Array.isArray(data.parts))next[d.id]=data;});
       state.geometries=next;draw();
-      // Un amministratore autorizzato avvia automaticamente il riallineamento
-      // conservativo una volta per sessione. Nessun intervento esistente
-      // viene sostituito senza una corrispondenza OSM molto vicina.
-      if(!state.autoPrecisionStarted && admin() && window.VargaSnowAutomaticSidewalks){
+      // La ricostruzione sostituisce l'aggancio generico Overpass.
+      // Salva solo i tratti totalmente riconosciuti; gli altri
+      // mantengono parti tratteggiate da verificare.
+      if(!state.autoPrecisionStarted && admin() && window.VargaSnowRedFootpaths){
         state.autoPrecisionStarted=true;
-        window.VargaSnowAutomaticSidewalks.run({
+        window.VargaSnowRedFootpaths.persist({
           db,admin:admin(),uid:currentUser?.uid,existing:next,
           onProgress:message
-        }).catch(error=>message("Allineamento automatico non riuscito: "+(error.message||error)+". Tracce originali conservate."));
+        }).catch(error=>message("Salvataggio marciapiedi non riuscito: "+(error.message||error)));
       }
     },error=>message("Mappa non sincronizzata: "+(error.code||error.message)));
   }
@@ -309,7 +319,7 @@
     if(!admin())return message("Solo un amministratore può correggere la mappa.");
     const stop=currentStop();if(!stop)return message("Seleziona prima un intervento dall’elenco.");
     const saved=state.geometries[stop.key];
-    state.editParts=(saved&&Array.isArray(saved.parts)?saved.parts:stop.parts.map(p=>p.coords||[])).map(p=>p.map(x=>[+x[0],+x[1]]));
+    state.editParts=effectiveSnowParts(stop).map(p=>(p.coords||[]).map(x=>[+x[0],+x[1]]));
     state.editPartIndex=state.editParts.length?0:-1;state.editSelectedSegment=-1;state.drawingLine=false;state.insertingPoint=false;state.editing=true;
     renderEditPartOptions();
     id("snow-plan-edit-hint").textContent="Traccia linea aggiunge un pezzo. Inserisci punto divide una linea: inserisci due punti ai bordi del tratto, poi tocca il piccolo segmento rosso e cancellalo. Da PC puoi esportare o importare KML per lavorare in Google Earth o QGIS; salva qui solo dopo aver controllato la mappa.";

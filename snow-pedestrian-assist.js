@@ -71,7 +71,10 @@
         weight: isSidewalk ? 3.5 : 2, opacity: .67,
         dashArray: isSidewalk ? null : "4 6", interactive: false
       }).addTo(s.osmLayer);
-      for (let i = 1; i < path.length && s.lines.length < 10000; i++)
+      // Aggancio automatico SOLO alle geometrie esplicitamente marcate
+      // come marciapiedi. Attraversamenti e percorsi generici sono
+      // visualizzati come riferimento, ma non attirano i vertici.
+      if (isSidewalk) for (let i = 1; i < path.length && s.lines.length < 10000; i++)
         s.lines.push([path[i-1], path[i]]);
       count++;
       if (isSidewalk) sidewalks++;
@@ -183,7 +186,7 @@
     });
     s.alignButton.addEventListener("click",()=>{
       if (!s.lines.length) return setStatus("Nessun riferimento OSM disponibile per l'allineamento.");
-      if (!global.confirm("Allineare SOLO IN ANTEPRIMA i vertici entro 6 m dalle linee pedonali OSM? Controlla lato e attraversamenti prima di salvare.")) return;
+      // Autorizzazione amministratore già concessa: niente popup ripetuti.
       const result = alignPreview(config.getParts());
       if (!result.moved) return setStatus("Nessun vertice da correggere entro 6 m dai percorsi OSM disponibili.");
       config.onPreview(result.parts);

@@ -10,7 +10,7 @@
   const admin = () => typeof canManageData === "function" && !!canManageData();
   const sectionsFor = (group) => group.indices.flatMap((sectionIndex) => C.sections[sectionIndex].stops.map((stop) => ({...stop, sectionIndex, sectionName:C.sections[sectionIndex].name})));
   const today = () => { const d=new Date(); return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-"); };
-  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, subscriptionKey:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null, activeCommessaId:null, geometries:{}, geometryUnlisten:null, runId:"initial", runUnlisten:null, runSubscriptionKey:null, editing:false, editParts:[], editPartIndex:0, editLayers:[], editSelectedSegment:-1, drawingLine:false, insertingPoint:false, autoPrecisionStarted:false};
+  const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, subscriptionKey:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null, activeCommessaId:null, geometries:{}, geometryUnlisten:null, runId:"initial", runUnlisten:null, runSubscriptionKey:null, editing:false, editParts:[], editPartIndex:0, editLayers:[], editSelectedSegment:-1, drawingLine:false, insertingPoint:false, autoPrecisionStarted:false, editBaseline:null, editSource:null};
   const normalPageVisible = () => {
     const page=id("impianti-page");
     return !!page && !page.hidden && !page.classList.contains("hidden") && !document.body.classList.contains("snow-management-context");
@@ -42,9 +42,85 @@
     // Precedenza alle modifiche manuali; gli snap automatici precedenti
     // non devono prevalere sulla ricostruzione delle vere linee OSM.
     const auto=/^(snow-sidewalk-auto|snow-pedestrian-auto|snow-red-rebuild)\//.test(writer);
+    if(writer.startsWith("snow-review-keep/") && Array.isArray(saved?.parts))
+      return saved.parts.map(coords=>({coords,source:"original-confirmed",matched:false}));
     if(saved && Array.isArray(saved.parts) && (!auto || !stop.redFootwayRebuild?.coverage))
       return saved.parts.map(coords=>({coords,source:"admin-firestore",matched:true}));
     return stop.parts||[];
+  }
+
+  // Questi 13 interventi non hanno geometrie pedonali affidabili nel
+  // catalogo: serve una decisione ESPRESSA dell'amministratore.
+  const reviewAll=C.sections.flatMap((section,i)=>section.stops
+    .filter(stop=>!stop.redFootwayRebuild)
+    .map(stop=>({...stop,sectionIndex:i,sectionName:section.name})));
+  const needsReview=stop=>!!stop&&!stop.redFootwayRebuild;
+  function reviewStatus(stop){
+    if(!needsReview(stop))return "not-required";
+    const record=state.geometries[stop.key],writer=String(record?.updatedBy||"");
+    if(writer.startsWith("snow-review-keep/"))return "keep";
+    if(writer.startsWith("snow-review-approved/"))return "approved";
+    if(record?.parts?.length&&writer&&!/^(snow-red-rebuild|snow-sidewalk-auto|snow-pedestrian-auto)\//.test(writer))return "approved";
+    return "pending";
+  }
+  const reviewLabel=s=>({pending:"⚠️ Da confermare",keep:"🟠 Originale mantenuto",approved:"✅ Correzione approvata"}[s]||"");
+  function reviewEdit(stop){
+    if(!admin())return;
+    select(stop.key,true);startEdit();
+  }
+  async function reviewKeep(stop){
+    if(!admin()||!dbReady()||!needsReview(stop)||reviewStatus(stop)==="approved")return;
+    if(!window.confirm("Confermi di MANTENERE ORIGINALE «"+stop.sectionName+" · "+stop.number+"» senza correggerne la geometria? Potrai modificarla successivamente."))return;
+    const parts=stop.parts.map(p=>(p.coords||[]).map(x=>[+x[0],+x[1]]));
+    const ref=db.collection("snowRouteGeometry").doc(stop.key);
+    try{
+      const accepted=await db.runTransaction(async tx=>{
+        const snap=await tx.get(ref),prev=snap.exists?snap.data():{};
+        const writer=String(prev.updatedBy||"");
+        if(prev.parts?.length&&writer&&!/^(snow-red-rebuild|snow-sidewalk-auto|snow-pedestrian-auto|snow-review-keep)\//.test(writer))return false;
+        tx.set(ref,{stopKey:stop.key,parts,
+          updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy:"snow-review-keep/"+(currentUser?.uid||"admin")},{merge:true});
+        return true;
+      });
+      if(!accepted)return message("La geometria è già stata modificata: non sovrascrivo una correzione precedente.");
+      state.geometries[stop.key]={parts,updatedBy:"snow-review-keep/"+(currentUser?.uid||"admin")};
+      draw();message("Decisione registrata: percorso originale mantenuto.");
+    }catch(error){message("Conferma non salvata: "+(error.code||error.message));}
+  }
+  function reviewButtons(container,stop){
+    if(!admin())return;
+    const row=document.createElement("div");
+    row.className="snow-plan-review-actions";
+    const edit=document.createElement("button");edit.type="button";
+    edit.textContent=reviewStatus(stop)==="keep"?"✏️ Correggi comunque":"✏️ Correggi percorso";
+    edit.addEventListener("click",()=>reviewEdit(stop));row.appendChild(edit);
+    if(reviewStatus(stop)==="pending"){
+      const keep=document.createElement("button");keep.type="button";
+      keep.textContent="✓ Mantieni originale";
+      keep.addEventListener("click",()=>reviewKeep(stop));row.appendChild(keep);
+    }
+    container.appendChild(row);
+  }
+  function renderReview(stops){
+    const box=id("snow-plan-review-panel"),list=id("snow-plan-review-list"),summary=id("snow-plan-review-summary");
+    if(!box||!list||!summary)return;
+    const all=reviewAll.length,waiting=reviewAll.filter(s=>reviewStatus(s)==="pending").length;
+    const current=stops.filter(needsReview);
+    summary.textContent="⚠️ Verifica percorsi: "+waiting+" da confermare su "+all;
+    box.hidden=!current.length;
+    list.replaceChildren();
+    const hint=document.createElement("p");
+    hint.textContent="In questa commessa: "+current.length+" linee da verificare. La scelta riguarda solo la geometria, non lo stato dei lavori. Nessuna correzione automatica su questi tratti.";
+    list.appendChild(hint);
+    current.forEach(stop=>{
+      const item=document.createElement("div");item.className="snow-plan-review-item";
+      const label=document.createElement("strong");label.textContent=stop.sectionName+" · "+stop.number+" — "+stop.note;item.appendChild(label);
+      const status=document.createElement("small");status.textContent=reviewLabel(reviewStatus(stop));item.appendChild(status);
+      const locate=document.createElement("button");locate.type="button";locate.textContent="📍 Vedi sulla mappa";
+      locate.addEventListener("click",()=>select(stop.key,true));item.appendChild(locate);
+      reviewButtons(item,stop);list.appendChild(item);
+    });
   }
   function ensureDom(){
     const page=id("impianti-page");
@@ -52,7 +128,7 @@
     if(!id("snow-plan-panel")){
       const section=document.createElement("section");
       section.id="snow-plan-panel";section.className="card snow-plan-panel hidden";section.setAttribute("aria-hidden","true");
-      section.innerHTML='<div class="snow-plan-heading"><div><h2>🗺️ Percorsi neve Castel Maggiore</h2><p class="muted">3 commesse · 4 sottopercorsi · 45 interventi. Tratti di strada, marciapiedi, ciclabili e accessi.</p></div></div><div id="snow-plan-editor" class="snow-plan-editor hidden"><button id="snow-plan-edit-start" type="button">🗺️ Apri editor mappa</button><button id="snow-plan-edit-new-part" type="button">✏️ Traccia linea</button><button id="snow-plan-edit-insert-point" type="button">➕ Inserisci punto</button><label>Tratto <select id="snow-plan-edit-part"></select></label><button id="snow-plan-edit-delete-part" type="button">🗑 Elimina piccolo pezzo</button><button id="snow-plan-edit-undo" type="button">Annulla ultimo punto</button><button id="snow-plan-edit-save" type="button">Salva mappa</button><button id="snow-plan-edit-export-kml" type="button">Esporta KML</button><button id="snow-plan-edit-import-kml" type="button">Importa KML</button><input id="snow-plan-edit-kml-file" type="file" accept=".kml,application/vnd.google-earth.kml+xml" hidden><button id="snow-plan-edit-cancel" type="button">Annulla modifica</button><span id="snow-plan-edit-hint">Seleziona un intervento per correggerlo.</span></div><button id="snow-plan-new-run" type="button" class="btn">🔄 Nuovo giro · azzera stati</button><p id="snow-plan-feedback" role="status" aria-live="polite" class="muted"></p><div class="snow-plan-filters"><label>Commessa<select id="snow-plan-group"></select></label><label>Giorno<input type="date" id="snow-plan-day"></label></div><p class="snow-plan-rules">⚠️ Piano operativo: attivazione oltre 5 cm di neve a terra. I punti prioritari sono evidenziati; verificare sul posto marciapiedi, accessi e geometrie. Ogni intervento prevede passaggi pedonali e salatura.</p><p id="snow-plan-resources" class="snow-plan-resources"></p><div class="snow-plan-summary" id="snow-plan-summary"></div><div class="snow-plan-layout"><div class="snow-plan-map-wrap"><div id="snow-plan-map" role="application" aria-label="Mappa dei percorsi neve"></div><div class="snow-plan-map-legend"><span>🔵 Da fare</span><span>🟠 In corso</span><span>🟢 Completato</span><span>🔴 Problema</span></div></div><div class="snow-plan-details"><h3 id="snow-plan-list-title">Interventi da pulire</h3><div id="snow-plan-stops"></div></div></div><p class="muted snow-plan-source">Geometrie dalla mappa Google My Maps «VIABILITA MINORE» dove disponibili. Per 2 interventi senza corrispondenza certa restano le geometrie indicative OSM/DBTR. Verificare sul posto. © OpenStreetMap contributors (ODbL), Regione Emilia-Romagna (CC BY 4.0). Il percorso di trasferimento stradale non equivale al tratto da pulire.</p>';
+      section.innerHTML='<div class="snow-plan-heading"><div><h2>🗺️ Percorsi neve Castel Maggiore</h2><p class="muted">3 commesse · 4 sottopercorsi · 45 interventi. Tratti di strada, marciapiedi, ciclabili e accessi.</p></div></div><div id="snow-plan-editor" class="snow-plan-editor hidden"><button id="snow-plan-edit-start" type="button">🗺️ Apri editor mappa</button><button id="snow-plan-edit-new-part" type="button">✏️ Traccia linea</button><button id="snow-plan-edit-insert-point" type="button">➕ Inserisci punto</button><label>Tratto <select id="snow-plan-edit-part"></select></label><button id="snow-plan-edit-delete-part" type="button">🗑 Elimina piccolo pezzo</button><button id="snow-plan-edit-undo" type="button">Annulla ultimo punto</button><button id="snow-plan-edit-save" type="button">Salva mappa</button><button id="snow-plan-edit-export-kml" type="button">Esporta KML</button><button id="snow-plan-edit-import-kml" type="button">Importa KML</button><input id="snow-plan-edit-kml-file" type="file" accept=".kml,application/vnd.google-earth.kml+xml" hidden><button id="snow-plan-edit-cancel" type="button">Annulla modifica</button><span id="snow-plan-edit-hint">Seleziona un intervento per correggerlo.</span></div><button id="snow-plan-new-run" type="button" class="btn">🔄 Nuovo giro · azzera stati</button><p id="snow-plan-feedback" role="status" aria-live="polite" class="muted"></p><div class="snow-plan-filters"><label>Commessa<select id="snow-plan-group"></select></label><label>Giorno<input type="date" id="snow-plan-day"></label></div><p class="snow-plan-rules">⚠️ Piano operativo: attivazione oltre 5 cm di neve a terra. I punti prioritari sono evidenziati; verificare sul posto marciapiedi, accessi e geometrie. Ogni intervento prevede passaggi pedonali e salatura.</p><p id="snow-plan-resources" class="snow-plan-resources"></p><div class="snow-plan-summary" id="snow-plan-summary"></div><details id="snow-plan-review-panel" class="snow-plan-review-panel" open><summary id="snow-plan-review-summary">⚠️ 13 percorsi da confermare</summary><div id="snow-plan-review-list"></div></details><div class="snow-plan-layout"><div class="snow-plan-map-wrap"><div id="snow-plan-map" role="application" aria-label="Mappa dei percorsi neve"></div><div class="snow-plan-map-legend"><span>🔵 Da fare</span><span>🟠 In corso</span><span>🟢 Completato</span><span>🔴 Problema</span><span>🟣 Geometria da verificare</span></div></div><div class="snow-plan-details"><h3 id="snow-plan-list-title">Interventi da pulire</h3><div id="snow-plan-stops"></div></div></div><p class="muted snow-plan-source">Geometrie dalla mappa Google My Maps «VIABILITA MINORE» dove disponibili. Per 2 interventi senza corrispondenza certa restano le geometrie indicative OSM/DBTR. Verificare sul posto. © OpenStreetMap contributors (ODbL), Regione Emilia-Romagna (CC BY 4.0). Il percorso di trasferimento stradale non equivale al tratto da pulire.</p>';
       const mapCard=page.querySelector("#commessa-operational-card");
       if(mapCard)mapCard.insertAdjacentElement("afterend",section);else page.appendChild(section);
       id("snow-plan-group").innerHTML=C.groups.map((g,i)=>'<option value="'+i+'">'+esc(g.name)+'</option>').join("");
@@ -99,6 +175,7 @@
     const bounds=[];
     stops.forEach((stop)=>{
       const status=aggregate(stop.key),color=colors[status],lines=[];
+      const flagged=needsReview(stop)&&reviewStatus(stop)!=="approved";
       const saved=state.geometries[stop.key];
       const editingParts=state.editing&&state.selected===stop.key?state.editParts:null;
       const parts=editingParts!==null?editingParts.map(coords=>({coords,matched:true})):effectiveSnowParts(stop);
@@ -107,12 +184,18 @@
         if(coords.length<2)return;
         bounds.push(...coords);
         const uncertain=stop.geometryStatus==="osm-red-footway-rebuilt" ? part.matched!==true : part.matched!==true || !/verified|dbtr|source-original-mymaps-kml/i.test(stop.geometryStatus||"");
-        const line=L.polyline(coords,{color,weight:uncertain?4:(status==="done"?5:3.5),opacity:uncertain?.84:.64,dashArray:uncertain?"6 6":null,lineCap:"round",lineJoin:"round"});
-        line.on("click",event=>{if(state.editing&&state.drawingLine){event.originalEvent?.stopPropagation?.();onEditMapClick(event)}else if(state.editing&&state.insertingPoint){event.originalEvent?.stopPropagation?.();insertEditPoint(stop.key,partIndex,event.latlng)}else if(state.editing)selectEditSegment(stop.key,partIndex,event.latlng);else select(stop.key,true)});line.bindTooltip((stop.priority?"★ PRIORITÀ · ":"")+stop.sectionName+" · "+stop.number,{sticky:true});
+        if(flagged){
+          const halo=L.polyline(coords,{color:"#7c3aed",weight:10,opacity:.58,
+            dashArray:"8 7",interactive:false,lineCap:"round",lineJoin:"round"});
+          halo.addTo(state.paths);lines.push(halo);
+        }
+        const line=L.polyline(coords,{color,weight:uncertain?4:(status==="done"?5:3.5),
+          opacity:uncertain?.84:.64,dashArray:flagged?"5 7":uncertain?"6 6":null,lineCap:"round",lineJoin:"round"});
+        line.on("click",event=>{if(state.editing&&state.drawingLine){event.originalEvent?.stopPropagation?.();onEditMapClick(event)}else if(state.editing&&state.insertingPoint){event.originalEvent?.stopPropagation?.();insertEditPoint(stop.key,partIndex,event.latlng)}else if(state.editing)selectEditSegment(stop.key,partIndex,event.latlng);else select(stop.key,true)});line.bindTooltip((flagged?"⚠️ MAPPA DA CONFERMARE · ":"")+(stop.priority?"★ PRIORITÀ · ":"")+stop.sectionName+" · "+stop.number,{sticky:true});
         line.addTo(state.paths);lines.push(line);
       });
       if(stop.marker?.length===2){
-        const marker=L.circleMarker(stop.marker,{radius:stop.priority?7:5,color:stop.priority?"#b91c1c":color,weight:2,fillOpacity:.9});
+        const marker=L.circleMarker(stop.marker,{radius:flagged?10:stop.priority?7:5,color:flagged?"#7c3aed":stop.priority?"#b91c1c":color,weight:flagged?4:2,fillOpacity:.9});
         marker.on("click",()=>{if(!state.editing)select(stop.key,true)});marker.addTo(state.paths);bounds.push(stop.marker);
         lines.push(marker);
       }
@@ -157,9 +240,15 @@
     const list=id("snow-plan-stops");list.replaceChildren();
     stops.forEach((stop)=>{
       const st=aggregate(stop.key),userId=userReady()?currentUser.uid:null,rec=state.records.find(r=>r.uid===userId&&r.stopKey===stop.key);
-      const article=document.createElement("article");article.className="snow-plan-stop"+(state.selected===stop.key?" selected":"");article.dataset.stopKey=stop.key;
+      const article=document.createElement("article");article.className="snow-plan-stop"+(state.selected===stop.key?" selected":"")+(needsReview(stop)?" snow-plan-stop-review snow-plan-review-"+reviewStatus(stop):"");article.dataset.stopKey=stop.key;
       article.innerHTML='<div class="snow-plan-stop-head"><strong>'+(stop.priority?'🔴 PRIORITÀ · ':'')+esc(stop.sectionName)+' · '+stop.number+'</strong><span style="color:'+colors[st]+'">'+esc(labels[st])+'</span></div><p>'+esc(stop.note)+'</p><div class="snow-plan-stop-buttons"><button type="button" data-action="view">📍 Mappa</button><button type="button" data-action="navigate">🧭 Naviga</button><button type="button" data-action="start">▶ Inizia</button><button type="button" data-action="clear">'+(rec?.cleared?'✓ Pulito':'✓ Pulizia')+'</button><button type="button" data-action="salt">'+(rec?.salted?'✓ Salato':'🧂 Salatura')+'</button><button type="button" data-action="problem">⚠ Problema</button></div><small>Tratto '+(stop.parts?.length?"presente in cartografia":"non disponibile")+' · Verificare accessi e lati dei marciapiedi sul posto.</small>';
-      article.querySelectorAll("button").forEach((button)=>button.addEventListener("click",()=>{
+      if(needsReview(stop)){
+        const banner=document.createElement("div");banner.className="snow-plan-review-notice";
+        banner.textContent=reviewLabel(reviewStatus(stop))+" — riguarda la mappa, non lo stato del lavoro.";
+        article.insertBefore(banner,article.querySelector(".snow-plan-stop-buttons"));
+        reviewButtons(article,stop);
+      }
+      article.querySelectorAll(".snow-plan-stop-buttons button").forEach((button)=>button.addEventListener("click",()=>{
         const act=button.dataset.action;
         if(act==="view")return select(stop.key,true);
         if(act==="navigate")return navigation(stop);
@@ -167,6 +256,7 @@
       }));
       list.appendChild(article);
     });
+    renderReview(stops);
     mapDraw(stops);
   }
   function watch(){
@@ -318,8 +408,9 @@
   function startEdit(){
     if(!admin())return message("Solo un amministratore può correggere la mappa.");
     const stop=currentStop();if(!stop)return message("Seleziona prima un intervento dall’elenco.");
-    const saved=state.geometries[stop.key];
+    state.editSource=JSON.stringify(state.geometries[stop.key]?.parts||null);
     state.editParts=effectiveSnowParts(stop).map(p=>(p.coords||[]).map(x=>[+x[0],+x[1]]));
+    state.editBaseline=JSON.stringify(state.editParts);
     state.editPartIndex=state.editParts.length?0:-1;state.editSelectedSegment=-1;state.drawingLine=false;state.insertingPoint=false;state.editing=true;
     renderEditPartOptions();
     id("snow-plan-edit-hint").textContent="Traccia linea aggiunge un pezzo. Inserisci punto divide una linea: inserisci due punti ai bordi del tratto, poi tocca il piccolo segmento rosso e cancellalo. Da PC puoi esportare o importare KML per lavorare in Google Earth o QGIS; salva qui solo dopo aver controllato la mappa.";
@@ -432,7 +523,7 @@
     drawEditPreview();
   }
   function cancelEdit(){
-    state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();window.VargaSnowPedestrianAssist?.detach?.();closeEditorPage();
+    state.editing=false;state.drawingLine=false;state.insertingPoint=false;state.editSelectedSegment=-1;state.editSource=null;state.editBaseline=null;if(state.map)state.map.off("click",onEditMapClick);clearEditLayers();window.VargaSnowPedestrianAssist?.detach?.();closeEditorPage();
     const hint=id("snow-plan-edit-hint");if(hint)hint.textContent="Seleziona un intervento per correggerlo.";if(normalPageVisible()&&activeGroup()>=0)draw();
   }
   function exportKml(){
@@ -479,13 +570,29 @@
     const stop=currentStop();if(!stop)return;
     if(state.editParts.some(part=>part.length<2))return message("Completa ogni linea con almeno due punti o rimuovi il tratto vuoto.");
     try{
-      const savedParts=state.editParts.map(p=>p.map(x=>[Number(x[0]),Number(x[1])]));
-      await db.collection("snowRouteGeometry").doc(stop.key).set({
-        stopKey:stop.key,parts:savedParts,
-        updatedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedBy:currentUser?.email||""
-      },{merge:true});
-      state.geometries[stop.key]={stopKey:stop.key,parts:savedParts};
-      cancelEdit();message("Percorso salvato in modo permanente."); 
+      const parts=state.editParts.map(p=>p.map(x=>[Number(x[0]),Number(x[1])]));
+      const stopReview=needsReview(stop);
+      if(stopReview){
+        if(JSON.stringify(parts)===state.editBaseline)
+          return message("Nessuna modifica alla geometria. Per conservare il percorso scegli «Mantieni originale».");
+        if(!window.confirm("CONFERMA CORREZIONE\n\nSostituire il percorso originale di «"+stop.sectionName+" · "+stop.number+"» con la geometria disegnata?\n\nLa modifica sarà salvata in modo permanente."))return;
+        const ref=db.collection("snowRouteGeometry").doc(stop.key);
+        await db.runTransaction(async tx=>{
+          const snap=await tx.get(ref);
+          if(JSON.stringify(snap.exists?(snap.data().parts||null):null)!==state.editSource)
+            throw Error("La geometria è stata modificata da un altro amministratore. Riapri l'editor prima di salvarla.");
+          tx.set(ref,{stopKey:stop.key,parts,updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy:"snow-review-approved/"+(currentUser?.uid||"admin")},{merge:true});
+        });
+        state.geometries[stop.key]={parts,updatedBy:"snow-review-approved/"+(currentUser?.uid||"admin")};
+      }else{
+        await db.collection("snowRouteGeometry").doc(stop.key).set({
+          stopKey:stop.key,parts,updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy:currentUser?.email||""
+        },{merge:true});
+        state.geometries[stop.key]={parts,updatedBy:currentUser?.email||""};
+      }
+      cancelEdit();draw();message(stopReview?"Correzione confermata e salvata dall'amministratore.":"Percorso salvato in modo permanente.");
     }catch(error){message("Salvataggio mappa non riuscito: "+(error.code||error.message));}
   }
   async function resetRun(){

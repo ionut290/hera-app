@@ -1,7 +1,7 @@
 /* Three salatura commesse are idempotent and never overwrite KML commesse. */
 "use strict";
 const fs=require("node:fs"),vm=require("node:vm"),assert=require("node:assert/strict");
-const window={},document={readyState:"loading",addEventListener:()=>{}};
+const window={},document={readyState:"loading",addEventListener:()=>{},getElementById:()=>null};
 vm.runInNewContext(fs.readFileSync("salatura-strada-routes.js","utf8"),{window});
 const routes=window.VARGA_SALATURA_STRADA_ROUTES;
 assert.equal(routes.length,3);

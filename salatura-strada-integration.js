@@ -5,7 +5,7 @@
 "use strict";
 const routes=window.VARGA_SALATURA_STRADA_ROUTES||[];
 if(routes.length!==3)return;
-const APP="https://ionut290.github.io/Varga-piano-neve/";
+const APP=new URL("./piano-neve/index.html",document.baseURI).href;
 const $=id=>document.getElementById(id);
 const admin=()=>typeof canManageData==="function"&&!!canManageData();
 const logged=()=>typeof currentUser!=="undefined"&&!!currentUser;
@@ -81,9 +81,9 @@ function fullScreen(){
  frameBox.setAttribute("role","dialog");frameBox.setAttribute("aria-modal","true");
  frameBox.innerHTML='<header><button type="button" id="salatura-back">← Torna alla commessa</button>'+
  '<strong id="salatura-full-title">Piano Neve</strong>'+
- '<a id="salatura-full-link" rel="noopener noreferrer" target="_blank">Apri app originale</a></header>'+
+ '<a id="salatura-full-link" rel="noopener noreferrer" target="_blank">Apri pagina completa</a></header>'+
  '<iframe id="salatura-iframe" title="Varga Piano Neve" allow="geolocation; fullscreen; clipboard-write"></iframe>'+
- '<p>Se il GPS non funziona nella vista integrata, usa «Apri app originale».</p>';
+ '<p>Accesso condiviso con Varga Cantieri. Se il GPS è limitato nel riquadro, apri la pagina completa.</p>';
  document.body.appendChild(frameBox);
  $("salatura-back").addEventListener("click",()=>{
    if(!window.confirm("Chiudere la vista? Metti in pausa o termina un eventuale giro attivo prima di uscire."))return;
@@ -100,9 +100,9 @@ function ensure(){
  panel.innerHTML='<h2 id="salatura-title">🧂 Salatura Strada</h2>'+
  '<p id="salatura-meta"></p>'+
  '<p>Il servizio mantiene la PWA Piano Neve originale: NAVIGA, GPS, percorso lavorato, INIZIA, PAUSA, RIPRENDI, TERMINA, sale caricato, rapportini, Excel e gestione amministratore.</p>'+
- '<div class="salatura-actions"><a id="salatura-launch" class="btn btn-primary" target="_blank" rel="noopener noreferrer">🧭 NAVIGA · Apri Piano Neve</a>'+
- '<button type="button" id="salatura-inline" class="btn">🗺️ Apri qui</button></div>'+
- '<p class="muted">Per navigare su iPhone/Android usa preferibilmente l’app originale. Potrebbe richiedere un accesso separato. Le attività restano nel registro Piano Neve.</p>'+
+ '<div class="salatura-actions"><button type="button" id="salatura-inline" class="btn btn-primary">🧭 NAVIGA · Apri Piano Neve</button>'+
+ '<a id="salatura-launch" class="btn" target="_blank" rel="noopener noreferrer">🗺️ Apri pagina completa</a></div>'+
+ '<p class="muted">Piano Neve è integrato in Varga Cantieri e usa il tuo accesso attuale, senza secondo login. I giri e i registri di salatura rimangono separati.</p>'+
  '<p id="salatura-panel-status" role="status"></p>'+
  '<details><summary id="salatura-street-count">Strade del percorso</summary><ol id="salatura-street-list"></ol></details>';
  const anchor=$("commessa-operational-card");
@@ -112,8 +112,8 @@ function ensure(){
    const box=fullScreen();
    $("salatura-full-title").textContent=routes[i].name+" · "+routes[i].sourceName;
    $("salatura-full-link").href=url(i);
-   $("salatura-iframe").src=url(i);
    box.hidden=false;document.body.classList.add("salatura-fullscreen-open");
+   $("salatura-iframe").src=url(i);
  });
  return panel;
 }

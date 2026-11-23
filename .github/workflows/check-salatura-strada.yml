@@ -1,0 +1,40 @@
+name: Check Salatura Strada integration
+on:
+  pull_request:
+    paths:
+      - 'salatura-strada-routes.js'
+      - 'salatura-strada-integration.js'
+      - 'salatura-strada-integration.css'
+      - 'scripts/check-salatura-strada.cjs'
+      - 'index.html'
+      - 'sw.js'
+      - '.github/workflows/check-salatura-strada.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'salatura-strada-routes.js'
+      - 'salatura-strada-integration.js'
+      - 'salatura-strada-integration.css'
+      - 'scripts/check-salatura-strada.cjs'
+      - '.github/workflows/check-salatura-strada.yml'
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify syntax
+        run: |
+          node --check salatura-strada-routes.js
+          node --check salatura-strada-integration.js
+      - name: Check normal commesse and safe deep links
+        run: node scripts/check-salatura-strada.cjs
+      - name: Preserve Castel Maggiore KML snow routing
+        run: node scripts/check-snow-castel-maggiore.js

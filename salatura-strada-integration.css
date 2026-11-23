@@ -1,0 +1,22 @@
+/* Salatura Strada 1/2/3 · Dentro le commesse normali. */
+.salatura-strada-panel{border:1px solid var(--line,#d5e3ef);margin-block:14px}
+.salatura-strada-panel.hidden,[hidden].salatura-fullscreen{display:none!important}
+.salatura-strada-panel h2{margin:0 0 6px;font-size:1.3rem}
+.salatura-strada-panel #salatura-meta{color:#445c70;font-weight:700;margin:0 0 12px}
+.salatura-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;margin:14px 0}
+.salatura-actions a,.salatura-actions button{min-height:48px;padding:12px 14px;font-size:14px;line-height:1.3;flex:1 1 200px;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none}
+.salatura-strada-panel details{margin-top:15px;background:var(--card,#f6f8fb);border-radius:12px;padding:12px}
+.salatura-strada-panel details summary{font-weight:700;cursor:pointer}
+.salatura-strada-panel ol{padding-left:28px;max-height:330px;overflow:auto}
+.salatura-strada-panel li{line-height:1.55;padding:5px 2px;border-bottom:1px solid #ccd6dd}
+.salatura-import-wrap{display:flex;flex-direction:column;gap:4px}
+.salatura-import-wrap .muted{margin:0;font-size:12px}
+body.salatura-fullscreen-open{overflow:hidden!important}
+.salatura-fullscreen{position:fixed;inset:0;z-index:2147483000;background:#f8fbff;color:#132a3b;display:flex;flex-direction:column;
+ padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.salatura-fullscreen header{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px;background:#0b3145;color:white}
+.salatura-fullscreen header strong{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.salatura-fullscreen header button,.salatura-fullscreen header a{min-height:44px;padding:10px;border-radius:8px;background:#e7f2f7;border:0;color:#0b3145;text-decoration:none;font-weight:700;cursor:pointer}
+.salatura-fullscreen iframe{border:0;display:block;flex:1 1 auto;min-height:200px;width:100%;background:#0a1a27}
+.salatura-fullscreen p{margin:0;padding:5px 12px;font-size:12px;line-height:1.3;background:#fffae8}
+@media(max-width:560px){.salatura-fullscreen header strong{order:3;flex:1 1 100%;text-align:center}.salatura-fullscreen header button,.salatura-fullscreen header a{flex:1}}

@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v242";
+const CACHE_NAME = "varga-cantieri-shell-v243";
 const CACHE_RESET_VERSION = "20261120-password-selfservice1";
 const APP_SHELL = [
   "./",
@@ -25,6 +25,9 @@ const APP_SHELL = [
   "./snow-castel-maggiore-catalog.js?v=20261122-pdf-audit1",
   "./app-snow.js?v=20261122-cm-routes1",
   "./snow-plan-operations.js?v=20261122-kml1",
+  "./salatura-strada-routes.js?v=20261123-1",
+  "./salatura-strada-integration.js?v=20261123-1",
+  "./salatura-strada-integration.css?v=20261123-1",
   "./snow-plan-operations.css?v=20261122-kml1",
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260928-maps-waze-direct1",
@@ -119,6 +122,9 @@ const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", 
 const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/app.js",
+  "/salatura-strada-routes.js",
+  "/salatura-strada-integration.js",
+  "/salatura-strada-integration.css",
   "/app-pure-utils.js",
   "/verde-bologna.js",
   "/verde-bologna-operativo.js",

@@ -1,172 +1,303 @@
-/* Varga Cantieri - allineamento automatico conservativo marciapiedi.
- * Esegue solo per amministratori autenticati, sulle 3 commesse normali.
- * Si basa esclusivamente sui percorsi OSM separati e marcati
- * highway=footway + footway=sidewalk; NON usa la mezzeria delle strade.
- * Mantiene tutti i 45 interventi e salva un backup per ogni correzione.
+/* Varga Cantieri — allineamento automatico ai percorsi pedonali OSM.
+ * Importante: mantieni KML originale nel catalogo e qualsiasi modifica
+ * manuale Firebase. Scrivi SOLO i 4 campi permessi dalle regole Firestore.
  */
-(function (global) {
+(function installSnowSidewalkAlignment(global) {
   "use strict";
-  const VERSION = "20261123-pedestrian-safe1";
-  const MAX_METERS = 2.5;
-  const ENDPOINT_MAX = 55;
-  const MAX_WAYS = 1800;
-  const OVERPASS = "https://overpass.private.coffee/api/interpreter";
-  const DIST_EARTH = 6371000;
-  let running = false;
-  const toRadians = a => a * Math.PI / 180;
-  function metres(a,b) {
-    const dLat=toRadians(b[0]-a[0]),dLon=toRadians(b[1]-a[1]);
-    const h=Math.sin(dLat/2)**2+Math.cos(toRadians(a[0]))*Math.cos(toRadians(b[0]))*Math.sin(dLon/2)**2;
-    return 2*DIST_EARTH*Math.atan2(Math.sqrt(h),Math.sqrt(Math.max(0,1-h)));
-  }
-  function xy(point,refLat) {
-    return [toRadians(point[1])*DIST_EARTH*Math.cos(toRadians(refLat)),toRadians(point[0])*DIST_EARTH];
-  }
+  const VERSION = "20261123-nearest-footway2";
+  const MAX_SNAP_METERS = 12;
+  const SAMPLE_METERS = 6;
+  const MAX_PART_SAMPLES = 1500;
+  const MAX_STOP_POINTS = 5000;
+  const MAX_WAYS = 3500;
+  const EARTH = 6371000;
+  const overpassURLs = [
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass-api.de/api/interpreter"
+  ];
+  const rad = value => value * Math.PI / 180;
+  const metres = (a,b) => {
+    const deltaLat=rad(b[0]-a[0]), deltaLng=rad(b[1]-a[1]);
+    const x=Math.sin(deltaLat/2)**2 + Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(deltaLng/2)**2;
+    return EARTH*2*Math.atan2(Math.sqrt(x),Math.sqrt(Math.max(0,1-x)));
+  };
+  const xy=(p,lat)=>[rad(p[1])*EARTH*Math.cos(rad(lat)), rad(p[0])*EARTH];
+  const cleanPart=part=>Array.isArray(part)
+    ?part.map(p=>[Number(p?.[0]),Number(p?.[1])]).filter(p=>p.every(Number.isFinite)):[];
+  const cloneParts=stop=>(stop.parts||[]).map(p=>cleanPart(p.coords));
   function project(point,a,b) {
-    const lat = point[0], p = xy(point,lat), aa=xy(a,lat), bb=xy(b,lat);
-    const vx=bb[0]-aa[0],vy=bb[1]-aa[1],length=vx*vx+vy*vy;
-    const t=length?Math.min(1,Math.max(0,((p[0]-aa[0])*vx+(p[1]-aa[1])*vy)/length)):0;
-    return [a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])];
+    const ref=point[0],p=xy(point,ref),a0=xy(a,ref),b0=xy(b,ref);
+    const dx=b0[0]-a0[0],dy=b0[1]-a0[1],len=dx*dx+dy*dy;
+    const t=len?Math.min(1,Math.max(0,((p[0]-a0[0])*dx+(p[1]-a0[1])*dy)/len)):0;
+    const target=[a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])];
+    return {point:target,distance:metres(point,target)};
   }
-  function normalizePart(part) {
-    return Array.isArray(part)
-      ? part.map(p=>[Number(p?.[0]),Number(p?.[1])]).filter(p=>p.every(Number.isFinite))
-      : [];
+  function samplePart(source) {
+    const points=cleanPart(source); if(points.length<2) return [];
+    const samples=[points[0]];
+    for(let i=1;i<points.length;i++) {
+      const before=points[i-1],after=points[i],distance=metres(before,after);
+      const steps=Math.max(1,Math.ceil(distance/SAMPLE_METERS));
+      if(samples.length+steps>MAX_PART_SAMPLES) return [];
+      for(let k=1;k<=steps;k++) {
+        const ratio=k/steps;
+        samples.push([before[0]+ratio*(after[0]-before[0]),before[1]+ratio*(after[1]-before[1])]);
+      }
+    }
+    return samples;
   }
-  function sections() {
-    return global.VARGA_SNOW_CM_CATALOG?.sections || [];
+  function kindOf(way) {
+    const tags=way.tags||{};
+    if(tags.footway==="sidewalk") return "sidewalk";
+    if(tags.footway==="crossing") return "crossing";
+    if(tags.highway==="pedestrian") return "pedestrian";
+    if(tags.highway==="footway" || !tags.highway) return "footway";
+    if(tags.highway==="path" && tags.foot!=="no") return "path";
+    return "excluded";
   }
-  function getBox(section) {
-    const pts = section.stops.flatMap(s=>(s.parts||[]).flatMap(p=>p.coords||[]))
-      .filter(p=>Array.isArray(p)&&p.length>=2);
-    if (!pts.length) return null;
-    const lats=pts.map(p=>p[0]),lons=pts.map(p=>p[1]);
-    const south=Math.min(...lats)-.001,north=Math.max(...lats)+.001;
-    const west=Math.min(...lons)-.0015,east=Math.max(...lons)+.0015;
-    // Non eseguire ricerche Overpass regionali per geometrie corrotte.
-    if (north-south>.065 || east-west>.085) return null;
-    return [south,west,north,east].map(n=>n.toFixed(6)).join(",");
-  }
-  async function requestSidewalks(bbox) {
-    const query = '[out:json][timeout:22];way["highway"="footway"]["footway"="sidewalk"]('+bbox+');out geom;';
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),25000);
-    try {
-      const response=await fetch(OVERPASS,{method:"POST",
-        headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},
-        body:new URLSearchParams({data:query}),signal:controller.signal});
-      if (!response.ok) throw new Error("Overpass HTTP "+response.status);
-      const data=await response.json();
-      return (data.elements||[]).slice(0,MAX_WAYS).filter(e=>e.type==="way" && Array.isArray(e.geometry))
-        .map(e=>({id:e.id,points:e.geometry.map(p=>[+p.lat,+p.lon])
-          .filter(p=>p.every(Number.isFinite))})).filter(e=>e.points.length>=2);
-    } finally {clearTimeout(timer);}
-  }
-  function nearestSidewalk(point, ways) {
-    let best=null,bestDistance=MAX_METERS;
-    for (const way of ways) {
-      for (let i=1;i<way.points.length;i++) {
-        const p=project(point,way.points[i-1],way.points[i]);
-        const d=metres(point,p);
-        if (d<bestDistance) {
-          best={point:p,wayId:way.id,segment:i-1,dist:d,
-            bearing:[way.points[i][0]-way.points[i-1][0],way.points[i][1]-way.points[i-1][1]]};
-          bestDistance=d;
+  // Griglia geografica da circa 65 m: non confrontare ogni vertice con
+  // migliaia di segmenti, soprattutto sui telefoni.
+  const cellKey=(lat,lng)=>Math.floor(lat/.00058)+":"+Math.floor(lng/.0008);
+  function indexWays(ways) {
+    const cells=new Map();
+    for(const way of ways) {
+      const kind=kindOf(way);
+      if(kind==="excluded")continue;
+      const pts=Array.isArray(way.points)?way.points:[];
+      for(let i=1;i<pts.length;i++) {
+        const a=pts[i-1],b=pts[i];
+        if(!Array.isArray(a)||!Array.isArray(b)||metres(a,b)>160)continue;
+        const seg={a,b,wayId:way.id,kind};
+        const lat0=Math.floor((Math.min(a[0],b[0])-.00018)/.00058);
+        const lat1=Math.floor((Math.max(a[0],b[0])+.00018)/.00058);
+        const lon0=Math.floor((Math.min(a[1],b[1])-.00023)/.0008);
+        const lon1=Math.floor((Math.max(a[1],b[1])+.00023)/.0008);
+        if((lat1-lat0+1)*(lon1-lon0+1)>50)continue;
+        for(let lat=lat0;lat<=lat1;lat++)for(let lon=lon0;lon<=lon1;lon++){
+          const key=lat+":"+lon;
+          if(!cells.has(key))cells.set(key,[]);
+          cells.get(key).push(seg);
         }
       }
     }
-    return best;
+    return cells;
   }
-  function automaticPart(part, ways) {
-    const original=normalizePart(part);
-    if (original.length<2 || original.length>700) return null;
-    // Evita tracciati con vertici a centinaia di metri fra loro: uno snap
-    // dei soli capi non descriverebbe il marciapiede intermedio.
-    if (original.some((p,i)=>i&&metres(p,original[i-1])>ENDPOINT_MAX)) return null;
-    const matching=original.map(p=>nearestSidewalk(p,ways));
-    // Richiede un percorso separato OSM CONTINUO e nessun vertice ambiguo.
-    if (matching.some(p=>!p)) return null;
-    const sameWay=matching.every(m=>m.wayId===matching[0].wayId);
-    if (!sameWay) return null;
-    // Protegge l'orientamento: i vertici devono seguire lo stesso
-    // marciapiede senza attraversamenti o inversioni improvvise.
-    const segments=matching.map(m=>m.segment);
-    const isNonDecreasing=segments.every((x,i)=>!i||x>=segments[i-1]);
-    const isNonIncreasing=segments.every((x,i)=>!i||x<=segments[i-1]);
-    if (!isNonDecreasing&&!isNonIncreasing) return null;
-    const candidate=matching.map(m=>m.point);
-    let before=0,after=0,moved=0,distSum=0;
-    for (let i=0;i<candidate.length;i++) {
-      const shift=metres(original[i],candidate[i]);
-      if (shift>MAX_METERS+.01) return null;
-      if (shift>.25) {moved++;distSum+=shift;}
-      if (i) {before+=metres(original[i-1],original[i]);after+=metres(candidate[i-1],candidate[i]);}
+  const penalty={sidewalk:0,footway:1,pedestrian:1.5,crossing:2,path:3};
+  function closest(point,tangent,index,previous) {
+    const key=cellKey(point[0],point[1]);
+    // Inline cell lookup for speed, including neighboring cells: 12m margin.
+    const row=Math.floor(point[0]/.00058),col=Math.floor(point[1]/.0008);
+    const seen=new Set(), options=[];
+    const tangentNorm=Math.hypot(tangent[0],tangent[1]);
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      for(const seg of (index.get((row+dr)+":"+(col+dc))||[])) {
+        if(seen.has(seg))continue;
+        seen.add(seg);
+        const candidate=project(point,seg.a,seg.b);
+        if(candidate.distance>MAX_SNAP_METERS)continue;
+        const x=xy(seg.a,point[0]),y=xy(seg.b,point[0]);
+        const sx=y[0]-x[0],sy=y[1]-x[1],sn=Math.hypot(sx,sy);
+        if(sn<.5)continue;
+        const parallel=tangentNorm?
+          Math.abs((sx*tangent[0]+sy*tangent[1])/(sn*tangentNorm)):1;
+        // Una traversa perpendicolare non è il marciapiede parallelo
+        // richiesto. Consenti crossing soltanto quando è nel verso
+        // dell'effettivo percorso sorgente.
+        if(parallel<.53)continue;
+        let score=candidate.distance+(penalty[seg.kind]||0)+(1-parallel)*5;
+        if(previous) {
+          const progress=metres(previous.point,candidate.point);
+          const sourceStep=metres(previous.source,point);
+          if(progress>sourceStep*1.85+5)continue; // non saltare carreggiata
+          if(seg.wayId===previous.wayId)score-=2;
+          else score+=Math.min(6,Math.abs(progress-sourceStep)*.8);
+        }
+        options.push({point:candidate.point,distance:candidate.distance,
+          wayId:seg.wayId,kind:seg.kind,score,source:point});
+      }
     }
-    if (moved<2 || before<2 || after<2 || Math.abs(before-after)>Math.max(2,before*.08)) return null;
-    // Non salvare correzioni che allontanano il percorso originale.
-    if (distSum/moved>2.25) return null;
-    return {original,candidate,moved};
+    if(!options.length)return null;
+    options.sort((a,b)=>a.score-b.score);
+    // In caso di distanze identiche su due marciapiedi contrapposti,
+    // non scegliere casualmente il lato per il primo punto.
+    if(!previous && options.length>1 && options[0].wayId!==options[1].wayId
+       && Math.abs(options[0].score-options[1].score)<.45
+       && metres(options[0].point,options[1].point)>4) return null;
+    return options[0];
   }
-  async function run({db,admin,uid,onProgress,existing={}}) {
-    if (!admin || !db || running || !global.VARGA_SNOW_CM_CATALOG) return null;
-    const key="varga-cm-snow-auto-"+VERSION;
-    try {
-      const last=Number(global.localStorage.getItem(key)||0);
-      if (Date.now()-last<24*3600*1000) return null;
-    } catch (_) {}
+  function automaticPart(originalPart,waysOrIndex) {
+    const original=cleanPart(originalPart);
+    if(original.length<2)return null;
+    const samples=samplePart(original);
+    if(samples.length<2)return null;
+    const index=waysOrIndex instanceof Map?waysOrIndex:indexWays(waysOrIndex||[]);
+    if(!index.size)return null;
+    const output=[], covered=[];
+    let last=null, snapped=0, maxShift=0;
+    for(let i=0;i<samples.length;i++){
+      const tangentAt=(i===0)?[samples[0],samples[1]]
+        :i===samples.length-1?[samples[i-1],samples[i]]
+        :[samples[i-1],samples[i+1]];
+      const a=xy(tangentAt[0],samples[i][0]),b=xy(tangentAt[1],samples[i][0]);
+      const target=closest(samples[i],[b[0]-a[0],b[1]-a[1]],index,last);
+      const p=target?target.point:samples[i];
+      output.push(p);
+      covered.push(!!target);
+      if(target) {
+        snapped++;
+        maxShift=Math.max(maxShift,target.distance);
+        last=target;
+      }else last=null;
+    }
+    const fraction=snapped/samples.length;
+    if(snapped<2||fraction<.50)return null;
+    const moved=output.filter((p,i)=>metres(p,samples[i])>.6).length;
+    if(moved<2)return null;
+    // Non collegare punti lontani con segmenti fittizi: ciascun tratto
+    // deve restare in una geometria plausibile senza tagli trasversali.
+    const safeParts=[];
+    let current=[];
+    for(let i=0;i<output.length;i++){
+      if(covered[i]){
+        if(current.length>0 && metres(current[current.length-1],output[i])>SAMPLE_METERS*2.4){
+          if(current.length>=2)safeParts.push(current);
+          current=[];
+        }
+        current.push(output[i]);
+      }else {
+        if(current.length>=2)safeParts.push(current);
+        current=[];
+      }
+    }
+    if(current.length>=2)safeParts.push(current);
+    // I pezzi mancanti rimangono nel percorso originale e non vengono
+    // inventati. Restituiamo le porzioni allineate e quelle residue.
+    const parts=[];
+    let start=0, isCovered=covered[0];
+    for(let i=1;i<=samples.length;i++){
+      if(i===samples.length || covered[i]!==isCovered){
+        const slice=output.slice(start,i);
+        if(slice.length>=2)parts.push(slice);
+        else if(slice.length===1 && parts.length)parts[parts.length-1].push(slice[0]);
+        start=i;isCovered=covered[i];
+      }
+    }
+    if(!parts.length)return null;
+    return {original, candidate:output,parts,moved,coverage:fraction,maxShift};
+  }
+  function boxFor(section) {
+    const coords=section.stops.flatMap(s=>cloneParts(s).flat());
+    if(!coords.length)return null;
+    const south=Math.min(...coords.map(x=>x[0]))-.0015;
+    const north=Math.max(...coords.map(x=>x[0]))+.0015;
+    const west=Math.min(...coords.map(x=>x[1]))-.002;
+    const east=Math.max(...coords.map(x=>x[1]))+.002;
+    if(north-south>.075||east-west>.095)return null;
+    return [south,west,north,east].map(n=>n.toFixed(6)).join(",");
+  }
+  async function fetchWays(bbox) {
+    const query='[out:json][timeout:22];('+
+      'way["highway"="footway"]('+bbox+');'+
+      'way["highway"="pedestrian"]('+bbox+');'+
+      'way["highway"="path"]["foot"!="no"]('+bbox+'););out geom;';
+    let lastError;
+    for(const endpoint of overpassURLs){
+      const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),25000);
+      try {
+        const response=await fetch(endpoint,{
+          method:"POST",
+          headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},
+          body:new URLSearchParams({data:query}),signal:controller.signal
+        });
+        if(!response.ok)throw Error("OSM HTTP "+response.status);
+        const json=await response.json();
+        return (Array.isArray(json.elements)?json.elements:[]).slice(0,MAX_WAYS)
+          .filter(e=>e.type==="way"&&Array.isArray(e.geometry))
+          .map(e=>({id:e.id,tags:e.tags||{},points:e.geometry.map(p=>[Number(p.lat),Number(p.lon)])
+            .filter(p=>p.every(Number.isFinite))})).filter(e=>e.points.length>=2);
+      }catch(error){lastError=error;}
+      finally{clearTimeout(timeout);}
+    }
+    throw lastError || Error("OSM non disponibile");
+  }
+  let running=false;
+  async function run({db,admin,uid,onProgress,existing={},force=false}={}) {
+    if(!admin||!db||running||!global.VARGA_SNOW_CM_CATALOG)return null;
+    const key="varga-snow-sidewalk-auto-"+VERSION;
+    if(!force)try{
+      const last=Number(global.localStorage?.getItem(key)||0);
+      if(Date.now()-last<24*3600*1000)return null;
+    }catch(_){}
     running=true;
-    let corrected=0, unchanged=0, unavailable=0, saved=0;
-    const progress=msg=>{if(typeof onProgress==="function")onProgress(msg);};
+    const progress=message=>{if(typeof onProgress==="function")onProgress(message);};
+    let saved=0,unchanged=0,unavailable=0,matched=0;
     try {
-      for (const section of sections()) {
-        const bbox=getBox(section);
-        if (!bbox) {unavailable+=section.stops.length;continue;}
+      for(const section of global.VARGA_SNOW_CM_CATALOG.sections){
+        const bbox=boxFor(section);
+        if(!bbox){unavailable+=section.stops.length;continue;}
         let ways;
-        try {ways=await requestSidewalks(bbox);}
-        catch (error) {
+        try{ways=await fetchWays(bbox);}
+        catch(error){
           unavailable+=section.stops.length;
-          progress("OSM non disponibile per "+section.name+": mantengo tutte le tracce originali.");
+          progress("Riferimenti pedonali OSM non disponibili in "+section.name+": geometrie conservate.");
           continue;
         }
-        for (const stop of section.stops) {
-          // Non sovrascrivere disegni che un amministratore ha già salvato.
-          if (existing[stop.key]?.parts?.length) {unchanged++;continue;}
-          const proposed=(stop.parts||[]).map(p=>automaticPart(p.coords,ways));
+        const index=indexWays(ways);
+        for(const stop of section.stops){
+          const previous=existing[stop.key];
+          const previousAuthor=String(previous?.updatedBy||"");
+          // Le geometrie disegnate manualmente da amministratori prevalgono.
+          if(previous?.parts?.length && !previousAuthor.startsWith("snow-sidewalk-auto/") &&
+             !previousAuthor.startsWith("snow-pedestrian-auto/")){unchanged++;continue;}
+          if(previousAuthor.includes(VERSION)){unchanged++;continue;}
+          const original=cloneParts(stop);
+          const candidate=[];
           let moved=0;
-          const newParts=(stop.parts||[]).map((p,i)=>{
-            if (proposed[i]) {moved+=proposed[i].moved;return proposed[i].candidate;}
-            return normalizePart(p.coords);
-          });
-          if (!moved || newParts.some(p=>p.length<2)) {unchanged++;continue;}
-          const doc=db.collection("snowRouteGeometry").doc(stop.key);
-          try {
-            // Transazione anti-concorrenza: un edit manuale prevale sempre.
-            const changed=await db.runTransaction(async tx=>{
-              const snap=await tx.get(doc);
-              if (snap.exists && Array.isArray(snap.data()?.parts) && snap.data().parts.length) return false;
-              tx.set(doc,{
-                stopKey:stop.key,parts:newParts,
-                originalParts:stop.parts.map(p=>normalizePart(p.coords)),
+          for(const part of original){
+            const aligned=automaticPart(part,index);
+            if(aligned){
+              moved+=aligned.moved;
+              // Mantieni sia i tratti riconosciuti sia quelli ancora da
+              // verificare, senza alterare la lista degli interventi.
+              candidate.push(...aligned.parts);
+            }else candidate.push(part);
+          }
+          if(!moved||candidate.some(p=>p.length<2)||
+             candidate.reduce((sum,p)=>sum+p.length,0)>MAX_STOP_POINTS){
+            unchanged++;continue;
+          }
+          matched++;
+          try{
+            const ref=db.collection("snowRouteGeometry").doc(stop.key);
+            const updated=await db.runTransaction(async tx=>{
+              const snap=await tx.get(ref);
+              if(snap.exists && Array.isArray(snap.data()?.parts) && snap.data().parts.length){
+                const editor=String(snap.data()?.updatedBy||"");
+                if(!editor.startsWith("snow-sidewalk-auto/")&&!editor.startsWith("snow-pedestrian-auto/"))return false;
+                if(editor.includes(VERSION))return false;
+              }
+              // Firestore rules consentono SOLO questi quattro campi.
+              // L'originale rimane in snow-castel-maggiore-kml-real.js
+              // o nel catalogo iniziale, senza campi extra rifiutati.
+              tx.set(ref,{
+                stopKey:stop.key,parts:candidate,
                 updatedAt:global.firebase.firestore.FieldValue.serverTimestamp(),
-                updatedBy:"snow-pedestrian-auto/"+String(uid||"admin"),
-                autoPrecision:{version:VERSION,source:"OpenStreetMap footway=sidewalk",movedVertices:moved,
-                  maxMoveMeters:MAX_METERS,confidence:"conservative",requiresFieldVerification:true}
+                updatedBy:"snow-sidewalk-auto/"+VERSION+"/"+String(uid||"admin")
               },{merge:true});
               return true;
             });
-            if (changed) {corrected++;saved++;} else unchanged++;
-          } catch(error) {
+            if(updated)saved++;else unchanged++;
+          }catch(error){
             unavailable++;
-            progress("Salvataggio automatico non riuscito per "+stop.key+": tracciato originale conservato.");
+            progress("Non riesco a salvare "+stop.key+" ("+(error?.code||error?.message||"errore")+").");
           }
         }
-        progress("Allineamento marciapiedi: "+corrected+" interventi aggiornati in modo conservativo; "+unchanged+" invariati.");
+        progress("Marciapiedi: "+saved+" interventi corretti, "+unchanged+" invariati. Tracciati pedonali trovati: "+ways.length+".");
       }
-      // Il fallimento di Overpass non blocca nuovi tentativi; preserva originali.
-      if (unavailable===0) try {global.localStorage.setItem(key,String(Date.now()));} catch(_) {}
-      progress("Controllo automatico terminato: "+saved+" interventi aggiornati, "+unchanged+" invariati, "+unavailable+" non verificabili. Le parti non riconosciute restano originali; controllo sul posto necessario.");
-      return {saved,unchanged,unavailable};
-    } finally {running=false;}
+      if(!unavailable)try{global.localStorage?.setItem(key,String(Date.now()));}catch(_){}
+      progress("Allineamento automatico concluso: "+saved+" interventi aggiornati; "+unchanged+" invariati; "+unavailable+" non verificabili. Gli originali restano disponibili.");
+      return {saved,unchanged,unavailable,matched};
+    }finally{running=false;}
   }
-  global.VargaSnowAutomaticSidewalks={run,automaticPart,metres};
+  global.VargaSnowAutomaticSidewalks={run,automaticPart,metres,indexWays,VERSION};
 })(window);

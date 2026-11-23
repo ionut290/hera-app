@@ -81,7 +81,7 @@ function fullScreen(){
  frameBox.setAttribute("role","dialog");frameBox.setAttribute("aria-modal","true");
  frameBox.innerHTML='<header><button type="button" id="salatura-back">← Torna alla commessa</button>'+
  '<strong id="salatura-full-title">Piano Neve</strong>'+
- '<a id="salatura-full-link" rel="noopener noreferrer" target="_blank">Apri pagina completa</a></header>'+
+ '<a id="salatura-full-link" rel="noopener noreferrer" target="_self">Apri pagina completa</a></header>'+
  '<iframe id="salatura-iframe" title="Varga Piano Neve" allow="geolocation; fullscreen; clipboard-write"></iframe>'+
  '<p>Accesso condiviso con Varga Cantieri. Se il GPS è limitato nel riquadro, apri la pagina completa.</p>';
  document.body.appendChild(frameBox);
@@ -101,7 +101,7 @@ function ensure(){
  '<p id="salatura-meta"></p>'+
  '<p>Il servizio mantiene la PWA Piano Neve originale: NAVIGA, GPS, percorso lavorato, INIZIA, PAUSA, RIPRENDI, TERMINA, sale caricato, rapportini, Excel e gestione amministratore.</p>'+
  '<div class="salatura-actions"><button type="button" id="salatura-inline" class="btn btn-primary">🧭 NAVIGA · Apri Piano Neve</button>'+
- '<a id="salatura-launch" class="btn" target="_blank" rel="noopener noreferrer">🗺️ Apri pagina completa</a></div>'+
+ '<a id="salatura-launch" class="btn" target="_self" rel="noopener noreferrer">🗺️ Apri pagina completa</a></div>'+
  '<p class="muted">Piano Neve è integrato in Varga Cantieri e usa il tuo accesso attuale, senza secondo login. I giri e i registri di salatura rimangono separati.</p>'+
  '<p id="salatura-panel-status" role="status"></p>'+
  '<details><summary id="salatura-street-count">Strade del percorso</summary><ol id="salatura-street-list"></ol></details>';

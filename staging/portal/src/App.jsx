@@ -7,6 +7,7 @@ import {
 import { collection, getDocs, getDoc, getDocsFromServer, getDocFromServer, doc, setDoc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { auth, db } from './firebase-staging.js';
 import './App.css';
+import FattoSettings from './FattoSettings.jsx';
 import pilotSource from '../../verde-levato-pilot.mjs?raw';
 import { buildVerdeFrame } from './verde-frame.mjs';
 import { loadTenantVerde } from '../../verde-tenant-loader.mjs';
@@ -97,6 +98,9 @@ function TenantPortal({ user, companies }) {
                 <p><button onClick={openVerde}>🌱 Verde Levato — anteprima demo</button></p>
               </div>
             </article>
+            {selected.role === 'admin' && selected.demo === true && selected.fattoMode === 'configurable-demo' && (
+              <FattoSettings key={selected.id} tenant={selected} context={{uid:user.uid,tenantId:selected.id,role:selected.role}} initialPolicy={{version:0,actions:['saveCompletion']}} preview />
+            )}
             {verdeError && <p role="alert">{verdeError}</p>}
             {verdeOpen && (
               <section aria-label="Anteprima Verde Levato">
@@ -192,7 +196,11 @@ export default function App() {
                   companies.push({
                     id: context.tenantId,
                     name: tenant.data().name,
-                    role: context.role
+                    role: context.role,
+                    fattoMode: tenant.data().fattoMode,
+                    demo: tenant.data().demo,
+                    whatsappConfigured: tenant.data().whatsappConfigured === true,
+                    sheetConfigured: tenant.data().sheetConfigured === true
                   });
                 }
               } catch (e) {

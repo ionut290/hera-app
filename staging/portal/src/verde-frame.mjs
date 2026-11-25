@@ -9,7 +9,7 @@ ${code}
 const records = ${serialized};
 const readStore=Object.freeze({collection(name){
  if(!['verdeLevatoRecords','verdeLevatoCommesse','verdeLevatoConfig'].includes(name)) throw new Error('Collection denied');
- return Object.freeze({get:async()=>({docs:name==='verdeLevatoRecords'?records.map(({id,...data})=>({id,data:()=>({...data})})):[]}),doc:()=>Object.freeze({get:async()=>({exists:false})})});
+ return Object.freeze({get:async()=>({docs:name==='verdeLevatoRecords'?records.map(({id,...data})=>({id,data:()=>({...data,...Object.fromEntries(['createdAt','updatedAt'].filter(k=>Number.isFinite(data[k])).map(k=>[k,new Date(data[k])]))})})):[]}),doc:()=>Object.freeze({get:async()=>({exists:false})})});
 }});
 const pilot=installVerdeLevatoPilot({readStore,user:{uid:'preview-only',email:'preview@example.test'},onClose:()=>parent.postMessage('varga-verde-close','*')});
 pilot.open().catch(()=>{document.body.textContent='Anteprima non disponibile';});

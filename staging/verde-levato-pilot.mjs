@@ -1,5 +1,4 @@
 export function installVerdeLevatoPilot({ readStore, user }) {
-  "use strict";
   if (!readStore || typeof readStore.collection !== "function" || !user?.uid) throw new Error("Pilot context required");
 
   const PAGE_ID = "verde-levato-page";

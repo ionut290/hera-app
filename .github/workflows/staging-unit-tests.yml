@@ -64,7 +64,7 @@ jobs:
         run: npx --no-install firebase emulators:exec --config emulator-ci.json --only firestore --project demo-varga-verde-isolation 'node test-shared-isolation.cjs candidate.rules && node test-fatto-policy.cjs candidate.rules && node test-cobo-write.cjs candidate.rules && node test-commesse-write.cjs candidate.rules && node test-original-create.cjs candidate.rules && node test-original-native.cjs candidate.rules && node test-original-archives.cjs candidate.rules'
   original-preview-browser:
     if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 8
     defaults:
       run:

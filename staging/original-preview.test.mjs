@@ -6,3 +6,6 @@ test('preview network and form submission denied',()=>{const p=buildOriginalPrev
 test('non administrator denied preview creation',()=>assert.throws(()=>buildOriginalPreviewFrame(extractOriginalPreview(),'employee')));
 
 test('preview uses original plant form and rendering',()=>{const p=extractOriginalPreview();assert.match(p.markup,/id="manual-impianto-form"/);assert.match(p.handlers,/async function addManualImpianto\(event\)/);assert.match(p.handlers,/function renderImpiantiManagementTable\(/);assert.match(p.handlers,/const MANAGEMENT_IMPIANTI_COLUMNS/);});
+
+import {Script} from 'node:vm';
+test('generated offline preview script is syntactically valid and uses local submit guard',()=>{const frame=buildOriginalPreviewFrame(extractOriginalPreview(),'admin');const match=frame.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);assert(match);assert.doesNotThrow(()=>new Script(match[1]));assert.match(match[1],/function bindLocalForm/);assert.match(frame,/form-action 'none'/);});

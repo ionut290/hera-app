@@ -41,6 +41,19 @@ const db={collection(n){
  }
  };
 }};
+function bindLocalForm(form,handler,feedback){
+ let running=false;
+ form.addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(running)return;
+  running=true;
+  const buttons=Array.from(form.querySelectorAll('button[type="submit"]'));
+  const originalStates=buttons.map(b=>b.disabled);
+  buttons.forEach(b=>b.disabled=true);
+  try{await handler(event);}catch{feedback.textContent='Operazione demo non riuscita.';}
+  finally{running=false;buttons.forEach((b,i)=>b.disabled=originalStates[i]);}
+ });
+}
 function renderList(){
  renderCommesseManagementList();
  for(const el of ui.commesseManageList.querySelectorAll('button')){
@@ -62,7 +75,7 @@ get('open-organize-commesse-btn').disabled=true;
 get('open-new-commessa-btn').addEventListener('click',openNewCommessaDialog);
 for(const id of ['close-new-commessa-btn','cancel-new-commessa-btn'])get(id).addEventListener('click',closeNewCommessaDialog);
 get('commesse-management-search').addEventListener('input',renderList);
-ui.commessaForm.addEventListener('submit',event=>createCommessa(event).catch(()=>{get('preview-feedback').textContent='Creazione demo non riuscita.';}));
+bindLocalForm(ui.commessaForm,createCommessa,get('preview-feedback'));
 document.addEventListener('submit',event=>event.preventDefault());
 updateCommessaParentField();renderList();
 get('close-impianti-management-btn').addEventListener('click',()=>{closeImpiantiManagement();selectedCommessaId='';selectedCommessaName='';renderList();});
@@ -70,7 +83,8 @@ const manualDetails=ui.manualImpiantoForm.closest('details');
 get('add-management-impianto-btn').addEventListener('click',()=>{manualDetails.open=true;ui.manualImpiantoDenominazione.focus();});
 for(const id of ['toggle-import-impianti-btn','export-all-impianti-btn','open-prezziario-btn','sheet-url-import-btn','download-excel-template-btn','excel-file','sheet-url'])get(id).disabled=true;
 get('snow-roads-section').classList.add('hidden');
-ui.manualImpiantoForm.addEventListener('submit',event=>addManualImpianto(event).then(refreshPlants).catch(()=>{ui.manualImpiantoFeedback.textContent='Inserimento demo non riuscito.';}));
+for(const id of ['parent-commessa-form','move-subcommesse-form','snow-roads-form'])for(const el of get(id).querySelectorAll('input,select,textarea,button'))el.disabled=true;
+bindLocalForm(ui.manualImpiantoForm,async event=>{await addManualImpianto(event);refreshPlants();},ui.manualImpiantoFeedback);
 get('impianti-management-search').addEventListener('input',refreshPlants);
 get('clear-impianti-management-search').addEventListener('click',()=>{get('impianti-management-search').value='';refreshPlants();});
 for(const id of ['impianti-status-filter','impianti-comune-filter','impianti-tipologia-filter','impianti-operatore-filter'])get(id).addEventListener('change',refreshPlants);

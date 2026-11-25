@@ -5,6 +5,7 @@ const { createHash } = require('node:crypto');
 const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { makeTenantService } = require('./tenant-service.prototype.cjs');
+const { makePlatformAdminService } = require('./platform-admin.prototype.cjs');
 const projectId = 'demo-varga-multi-tenant';
 if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8180') throw new Error('Local emulator required');
 const app = initializeApp({projectId});
@@ -18,6 +19,8 @@ const auth = (uid,extra={})=>({uid,email:uid+'@example.invalid',email_verified:t
 const platform = auth('platform',{platform_admin:true}), alice=auth('owner-a'), bob=auth('owner-b'), worker=auth('worker'), second=auth('second'), admin=auth('admin');
 let now=Date.now();
 const service=makeTenantService(store,()=>now);
+store.listTenants=async ({limit,after})=>{let q=db.collection('tenants').orderBy('__name__').limit(limit+1);if(after)q=q.startAfter(after);return (await q.get()).docs.map(d=>({id:d.id,data:d.data()}));};
+const platformService=makePlatformAdminService(store,()=>now);
 const rejects=(fn,code)=>assert.rejects(fn,{code});
 async function main(){
   await rejects(()=>service.createCompany(worker,{name:'Forbidden',ownerUid:worker.uid,ownerEmail:worker.email}),'forbidden');
@@ -62,6 +65,27 @@ async function main(){
   const suspended=await service.invite(bob,{tenantId:b,recipientEmail:second.email,role:'worker'});
   await db.doc('tenants/'+b).update({status:'suspended'});
   await rejects(()=>service.accept(second,{tenantId:b,token:suspended.token}),'invalid-invite');
-  console.log('Tenant backend transaction integration tests passed');
+  await rejects(()=>platformService.listCompanies(worker),'forbidden');
+  await rejects(()=>platformService.listCompanies(auth('platform',{platform_admin:true,apple_review:true})),'unauthenticated');
+  const page=await platformService.listCompanies(platform,{limit:1});
+  assert.equal(page.companies.length,1);assert.ok(page.nextCursor);
+  const next=await platformService.listCompanies(platform,{limit:1,after:page.nextCursor});
+  assert.notEqual(page.companies[0].id,next.companies[0].id);
+  assert.deepEqual(Object.keys(page.companies[0]).sort(),['createdAt','id','name','status']);
+  await rejects(()=>platformService.setCompanyStatus(alice,{tenantId:a,status:'suspended',reason:'Unauthorized'}),'forbidden');
+  await rejects(()=>platformService.setCompanyStatus(platform,{tenantId:a,status:'deleted',reason:'Not allowed'}),'invalid-status');
+  const fresh=await service.invite(alice,{tenantId:a,recipientEmail:second.email,role:'worker'});
+  assert.equal((await platformService.setCompanyStatus(platform,{tenantId:a,status:'suspended',reason:'Synthetic test'})).changed,true);
+  await rejects(()=>service.accept(second,{tenantId:a,token:fresh.token}),'invalid-invite');
+  assert.equal((await platformService.setCompanyStatus(platform,{tenantId:a,status:'suspended',reason:'Synthetic repeat'})).changed,false);
+  assert.equal((await db.doc('tenants/'+a+'/members/'+alice.uid).get()).data().role,'owner');
+  assert.equal((await db.doc('tenants/'+a+'/members/'+worker.uid).get()).data().status,'active');
+  await platformService.setCompanyStatus(platform,{tenantId:a,status:'active',reason:'Synthetic restore'});
+  await rejects(()=>service.accept(second,{tenantId:a,token:fresh.token}),'invalid-invite');
+  const newInvite=await service.invite(alice,{tenantId:a,recipientEmail:second.email,role:'worker'});
+  await service.accept(second,{tenantId:a,token:newInvite.token});
+  assert.equal((await db.collection('tenants/'+a+'/audit').where('event','==','company-status-changed').get()).size,2);
+  assert.equal((await db.doc('tenants/'+b).get()).data().status,'suspended');
+  console.log('Tenant backend and platform admin integration tests passed');
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await db.terminate();await deleteApp(app);});

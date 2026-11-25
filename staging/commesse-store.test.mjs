@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createCommesseStore} from './commesse-store.mjs';
+const db={app:{options:{projectId:'varga-cantieri-v2-staging'}}};
+const context={uid:'u',tenantId:'demo-a',role:'employee'};
+const sdk={collection:(_, ...p)=>p,doc:(_, ...p)=>p,getDocsFromServer:async p=>p,getDocFromServer:async p=>({id:p.at(-1),exists:()=>true,data:()=>p})};
+const store=createCommesseStore(db,context,sdk);
+test('commesse scoped list',async()=>assert.deepEqual(await store.collection('commesse').get(),['tenants','demo-a','commesse']));
+test('commessa scoped document',async()=>assert.deepEqual((await store.collection('commesse').doc('c').get()).data(),['tenants','demo-a','commesse','c']));
+test('impianti scoped list',async()=>assert.deepEqual(await store.collection('commesse').doc('c').collection('impianti').get(),['tenants','demo-a','commesse','c','impianti']));
+test('impianto scoped document',async()=>assert.deepEqual((await store.collection('commesse').doc('c').collection('impianti').doc('p').get()).data(),['tenants','demo-a','commesse','c','impianti','p']));
+test('tenant switch isolates identical ids',async()=>assert.notDeepEqual(await store.collection('commesse').get(),await createCommesseStore(db,{...context,tenantId:'demo-b'},sdk).collection('commesse').get()));
+test('reject production',()=>assert.throws(()=>createCommesseStore({app:{options:{projectId:'production'}}},context,sdk)));
+test('reject unknown collections and missing ids',()=>{assert.throws(()=>store.collection('users'));assert.throws(()=>store.collection('commesse').doc());assert.throws(()=>store.collection('commesse').doc('c').collection('users'));assert.throws(()=>store.collection('commesse').doc('c').collection('impianti').doc());});
+test('no writes exposed',()=>{const c=store.collection('commesse');const d=c.doc('c');assert.equal(c.add,undefined);assert.equal(d.set,undefined);assert.equal(d.delete,undefined);assert.equal(store.batch,undefined);});

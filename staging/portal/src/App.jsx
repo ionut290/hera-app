@@ -74,7 +74,7 @@ function TenantPortal({ user, companies }) {
             {verdeOpen && (
               <section aria-label="Anteprima Verde Levato">
                 <button onClick={() => setVerdeOpen(false)}>Chiudi Verde Levato</button>
-                <p>Solo dati fittizi, non collegati all'azienda.</p>
+                <p>Archivio dimostrativo vuoto. Nessun collegamento ai dati aziendali reali.</p>
                 <iframe key={selected.id} title="Verde Levato demo" src="/verde-preview.html" sandbox="allow-scripts" style={{width:'100%',height:'75vh',border:'1px solid #ccd5ce',borderRadius:8,background:'white'}} />
               </section>
             )}

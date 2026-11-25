@@ -1,0 +1,44 @@
+// Candidate only. The original price list lives inside each company's own commessa.
+// Writes and reads are deliberately gated; no production rules are modified.
+function priceListReadable(commessaId) {
+ return canReadDemoCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('priceListEnabled',false)==true
+ && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId));
+}
+function priceListWritable(commessaId) {
+ return priceListReadable(commessaId) && canManageCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('priceListWriteEnabled',false)==true;
+}
+function priceFields() {
+ return ['commessaId','numeroProgressivo','codiceVoce','descrizione','unitaMisura','prezzoBase','percentualeRibasso','prezzoRibassato','note','createdAt','createdBy','updatedAt','updatedBy','updatedByName'];
+}
+function priceValid(commessaId) {
+ let d=request.resource.data;
+ return d.keys().hasAll(priceFields()) && d.keys().hasOnly(priceFields())
+ && d.commessaId==commessaId && d.numeroProgressivo is int && d.numeroProgressivo>0
+ && d.codiceVoce is string && d.codiceVoce.size()<=150
+ && d.descrizione is string && d.descrizione.size()<=2000
+ && d.unitaMisura is string && d.unitaMisura.size()<=100
+ && d.note is string && d.note.size()<=3000
+ && (d.prezzoBase==null || (d.prezzoBase is number && d.prezzoBase>=0 && d.prezzoBase<=100000000))
+ && (d.percentualeRibasso==null || (d.percentualeRibasso is number && d.percentualeRibasso>=0 && d.percentualeRibasso<=1))
+ && (d.prezzoRibassato==null || (d.prezzoBase is number && d.prezzoRibassato is number && d.prezzoRibassato>=0 && d.prezzoRibassato<=d.prezzoBase))
+ && d.updatedAt==request.time && d.updatedBy==request.auth.uid
+ && d.updatedByName is string && d.updatedByName.size()<=250;
+}
+match /commesse/{commessaId} {
+ allow update: if priceListWritable(commessaId)
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['percentualeRibassoGenerale','updatedAt','updatedBy','updatedByName'])
+ && request.resource.data.percentualeRibassoGenerale is number
+ && request.resource.data.percentualeRibassoGenerale>=0 && request.resource.data.percentualeRibassoGenerale<=1
+ && request.resource.data.updatedAt==request.time && request.resource.data.updatedBy==request.auth.uid
+ && request.resource.data.updatedByName is string && request.resource.data.updatedByName.size()<=250;
+ match /prezziario/{priceId} {
+  allow get,list: if priceListReadable(commessaId);
+  allow create: if priceListWritable(commessaId) && priceValid(commessaId)
+  && request.resource.data.createdAt==request.time && request.resource.data.createdBy==request.auth.uid;
+  allow update: if priceListWritable(commessaId) && priceValid(commessaId)
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['codiceVoce','descrizione','unitaMisura','prezzoBase','percentualeRibasso','prezzoRibassato','note','updatedAt','updatedBy','updatedByName']);
+  allow delete: if false;
+ }
+}

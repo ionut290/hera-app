@@ -14,10 +14,13 @@ import { loadTenantVerde } from '../../verde-tenant-loader.mjs';
 const VERDE_SERVER_ENABLED = false; // Enable only after staging rules and browser verification.
 import { resolveTenantContext } from '../../tenant-context.mjs';
 import { createCompanySelection } from '../../company-selection.mjs';
+import originalPreview from './original-preview.generated.mjs';
+import { buildOriginalPreviewFrame } from './original-preview-frame.mjs';
 
 
 function TenantPortal({ user, companies }) {
   const [selected, setSelected] = useState(null);
+  const [originalOpen,setOriginalOpen]=useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selectionError, setSelectionError] = useState('');
   const selectionRef = useRef(null);
@@ -33,7 +36,7 @@ function TenantPortal({ user, companies }) {
     } catch {if(request===selectRevision.current)setSelectionError('Accesso aziendale non disponibile o autorizzazione non più valida.');}
     finally {if(request===selectRevision.current)setSelecting(false);}
   }
-  function closeCompany(){selectRevision.current++;selectionRef.current.close();closeVerde();setSelected(null);setSelecting(false);setSelectionError('');}
+  function closeCompany(){setOriginalOpen(false);selectRevision.current++;selectionRef.current.close();closeVerde();setSelected(null);setSelecting(false);setSelectionError('');}
   useEffect(()=>()=>{selectRevision.current++;selectionRef.current.close();},[]);
   const [verdeOpen, setVerdeOpen] = useState(false);
   const verdeRef = useRef(null);
@@ -115,12 +118,14 @@ function TenantPortal({ user, companies }) {
                 <h3>Area aziendale</h3>
                 <p>Accesso effettuato correttamente.</p>
                 <small>Moduli operativi in sviluppo.</small>
+                {selected.role==='admin' && <p><button onClick={()=>setOriginalOpen(true)}>Gestione commesse — anteprima originale</button></p>}
                 <p><button onClick={openVerde}>🌱 Verde Levato — anteprima demo</button></p>
               </div>
             </article>
             {selected.role === 'admin' && selected.demo === true && selected.fattoMode === 'configurable-demo' && (
               <FattoSettings key={selected.id} tenant={selected} context={{uid:user.uid,tenantId:selected.id,role:selected.role}} initialPolicy={{version:0,actions:['saveCompletion']}} preview />
             )}
+            {originalOpen && selected.role==='admin' && <section aria-label="Gestione commesse originale demo"><button onClick={()=>setOriginalOpen(false)}>Chiudi anteprima</button><p>Le commesse di prova scompaiono chiudendo l'anteprima. Nessun dato reale.</p><iframe key={selected.id} title="Gestione commesse originale demo" sandbox="allow-scripts" srcDoc={buildOriginalPreviewFrame(originalPreview,selected.role)} style={{width:'100%',height:'75vh',border:'1px solid #ccd5ce',borderRadius:8,background:'white'}}/></section>}
             {verdeError && <p role="alert">{verdeError}</p>}
             {verdeOpen && (
               <section aria-label="Anteprima Verde Levato">

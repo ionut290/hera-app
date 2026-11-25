@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createModularVerdeStore} from './verde-modular-store.mjs';
+const db={app:{options:{projectId:'varga-cantieri-v2-staging'}}};
+const ctx={uid:'demo-user',tenantId:'demo-a',role:'employee'};
+const sdk={collection:(_, ...p)=>p,doc:(_, ...p)=>p,getDocsFromServer:async p=>({docs:[],path:p}),getDocFromServer:async p=>({exists:()=>true,data:()=>p})};
+test('tenant collection server read',async()=>assert.deepEqual((await createModularVerdeStore(db,ctx,sdk).collection('verdeLevatoRecords').get()).path,['tenants','demo-a','verdeLevatoRecords']));
+test('document snapshot compatibility',async()=>{const s=await createModularVerdeStore(db,ctx,sdk).collection('verdeLevatoConfig').doc('access').get();assert.equal(s.exists,true);assert.deepEqual(s.data(),['tenants','demo-a','verdeLevatoConfig','access']);});
+test('reject production',()=>assert.throws(()=>createModularVerdeStore({app:{options:{projectId:'production'}}},ctx,sdk)));
+test('reject invalid role',()=>assert.throws(()=>createModularVerdeStore(db,{...ctx,role:'unknown'},sdk)));
+test('reject other collection',()=>assert.throws(()=>createModularVerdeStore(db,ctx,sdk).collection('users')));
+test('reject document path',()=>assert.throws(()=>createModularVerdeStore(db,ctx,sdk).collection('verdeLevatoRecords').doc('a/b')));
+test('no write methods',()=>assert.equal(createModularVerdeStore(db,ctx,sdk).collection('verdeLevatoRecords').doc('a').set,undefined));

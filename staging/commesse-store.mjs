@@ -19,7 +19,7 @@ export function createCommesseStore(db,context,sdk){
  async function createPlant(commessaId,plantId,data){
   const plan=planCreatePlant({context,commessaId,plantId,data});
   const ref=doc(db,...plan.path);
-  await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(snap.exists())throw new Error('Cantiere already exists');tx.set(ref,{...plan.data,createdAt:serverTimestamp()});});
+  await runTransaction(db,async tx=>{const parent=doc(db,...commessaDocumentPath(context,commessaId));const parentSnap=await tx.get(parent);if(!parentSnap.exists())throw new Error('Commessa does not exist');const snap=await tx.get(ref);if(snap.exists())throw new Error('Cantiere already exists');tx.set(ref,{...plan.data,createdAt:serverTimestamp()});});
   return plantId;
  }
  return Object.freeze({createCommessa,createPlant,collection(name){

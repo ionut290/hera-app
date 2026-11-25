@@ -1,0 +1,36 @@
+// Candidate emulator rules. Preserve original read permissions inside verified demo membership.
+// No writes or deletes granted here. Keep sensitive aggregate/identity and integrations out.
+function canReadOriginalArchives() {
+ return canReadDemoCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalArchivesEnabled',false)==true;
+}
+function originalArchiveAdmin() {
+ return canReadOriginalArchives()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role=='admin';
+}
+match /{archive}/{id} {
+ allow get,list: if canReadOriginalArchives() && archive in [
+ 'personale','mezzi','squadreCommesse','squadreStorico','neve_squadre','neve_squadre_storico',
+ 'oreReports','oreApprovalRequests','neve_ore','neve_ore_richieste','commessaResources','oreLocks'];
+}
+match /neve_commesse/{id} {
+ allow get,list: if canReadOriginalArchives();
+ match /impianti/{plantId} { allow get,list: if canReadOriginalArchives(); }
+}
+match /globalCommesse/{id} {
+ allow get,list: if canReadOriginalArchives();
+ match /impianti/{plantId} { allow get,list: if canReadOriginalArchives(); }
+}
+match /programmazioni/{id} {
+ allow get,list: if originalArchiveAdmin() || (canReadOriginalArchives()
+ && resource.data.operatoriCoinvolti is list
+ && (request.auth.token.get('email','') in resource.data.operatoriCoinvolti
+ || (request.auth.token.get('name','')!='' && request.auth.token.get('name','') in resource.data.operatoriCoinvolti)));
+}
+match /calendarEvents/{id} {
+ allow get,list: if canReadOriginalArchives() && resource.data.type is string && (
+ resource.data.type!='SCADENZA_DOCUMENTO'
+ || resource.data.get('ownerUserId','')==request.auth.uid
+ || resource.data.get('sharedToAll',false)==true
+ || request.auth.uid in resource.data.get('authorizedUserIds',[]));
+}

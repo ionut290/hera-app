@@ -1,0 +1,32 @@
+// PROTOTIPO EMULATOR ONLY. Non referenziato da firebase.json di produzione.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function eligible() {
+      return request.auth != null
+        && request.auth.token.get('email_verified', false) == true
+        && request.auth.token.get('apple_review', false) == false;
+    }
+    function activeMember(tenantId) {
+      return eligible()
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active'
+        && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.status == 'active';
+    }
+    match /tenants/{tenantId} {
+      allow get: if activeMember(tenantId);
+      allow list, create, update, delete: if false;
+      match /members/{uid} {
+        allow get: if activeMember(tenantId) && request.auth.uid == uid;
+        allow list, create, update, delete: if false;
+      }
+    }
+    match /users/{uid}/memberships/{tenantId} {
+      // Indice personale, NON autorizzazione. La selezione deve verificare activeMember.
+      allow get, list: if eligible() && request.auth.uid == uid;
+      allow create, update, delete: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -36,7 +36,7 @@ function makeTenantService(store, clock=Date.now) {
     const uid=id(ownerUid), normalized=email(ownerEmail), tenantId=randomUUID(), now=clock();
     const root=tenantPath(tenantId), member={role:'owner',status:'active',email:normalized,createdAt:now};
     await store.runTransaction(async tx=>{
-      tx.create(root,{name:name.trim(),status:'active',createdAt:now,createdBy:caller.uid});
+      tx.create(root,{name:name.trim(),status:'active',inviteGeneration:0,createdAt:now,createdBy:caller.uid});
       tx.create(memberPath(tenantId,uid),member);
       tx.create(indexPath(tenantId,uid),{role:'owner',status:'active'});
       tx.create(root+'/audit/'+randomUUID(),{event:'company-created',actorUid:caller.uid,subjectUid:uid,at:now});
@@ -52,7 +52,7 @@ function makeTenantService(store, clock=Date.now) {
       if (tenant?.status!=='active' || membership?.status!=='active' || !adminRoles.has(membership.role)) fail('forbidden');
       // An admin may invite operational roles, not another admin.
       if (role==='admin' && membership.role!=='owner') fail('forbidden');
-      tx.create(root+'/invites/'+inviteId,{email:target,role,status:'pending',createdBy:caller.uid,createdAt:now,expiresAt:now+7*DAY});
+      tx.create(root+'/invites/'+inviteId,{email:target,role,status:'pending',generation:tenant.inviteGeneration??0,createdBy:caller.uid,createdAt:now,expiresAt:now+7*DAY});
       tx.create(root+'/audit/'+randomUUID(),{event:'invite-created',actorUid:caller.uid,role,at:now});
     });
     // Only the caller receives the raw token; never store or log it.
@@ -64,7 +64,7 @@ function makeTenantService(store, clock=Date.now) {
     const path=root+'/invites/'+digest(token);
     await store.runTransaction(async tx=>{
       const tenant=await tx.get(root), invitation=await tx.get(path), member=await tx.get(memberPath(tenantId,caller.uid)), now=clock();
-      if (tenant?.status!=='active'|| invitation?.status!=='pending'|| !Number.isFinite(invitation.expiresAt)|| invitation.expiresAt<=now|| invitation.email!==caller.email||!roles.has(invitation.role)) fail('invalid-invite');
+      if (tenant?.status!=='active'|| invitation?.status!=='pending'|| (invitation.generation??0)!==(tenant.inviteGeneration??0)|| !Number.isFinite(invitation.expiresAt)|| invitation.expiresAt<=now|| invitation.email!==caller.email||!roles.has(invitation.role)) fail('invalid-invite');
       // Recheck issuer membership; revoked issuers cannot confer access.
       const issuer=await tx.get(memberPath(tenantId,invitation.createdBy));
       if (issuer?.status!=='active'|| !adminRoles.has(issuer.role)|| (invitation.role==='admin'&&issuer.role!=='owner')) fail('invalid-invite');

@@ -13,10 +13,28 @@ import { buildVerdeFrame } from './verde-frame.mjs';
 import { loadTenantVerde } from '../../verde-tenant-loader.mjs';
 const VERDE_SERVER_ENABLED = false; // Enable only after staging rules and browser verification.
 import { resolveTenantContext } from '../../tenant-context.mjs';
+import { createCompanySelection } from '../../company-selection.mjs';
 
 
 function TenantPortal({ user, companies }) {
   const [selected, setSelected] = useState(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selectionError, setSelectionError] = useState('');
+  const selectionRef = useRef(null);
+  if (!selectionRef.current) selectionRef.current = createCompanySelection({db,sdk:{doc,getDocFromServer},getCurrentUser:()=>auth.currentUser});
+  const selectRevision = useRef(0);
+  async function selectCompany(company) {
+    const request=++selectRevision.current;
+    setSelecting(true);setSelectionError('');setSelected(null);
+    try {
+      const session=await selectionRef.current.open(company.id);
+      if(request!==selectRevision.current || auth.currentUser?.uid!==user.uid){session.close();return;}
+      setSelected(session.company);
+    } catch {if(request===selectRevision.current)setSelectionError('Accesso aziendale non disponibile o autorizzazione non più valida.');}
+    finally {if(request===selectRevision.current)setSelecting(false);}
+  }
+  function closeCompany(){selectRevision.current++;selectionRef.current.close();closeVerde();setSelected(null);setSelecting(false);setSelectionError('');}
+  useEffect(()=>()=>{selectRevision.current++;selectionRef.current.close();},[]);
   const [verdeOpen, setVerdeOpen] = useState(false);
   const verdeRef = useRef(null);
   const [verdeFrame, setVerdeFrame] = useState('');
@@ -64,6 +82,8 @@ function TenantPortal({ user, companies }) {
         {!selected ? (
           <>
             <h2>Seleziona la tua azienda</h2>
+            {selecting && <p>Verifica autorizzazioni aziendali...</p>}
+            {selectionError && <p role="alert">{selectionError}</p>}
 
             {companies.length === 0 && (
               <p>Nessuna azienda attiva disponibile.</p>
@@ -75,7 +95,7 @@ function TenantPortal({ user, companies }) {
                   <h3>{company.name}</h3>
                   <small>{roles[company.role]}</small>
                 </div>
-                <button onClick={() => setSelected(company)}>
+                <button disabled={selecting} onClick={() => selectCompany(company)}>
                   Accedi
                 </button>
               </article>
@@ -83,7 +103,7 @@ function TenantPortal({ user, companies }) {
           </>
         ) : (
           <>
-            <button onClick={() => { closeVerde(); setSelected(null); }}>
+            <button onClick={closeCompany}>
               Cambia azienda
             </button>
 

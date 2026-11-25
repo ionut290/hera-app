@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+ function eligible() {
+ return request.auth != null && request.auth.token.get('email_verified', false) == true && request.auth.token.get('apple_review', false) == false;
+ }
+ function activeMember(tenantId) {
+ return eligible() && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active' && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.status == 'active';
+ }
+ match /tenants/{tenantId} {
+ // VERDE_FRAGMENT
+ }
+ match /{document=**} { allow read, write: if false; }
+ }
+}

@@ -61,4 +61,4 @@ jobs:
           printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > emulator-ci.json
       - name: Test tenant isolation
         working-directory: staging
-        run: npx --no-install firebase emulators:exec --config emulator-ci.json --only firestore --project demo-varga-verde-isolation 'node test-shared-isolation.cjs candidate.rules && node test-fatto-policy.cjs candidate.rules'
+        run: npx --no-install firebase emulators:exec --config emulator-ci.json --only firestore --project demo-varga-verde-isolation 'node test-shared-isolation.cjs candidate.rules && node test-fatto-policy.cjs candidate.rules && node test-cobo-write.cjs candidate.rules'

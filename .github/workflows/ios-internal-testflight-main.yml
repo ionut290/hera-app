@@ -1,4 +1,4 @@
-name: Varga Cantieri internal TestFlight from reviewed main (manual upload only)
+name: Varga Cantieri internal TestFlight from reviewed snow release (manual upload only)
 
 # Internal TestFlight upload ONLY. NOT a public App Store submission.
 # This uses the signed archive path for App Store Connect transport, but
@@ -17,10 +17,10 @@ on:
           - DO_NOT_UPLOAD
           - UPLOAD_INTERNAL_TESTFLIGHT_ONLY
       build_number:
-        description: "New CFBundleVersion above confirmed TestFlight build 1.0 (20016); verify live ASC first"
+        description: "New CFBundleVersion above confirmed TestFlight build 20030; verify live ASC first"
         type: string
         required: true
-        default: "20017"
+        default: "20031"
       demo_ui:
         description: "Optional isolated Apple reviewer demo UI for this INTERNAL TestFlight build only"
         type: choice
@@ -35,7 +35,7 @@ on:
         type: string
 
 concurrency:
-  group: varga-ios-internal-main-candidate
+  group: varga-ios-internal-snow-candidate
   cancel-in-progress: false
 
 permissions:
@@ -61,17 +61,18 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REPOSITORY" != "ionut290/hera-app" ||
-                "$GITHUB_REF" != "refs/heads/main" ||
+                "$GITHUB_REF" != "refs/heads/release/ios-1.1-snow-testflight" ||
                 "$GITHUB_ACTOR" != "ionut290" ||
                 "$GITHUB_TRIGGERING_ACTOR" != "ionut290" ||
                 "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
-            echo "::error::Only the owner may start a new internal TestFlight dispatch from main."
+            echo "::error::Only the owner may start a new internal TestFlight dispatch from the isolated snow release branch."
             exit 1
           fi
           if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$ACTUAL_SHA" ]]; then
-            echo "::error::Reviewed SHA must match the exact main commit running this workflow."
+            echo "::error::Reviewed SHA must match the exact snow release commit running this workflow."
             exit 1
           fi
+          [[ "$IOS_BUILD_NUMBER" == "20031" ]] || { echo "::error::This isolated snow release is reserved for build 20031."; exit 1; }
           bash scripts/check-ios-appstore-build-number.sh "$IOS_BUILD_NUMBER"
           echo "Preflight OK: workflow parsed, Linux job started and manual inputs validated."
           echo "No App Store Connect upload or iPhone app modification performed."
@@ -98,7 +99,7 @@ jobs:
     name: Sign and upload INTERNAL TestFlight candidate (NO submission)
     needs: preflight
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_INTERNAL_TESTFLIGHT_ONLY' }}
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 90
     # Existing protected environment holds validated Apple signing credentials.
     # Keep the same reviewer gate; no new secret copies are needed.
@@ -130,7 +131,7 @@ jobs:
           # Re-check inside upload job: GitHub can rerun individual jobs
           # without rerunning the first preflight. Never reuse approval.
           if [[ "$GITHUB_REPOSITORY" != "ionut290/hera-app" ||
-                "$GITHUB_REF" != "refs/heads/main" ||
+                "$GITHUB_REF" != "refs/heads/release/ios-1.1-snow-testflight" ||
                 "$GITHUB_ACTOR" != "ionut290" ||
                 "$GITHUB_TRIGGERING_ACTOR" != "ionut290" ||
                 "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
@@ -160,6 +161,7 @@ jobs:
             echo "::error::Starting April 2027, Apple requires the iOS 27 SDK or newer. Upgrade the macOS/Xcode runner before uploading."
             exit 1
           fi
+          [[ "$IOS_BUILD_NUMBER" == "20031" ]] || { echo "::error::This isolated snow release is reserved for build 20031."; exit 1; }
           bash scripts/check-ios-appstore-build-number.sh "$IOS_BUILD_NUMBER"
           echo "Reviewed commit, requested build number and supported Xcode verified; no upload yet."
 
@@ -360,7 +362,7 @@ jobs:
             -authenticationKeyPath "$APPLE_API_KEY_PATH" \
             -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
             -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
-            MARKETING_VERSION=1.0 \
+            MARKETING_VERSION=1.1 \
             CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
             IPHONEOS_DEPLOYMENT_TARGET=15.0 \
             archive > "$RUNNER_TEMP/ios-private-archive.log" 2>&1 ||
@@ -368,6 +370,7 @@ jobs:
           test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | awk 'BEGIN { ok=0 } { if ($1+0 >= 15.0) ok=1 } END { exit(ok ? 0 : 1) }' ||
             { echo "::error::Signed iOS archive must require iOS 15.0 or later."; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | grep -Fx '1.1'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
             grep -Fx "$IOS_BUILD_NUMBER"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
@@ -393,6 +396,7 @@ jobs:
               "provisioningProfiles": {"it.vargacantieri.hera": os.environ["IOS_PROFILE_NAME"]},
               "teamID": os.environ["IOS_APPLE_TEAM_ID"],
               "uploadSymbols": True,
+              "testFlightInternalTestingOnly": True,
           }
           with Path(os.environ["RUNNER_TEMP"], "varga-internal-testflight-options.plist").open("wb") as f:
               plistlib.dump(options, f)

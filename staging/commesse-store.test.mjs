@@ -1,15 +1,9 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import test from 'node:test';import assert from 'node:assert/strict';
 import {createCommesseStore} from './commesse-store.mjs';
-const db={app:{options:{projectId:'varga-cantieri-v2-staging'}}};
-const context={uid:'u',tenantId:'demo-a',role:'employee'};
-const sdk={collection:(_, ...p)=>p,doc:(_, ...p)=>p,getDocsFromServer:async p=>p,getDocFromServer:async p=>({id:p.at(-1),exists:()=>true,data:()=>p})};
-const store=createCommesseStore(db,context,sdk);
-test('commesse scoped list',async()=>assert.deepEqual(await store.collection('commesse').get(),['tenants','demo-a','commesse']));
-test('commessa scoped document',async()=>assert.deepEqual((await store.collection('commesse').doc('c').get()).data(),['tenants','demo-a','commesse','c']));
-test('impianti scoped list',async()=>assert.deepEqual(await store.collection('commesse').doc('c').collection('impianti').get(),['tenants','demo-a','commesse','c','impianti']));
-test('impianto scoped document',async()=>assert.deepEqual((await store.collection('commesse').doc('c').collection('impianti').doc('p').get()).data(),['tenants','demo-a','commesse','c','impianti','p']));
-test('tenant switch isolates identical ids',async()=>assert.notDeepEqual(await store.collection('commesse').get(),await createCommesseStore(db,{...context,tenantId:'demo-b'},sdk).collection('commesse').get()));
-test('reject production',()=>assert.throws(()=>createCommesseStore({app:{options:{projectId:'production'}}},context,sdk)));
-test('reject unknown collections and missing ids',()=>{assert.throws(()=>store.collection('users'));assert.throws(()=>store.collection('commesse').doc());assert.throws(()=>store.collection('commesse').doc('c').collection('users'));assert.throws(()=>store.collection('commesse').doc('c').collection('impianti').doc());});
-test('no writes exposed',()=>{const c=store.collection('commesse');const d=c.doc('c');assert.equal(c.add,undefined);assert.equal(d.set,undefined);assert.equal(d.delete,undefined);assert.equal(store.batch,undefined);});
+function fixture(role='admin'){const writes=[];const data=new Map();const db={app:{options:{projectId:'varga-cantieri-v2-staging'}}};const sdk={doc:(_, ...p)=>p.join('/'),collection:(_, ...p)=>p.join('/'),getDocsFromServer:async p=>({path:p}),getDocFromServer:async p=>({id:p.split('/').at(-1),exists:()=>data.has(p),data:()=>data.get(p)}),runTransaction:async(_,fn)=>fn({get:async ref=>({exists:()=>data.has(ref)}),set:(ref,value)=>{writes.push({ref,value});data.set(ref,value);}}),serverTimestamp:()=> 'SERVER_TIME'};return {store:createCommesseStore(db,{uid:'u',tenantId:'azienda-a',role},sdk),writes,data};}
+test('admin creates own commessa transactionally',async()=>{const f=fixture();await f.store.createCommessa('verde',{nome:'Verde'});assert.equal(f.writes[0].ref,'tenants/azienda-a/commesse/verde');assert.equal(f.writes[0].value.createdBy,'u');});
+test('employee cannot create commessa',async()=>{const f=fixture('employee');await assert.rejects(f.store.createCommessa('verde',{nome:'Verde'}));assert.equal(f.writes.length,0);});
+test('employee can create cantiere inside commessa',async()=>{const f=fixture('employee');await f.store.createPlant('verde','p1',{id:'p1',commessaId:'verde',nome:'Parco'});assert.equal(f.writes[0].ref,'tenants/azienda-a/commesse/verde/impianti/p1');});
+test('duplicate commessa rejected',async()=>{const f=fixture();f.data.set('tenants/azienda-a/commesse/verde',{});await assert.rejects(f.store.createCommessa('verde',{nome:'Verde'}));});
+test('duplicate cantiere rejected',async()=>{const f=fixture();f.data.set('tenants/azienda-a/commesse/verde/impianti/p1',{});await assert.rejects(f.store.createPlant('verde','p1',{id:'p1',commessaId:'verde',nome:'Parco'}));});
+test('store refuses production database',()=>{assert.throws(()=>createCommesseStore({app:{options:{projectId:'production'}}},{uid:'u',tenantId:'azienda-a',role:'admin'},{}));});

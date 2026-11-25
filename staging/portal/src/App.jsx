@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
@@ -7,12 +7,23 @@ import {
 import { collection, getDocs, getDoc, doc, setDoc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import './App.css';
+import pilotSource from '../../verde-levato-pilot.mjs?raw';
+import { buildVerdeFrame } from './verde-frame.mjs';
+const verdeFrame = buildVerdeFrame(pilotSource);
 import { resolveTenantContext } from '../../tenant-context.mjs';
 
 
 function TenantPortal({ user, companies }) {
   const [selected, setSelected] = useState(null);
   const [verdeOpen, setVerdeOpen] = useState(false);
+  const verdeRef = useRef(null);
+  useEffect(() => {
+    const close = event => {
+      if (event.origin === 'null' && event.source === verdeRef.current?.contentWindow && event.data === 'varga-verde-close') setVerdeOpen(false);
+    };
+    window.addEventListener('message', close);
+    return () => window.removeEventListener('message', close);
+  }, []);
 
   const roles = {
     admin: 'Amministratore',
@@ -75,7 +86,7 @@ function TenantPortal({ user, companies }) {
               <section aria-label="Anteprima Verde Levato">
                 <button onClick={() => setVerdeOpen(false)}>Chiudi Verde Levato</button>
                 <p>Archivio dimostrativo vuoto. Nessun collegamento ai dati aziendali reali.</p>
-                <iframe key={selected.id} title="Verde Levato demo" src="/verde-preview.html" sandbox="allow-scripts" style={{width:'100%',height:'75vh',border:'1px solid #ccd5ce',borderRadius:8,background:'white'}} />
+                <iframe key={selected.id} title="Verde Levato demo" ref={verdeRef} srcDoc={verdeFrame} sandbox="allow-scripts" style={{width:'100%',height:'75vh',border:'1px solid #ccd5ce',borderRadius:8,background:'white'}} />
               </section>
             )}
           </>

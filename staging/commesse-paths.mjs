@@ -1,12 +1,10 @@
-import {tenantCollectionPath} from './tenant-context.mjs';
 function id(value) {
  if(typeof value !== 'string' || !value.trim() || value.includes('/') || value==='.' || value==='..') throw new Error('Invalid document ID');
  return value;
 }
 export function commessePath(context, commessaId, impiantoId) {
- const [root,tenant]=tenantCollectionPath(context,'sites');
- if(!context.uid || !['admin','supervisor','employee'].includes(context.role)) throw new Error('Tenant role required');
- const path=[root,tenant,'commesse'];
+ if(!context?.uid || typeof context.tenantId!=='string' || !/^[a-z0-9-]{3,64}$/.test(context.tenantId) || !['admin','supervisor','employee'].includes(context.role)) throw new Error('Tenant role required');
+ const path=['tenants',context.tenantId,'commesse'];
  if(commessaId===undefined) {
   if(impiantoId!==undefined) throw new Error('Commessa required');
   return path;

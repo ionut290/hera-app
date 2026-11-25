@@ -1,4 +1,4 @@
-const fields = Object.freeze(['tipoRecord','denominazione','codice','comune','localita','via','civico','indirizzo','specieAlbero','specieSiepe','note','numeroAlbero','diametroCm','altezzaAlberoM','lunghezzaM','altezzaSiepeM','larghezzaM','superficieMq','tipologiaIntervento','lavorazioniRichieste']);
+const fields = Object.freeze(['tipoRecord','denominazione','codice','comune','localita','via','civico','indirizzo','specieAlbero','specieSiepe','note','numeroAlbero','diametroCm','altezzaAlberoM','lunghezzaM','altezzaSiepeM','larghezzaM','superficieMq','tipologiaIntervento','lavorazioniRichieste','gpsX','gpsY','gpsAccuracyM','gpsDetectedAt','coordinateSource','commessaId','commessaNome','commessaCodice','cap','provincia','regione','paese','statoVegetativo','source']);
 export function projectVerdeRecords(snapshot) {
   if (!Array.isArray(snapshot?.docs)) throw new Error('Invalid record snapshot');
   return snapshot.docs.map(doc => {

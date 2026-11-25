@@ -18,11 +18,25 @@ export function createOriginalFirestoreCompat({db,router}){
   if(root!==prefix+segments[0])throw Error('Unexpected archive scope');
   return [root,...segments.slice(1)].join('/');
  }
+ function checkRef(ref){
+  if(!ref||ref.firestore!==db||typeof ref.path!=='string'||!ref.path.startsWith(prefix)||resolve(ref.path,true)!==ref.path)throw Error('Reference outside company scope');
+  return ref;
+ }
+ function open(){if(closed)throw Error('Scope closed');router.path('commesse');}
+ function writes(native,transaction=false){
+  let failed=false;let committed=false;
+  function guard(){open();if(failed||committed)throw Error('Operation closed');}
+  function apply(method,ref,...args){try{guard();native[method](checkRef(ref),...args);return facade;}catch(e){failed=true;throw e;}}
+  const facade=Object.freeze({set:(ref,...args)=>apply('set',ref,...args),update:(ref,...args)=>apply('update',ref,...args),delete(){failed=true;throw Error('Deletion not enabled in staging compatibility boundary');},...(transaction?{get(ref){guard();return native.get(checkRef(ref));}}:{async commit(){guard();committed=true;return native.commit();}})});
+  return {facade,verify:guard};
+ }
  // Return actual compat SDK references. Their native query, batch and transaction
  // behavior is preserved; references already issued are governed by server rules.
  return Object.freeze({
   collection(path){return db.collection(resolve(path));},
   doc(path){return db.doc(resolve(path,true));},
+  batch(){open();return writes(db.batch()).facade;},
+  runTransaction(fn,...options){open();if(typeof fn!=='function')throw Error('Transaction callback required');return db.runTransaction(async native=>{open();const scoped=writes(native,true);const result=await fn(scoped.facade);scoped.verify();return result;},...options);},
   close(){closed=true;router.close();}
  });
 }

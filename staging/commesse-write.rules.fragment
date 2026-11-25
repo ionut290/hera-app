@@ -35,6 +35,7 @@ match /commesse/{commessaId} {
   && request.resource.data.commessaId==commessaId
   && request.resource.data.createdBy==request.auth.uid
   && request.resource.data.createdAt==request.time
+  && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId))
   && (!('stato' in request.resource.data) || request.resource.data.stato in ['da_fare','in_lavorazione']);
   allow update: if commessaId != 'sfalcio-cobo' && canManageCantieri()
   && request.resource.data.diff(resource.data).affectedKeys().hasOnly(cantiereKeys().toSet().difference(['id','commessaId','createdAt','createdBy','stato'].toSet()))

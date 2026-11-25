@@ -19,6 +19,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Check staging client syntax
+        run: node --check tests/multi-tenant/staging-client.mjs
       - name: Install isolated test dependencies
         working-directory: tests/multi-tenant
         run: |

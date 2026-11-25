@@ -1,5 +1,5 @@
 import { installVerdeLevatoPilot } from '../../verde-levato-pilot.mjs';
-const records = Object.freeze([
+const records = Object.freeze(window.parent !== window ? [] : [
  {id:'demo-c1',tipoRecord:'cantiere',denominazione:'Cantiere dimostrativo A',codice:'DEMO-C01',comune:'Comune fittizio',via:'Via Esempio 1'},
  {id:'demo-a1',tipoRecord:'albero',denominazione:'Albero dimostrativo',codice:'DEMO-A01',comune:'Comune fittizio',specie:'Acero'},
  {id:'demo-s1',tipoRecord:'siepe',denominazione:'Siepe dimostrativa',codice:'DEMO-S01',comune:'Comune fittizio',specie:'Lauro'}

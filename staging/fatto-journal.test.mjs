@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {journalPath,restoreJournal,serializeJournal} from './fatto-journal.mjs';
+import {startExecution,transitionExecution} from './fatto-execution-state.mjs';
+const plan={tenantId:'demo-a',siteId:'site-a',operationId:'op-a',version:1,steps:[{key:'a',action:'saveCompletion'},{key:'b',action:'openWhatsApp'}]};
+const context={uid:'u',tenantId:'demo-a',role:'employee'};
+const initial=()=>serializeJournal(startExecution(plan));
+test('tenant scoped journal',()=>assert.deepEqual(journalPath(context,'op-a'),['tenants','demo-a','fattoExecutions','op-a']));
+test('reject path injection',()=>assert.throws(()=>journalPath(context,'../op')));
+test('reject unknown role',()=>assert.throws(()=>journalPath({...context,role:'viewer'},'op-a')));
+test('restore pending',()=>assert.deepEqual(serializeJournal(restoreJournal(plan,initial())),initial()));
+test('interrupted action becomes uncertain',()=>{const s=transitionExecution(startExecution(plan),'a','start');assert.equal(restoreJournal(plan,serializeJournal(s)).steps[0].status,'uncertain');});
+test('completed step retained',()=>{const s=transitionExecution(transitionExecution(startExecution(plan),'a','start'),'a','success');assert.equal(restoreJournal(plan,serializeJournal(s)).steps[0].status,'done');});
+for(const [key,value] of Object.entries({tenantId:'demo-b',siteId:'site-b',operationId:'op-b',version:2}))test('reject mismatched '+key,()=>assert.throws(()=>restoreJournal(plan,{...initial(),[key]:value})));
+test('reject out of order completion',()=>{const r=initial();r.steps[1].status='done';assert.throws(()=>restoreJournal(plan,r));});
+test('reject altered action',()=>{const r=initial();r.steps[0].action='exportSheet';assert.throws(()=>restoreJournal(plan,r));});

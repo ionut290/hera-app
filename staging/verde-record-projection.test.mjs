@@ -9,3 +9,7 @@ test('non scalar values excluded',()=>assert.deepEqual(projectVerdeRecords(snap(
 test('invalid category rejected',()=>assert.throws(()=>projectVerdeRecords(snap({tipoRecord:'unknown'}))));
 test('invalid ID rejected',()=>assert.throws(()=>projectVerdeRecords(snap({tipoRecord:'albero'},'a/b'))));
 test('invalid snapshot rejected',()=>assert.throws(()=>projectVerdeRecords(null)));
+
+test('preserve GPS and original commessa fields',()=>assert.deepEqual(projectVerdeRecords(snap({tipoRecord:'cantiere',gpsX:11.34,gpsY:44.49,commessaId:'demo-commessa',cap:'40100'})),[{id:'a',tipoRecord:'cantiere',gpsX:11.34,gpsY:44.49,commessaId:'demo-commessa',cap:'40100'}]));
+test('serialize Firestore timestamps',()=>assert.deepEqual(projectVerdeRecords(snap({tipoRecord:'siepe',createdAt:{toMillis:()=>1234},updatedAt:new Date(5678)})),[{id:'a',tipoRecord:'siepe',createdAt:1234,updatedAt:5678}]));
+test('reject invalid timestamp values',()=>assert.deepEqual(projectVerdeRecords(snap({tipoRecord:'siepe',createdAt:{toMillis:()=>Infinity},updatedAt:new Date(NaN)})),[{id:'a',tipoRecord:'siepe'}]));

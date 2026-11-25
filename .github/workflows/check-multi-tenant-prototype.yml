@@ -26,4 +26,4 @@ jobs:
       - name: Run Firestore synthetic tenant tests
         working-directory: tests/multi-tenant
         run: |
-          npx firebase emulators:exec --only firestore --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs && node tenant-service.emulator.test.cjs'
+          npx firebase emulators:exec --only firestore,auth --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs && node tenant-service.emulator.test.cjs && node auth-adapter.emulator.test.cjs'

@@ -1,0 +1,17 @@
+// Emulator candidate only. Insert within /tenants/{tenantId}.
+function canReadDemoCommesse() {
+ return activeMember(tenantId)
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.demo == true
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['admin','supervisor','employee']
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.status == 'active'
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.tenantId == tenantId
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role;
+}
+match /commesse/{commessaId} {
+ allow get, list: if canReadDemoCommesse();
+ allow create, update, delete: if false;
+ match /impianti/{impiantoId} {
+  allow get, list: if canReadDemoCommesse();
+  allow create, update, delete: if false;
+ }
+}

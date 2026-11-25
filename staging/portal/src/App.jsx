@@ -12,6 +12,7 @@ import { resolveTenantContext } from '../../tenant-context.mjs';
 
 function TenantPortal({ user, companies }) {
   const [selected, setSelected] = useState(null);
+  const [verdeOpen, setVerdeOpen] = useState(false);
 
   const roles = {
     admin: 'Amministratore',
@@ -55,7 +56,7 @@ function TenantPortal({ user, companies }) {
           </>
         ) : (
           <>
-            <button onClick={() => setSelected(null)}>
+            <button onClick={() => { setVerdeOpen(false); setSelected(null); }}>
               Cambia azienda
             </button>
 
@@ -67,8 +68,16 @@ function TenantPortal({ user, companies }) {
                 <h3>Area aziendale</h3>
                 <p>Accesso effettuato correttamente.</p>
                 <small>Moduli operativi in sviluppo.</small>
+                <p><button onClick={() => setVerdeOpen(true)}>🌱 Verde Levato — anteprima demo</button></p>
               </div>
             </article>
+            {verdeOpen && (
+              <section aria-label="Anteprima Verde Levato">
+                <button onClick={() => setVerdeOpen(false)}>Chiudi Verde Levato</button>
+                <p>Solo dati fittizi, non collegati all'azienda.</p>
+                <iframe key={selected.id} title="Verde Levato demo" src="/verde-preview.html" sandbox="allow-scripts" style={{width:'100%',height:'75vh',border:'1px solid #ccd5ce',borderRadius:8,background:'white'}} />
+              </section>
+            )}
           </>
         )}
       </section>

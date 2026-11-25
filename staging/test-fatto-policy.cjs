@@ -11,7 +11,7 @@ await env.withSecurityRulesDisabled(async c=>{
 const db=c.firestore();
 for(const [id,mode] of [['demo-a','configurable-demo'],['demo-b','configurable-demo'],['demo-protected','immutable']]){
 await setDoc(doc(db,'tenants',id),{demo:true,status:'active',fattoMode:mode});
-for(const [uid,role] of [['admin','admin'],['employee','employee']]){
+for(const [uid,role] of [['admin','admin'],['employee','employee'],['supervisor','supervisor']]){
 if(id==='demo-b')continue;
 await setDoc(doc(db,'tenants',id,'members',uid),{status:'active',role});
 await setDoc(doc(db,'users',uid,'memberships',id),{status:'active',role,tenantId:id});
@@ -30,11 +30,15 @@ for(const actions of [[],['openWhatsApp','saveCompletion'],['saveCompletion','op
 await check(setDoc(ref('admin','demo-b'),payload()),false);
 await check(setDoc(ref('admin','demo-protected'),payload()),false);
 await check(setDoc(ref('employee'),{...payload(3),updatedBy:'employee'}),false);
-await check(getDoc(ref('employee')),false);
+await check(getDoc(ref('employee')),true);
+await check(getDoc(ref('supervisor')),true);
+await check(setDoc(ref('supervisor'),{...payload(3),updatedBy:'supervisor'}),false);
+await check(getDoc(ref('employee','demo-b')),false);
+await check(getDoc(ref('employee','demo-protected')),false);
 await check(deleteDoc(ref('admin')),false);
 await check(setDoc(ref('admin'),{...payload(3),updatedBy:'other'}),false);
 await check(setDoc(ref('admin'),{...payload(3),extra:true}),false);
-console.log('FATTO RESULT: '+count+'/18');
-if(count!==18)throw Error('Unexpected count');
+console.log('FATTO RESULT: '+count+'/22');
+if(count!==22)throw Error('Unexpected count');
 }finally{await env.cleanup()}
 })().catch(e=>{console.error(e);process.exitCode=1});

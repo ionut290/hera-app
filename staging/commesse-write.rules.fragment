@@ -1,10 +1,10 @@
 // Generic company-owned commesse. Sfalcio COBO keeps its dedicated constrained rules.
 function canManageCommesse() {
  return canReadDemoCommesse()
- && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['admin','supervisor'];
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin';
 }
 function canManageCantieri() {
- return canReadDemoCommesse();
+ return canManageCommesse();
 }
 function commessaKeys() {
  return ['nome','codice','descrizione','cliente','committente','comune','indirizzo','attiva','tipo','createdAt','updatedAt','createdBy','updatedBy'];

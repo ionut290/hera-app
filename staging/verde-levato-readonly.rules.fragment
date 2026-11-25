@@ -1,0 +1,12 @@
+// Candidate fragment ONLY. Not a deployable rules file.
+// Insert inside match /tenants/{tenantId} of the tested staging rules,
+// never into the inherited production rules.
+// Requires existing eligible() and activeMember(tenantId) helpers.
+match /{verdeCollection}/{documentId} {
+  allow get, list: if verdeCollection in [
+    'verdeLevatoRecords', 'verdeLevatoCommesse', 'verdeLevatoConfig'
+  ]
+  && activeMember(tenantId)
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.demo == true;
+  allow create, update, delete: if false;
+}

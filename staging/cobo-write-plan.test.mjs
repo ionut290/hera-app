@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {planCoboWrite} from './cobo-write-plan.mjs';
+const plantId='cobo-parco-demo';
+const context={uid:'u',tenantId:'demo-a',role:'admin'};
+const args={context,commessaExists:false,plantId,payload:{id:plantId,commessaId:'sfalcio-cobo',sfalcioCobo:true}};
+test('admin initialization',()=>{const p=planCoboWrite(args);assert.equal(p.initialize,true);assert.deepEqual(p.plantPath,['tenants','demo-a','commesse','sfalcio-cobo','impianti',plantId]);});
+test('employee cannot initialize',()=>assert.throws(()=>planCoboWrite({...args,context:{...context,role:'employee'}})));
+test('employee existing commessa',()=>assert.equal(planCoboWrite({...args,commessaExists:true,context:{...context,role:'employee'}}).initialize,false));
+test('separate tenant paths',()=>assert.notDeepEqual(planCoboWrite(args).plantPath,planCoboWrite({...args,context:{...context,tenantId:'demo-b'}}).plantPath));
+test('reject path injection',()=>assert.throws(()=>planCoboWrite({...args,plantId:'../bad'})));
+for(const key of ['done','doneAt','doneBy','stato','createdAt','updatedAt','tenantId'])test('reject protected '+key,()=>assert.throws(()=>planCoboWrite({...args,payload:{...args.payload,[key]:null}})));
+test('reject mismatched ID',()=>assert.throws(()=>planCoboWrite({...args,payload:{...args.payload,id:'other'}})));
+test('reject other commessa',()=>assert.throws(()=>planCoboWrite({...args,payload:{...args.payload,commessaId:'other'}})));

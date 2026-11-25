@@ -10,3 +10,7 @@ Product requirement: every new company receives the same complete application, n
 - Staging only, demo tenants only, no paid services, no deployment implied by this specification.
 
 Acceptance: a newly created company can open the same modules and sees empty operational lists; creating data in one company never populates another. This is a target requirement, not a claim of completed implementation.
+
+## Mandatory implementation rule — owner directive
+
+Reuse the current Avola application UI, navigation, business logic, workflows, and systems for every tenant. Do not replace existing operational screens with newly designed screens or simplified substitutes. Change only tenant data routing, authorization, tenant-specific settings and necessary isolation infrastructure. New tenants begin with empty operational archives, ready for manual entry. Compare each migrated module against the original before acceptance. Temporary staging previews are not final product interfaces. The super-admin and company selection are new administrative entry points, not replacements for the existing operational application.

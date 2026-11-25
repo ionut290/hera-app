@@ -152,7 +152,7 @@ La cartella principale del branch contiene già la shell originale `index.html` 
 2. `netlify.toml` blocca deliberatamente la build: `STAGING deployment blocked pending isolation audit`. Non rimuovere il blocco finché l'isolamento non è verificato.
 3. `staging/portal/src/App.jsx` è un portale semplificato e mostra ancora moduli operativi in sviluppo; non è la copia completa richiesta.
 4. Le regole Firestore legacy root non dimostrano isolamento multi-tenant. Non collegare il runtime completo a Firestore finché tutti i percorsi, listener, cache, storage e integrazioni non sono isolati.
-5. Il file `app.js` non è stato possibile estrarlo con il connettore GitHub in questo passaggio; nessuna funzione interna è dichiarata verificata sulla base di questo audit.
+5. TinyFish ha letto il file originale `app.js` (1,38 MB) e ha verificato i punti di ingresso commesse: `getCommesseCollectionName()` (riga 537), `createCommessa()` (riga 636), `addManagementImpianto()` (riga 265), `firebase.initializeApp()` (riga 42) e i percorsi Firestore relativi. Questo helper centralizza i percorsi delle commesse nel solo `app.js`, ma NON centralizza tutte le collezioni dell'intera applicazione.
 6. Il file `index.html` fa riferimento a icone sotto `icons/` che non risultano nel tree corrente: `icons/varga-cantieri-32.png`, `icons/varga-cantieri-180.png`, `icons/varga-cantieri-512.png`. Verificare se vengono generate da altra pipeline prima di una build.
 
 ## Prossimo gate tecnico

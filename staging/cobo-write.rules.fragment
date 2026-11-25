@@ -20,4 +20,9 @@ match /commesse/sfalcio-cobo/impianti/{plantId} {
  allow update: if validCobo() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(coboFields());
  allow delete: if false;
 }
-// Parent commessa initialization remains denied pending separate schema validation.
+match /commesse/sfalcio-cobo {
+ allow create: if canWriteCobo()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role=='admin'
+ && request.resource.data == {'nome':'Sfalcio COBO','codice':'COBO-SFALCIO','speciale':true,'tipoSpeciale':'SFALCIO_COBO','verdeBologna':true,'parchiGiardini':true,'attiva':true,'parentCommessaId':null,'excelModelVersion':2,'priceListVersion':2,'workItemsModelVersion':2,'percentualeRibassoGenerale':0.01,'nextImpiantoNumber':1,'creatoDa':request.auth.token.email,'createdAt':request.time};
+ allow update, delete: if false;
+}

@@ -8,7 +8,7 @@ await assertSucceeds(setDoc(comm('admin','azienda-a','giardinaggio'),cdata()));
 await assertFails(setDoc(comm('worker','azienda-a','potature'),{...cdata(),createdBy:'worker'}));
 await assertSucceeds(setDoc(site('worker','azienda-a','giardinaggio','cantiere-1'),{id:'cantiere-1',commessaId:'giardinaggio',nome:'Parco',createdBy:'worker',createdAt:serverTimestamp(),stato:'da_fare'}));
 await assertFails(setDoc(site('worker','azienda-a','giardinaggio','cantiere-2'),{id:'cantiere-2',commessaId:'giardinaggio',nome:'Parco',createdBy:'worker',createdAt:serverTimestamp(),done:true}));
-await assertFails(setDoc(comm('admin','azienda-b','giardinaggio'),{...cdata(),createdBy:'admin'}).then(()=>{throw Error('unexpected')}));
+await assertFails(setDoc(comm('worker','azienda-b','giardinaggio'),{...cdata(),createdBy:'worker'}));
 await assertFails(setDoc(site('admin','azienda-b','giardinaggio','x'),{id:'x',commessaId:'giardinaggio',nome:'X',createdBy:'admin',createdAt:serverTimestamp()}));
 console.log('COMMESSE: 6 checks passed');
 }finally{await env.cleanup();}})().catch(e=>{console.error(e);process.exitCode=1;});

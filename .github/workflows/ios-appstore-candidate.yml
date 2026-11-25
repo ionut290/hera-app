@@ -97,7 +97,8 @@ jobs:
     name: Sign and upload App Store-eligible candidate (NO submission)
     needs: preflight
     if: ${{ github.event_name == 'workflow_dispatch' && (inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY' || inputs.approval == 'UPLOAD_20029_PRIVACY_CORRECTION_ONLY') }}
-    runs-on: macos-26
+    # Standard Intel runner avoids the observed ARM64 acquisition failures.
+    runs-on: macos-26-intel
     timeout-minutes: 90
     # Existing protected environment holds validated Apple signing credentials.
     # Keep the same reviewer gate; no new secret copies are needed.

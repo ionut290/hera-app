@@ -7,6 +7,7 @@ import {
 import { collection, getDocs, getDoc, doc, setDoc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import './App.css';
+import { resolveTenantContext } from '../../tenant-context.mjs';
 
 
 function TenantPortal({ user, companies }) {
@@ -143,18 +144,19 @@ export default function App() {
                       'members', current.uid)
                 );
 
-                if (
-                  tenant.exists() &&
-                  tenant.data().status === 'active' &&
-                  member.exists() &&
-                  member.data().status === 'active' &&
-                  ['admin', 'supervisor', 'employee']
-                    .includes(member.data().role)
-                ) {
+                const context = resolveTenantContext({
+                  uid: current.uid,
+                  claims: token.claims,
+                  tenantId: membership.id,
+                  tenant: tenant.exists() ? tenant.data() : null,
+                  member: member.exists() ? member.data() : null,
+                  membership: membership.data()
+                });
+                if (context) {
                   companies.push({
-                    id: tenant.id,
+                    id: context.tenantId,
                     name: tenant.data().name,
-                    role: member.data().role
+                    role: context.role
                   });
                 }
               } catch (e) {

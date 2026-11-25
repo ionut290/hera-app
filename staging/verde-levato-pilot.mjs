@@ -1,4 +1,4 @@
-export function installVerdeLevatoPilot({ readStore, user }) {
+export function installVerdeLevatoPilot({ readStore, user, onClose }) {
   if (!readStore || typeof readStore.collection !== "function" || !user?.uid) throw new Error("Pilot context required");
 
   const PAGE_ID = "verde-levato-page";
@@ -783,6 +783,7 @@ export function installVerdeLevatoPilot({ readStore, user }) {
   }
 
   function closePage() {
+    if (typeof onClose === "function") { onClose(); return; }
     closeRecordForm();
     closeAdminModal();
     const page = $(PAGE_ID);
@@ -830,13 +831,10 @@ export function installVerdeLevatoPilot({ readStore, user }) {
     document.addEventListener("keydown", (event) => { if (event.key !== "Escape" || $(PAGE_ID)?.classList.contains("hidden")) return; if (!$("verde-levato-record-modal")?.classList.contains("hidden")) closeRecordForm(); else if (!$("verde-levato-admin-modal")?.classList.contains("hidden")) closeAdminModal(); else if (state.category) showCategories(); else closePage(); });
   }
 
-  function install() {
-    injectStyle();
-    buildPage();
-    renderCategories();
-    addMenuButton();
-    window.HeraVerdeLevato = Object.freeze({ open: openPage, close: closePage, useCurrentLocation, exportAllData, categories: CATEGORIES.map(({ id, title }) => ({ id, title })), collections: Object.freeze({ records: RECORDS_COLLECTION, commesse: COMMESSE_COLLECTION, config: CONFIG_COLLECTION }) });
-  }
-
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true }); else install();
+  // Pilot is mounted once per isolated document. Closing destroys the document
+  // through the host callback; never reuse it for another tenant.
+  injectStyle();
+  buildPage();
+  renderCategories();
+  return Object.freeze({ open: openPage, close: closePage });
 }

@@ -1,6 +1,7 @@
 import {commessePath,commessaDocumentPath} from './commesse-paths.mjs';
 export function createCommesseStore(db,context,sdk){
  if(db?.app?.options?.projectId!=='varga-cantieri-v2-staging') throw new Error('Staging Firebase required');
+ context=Object.freeze({...context});
  const root=commessePath(context);
  const {collection,doc,getDocsFromServer,getDocFromServer}=sdk;
  const readCollection=path=>getDocsFromServer(collection(db,...path));

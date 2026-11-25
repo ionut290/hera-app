@@ -31,3 +31,10 @@ match /fattoSettings/{settingId} {
  allow create: if settingId == 'workflow' && canConfigureDemoFatto() && validFattoPolicy() && request.resource.data.version == 1;
  allow update: if settingId == 'workflow' && canConfigureDemoFatto() && validFattoPolicy() && request.resource.data.version == resource.data.version + 1;
 }
+
+// Journal records are readable only by authorized tenant members.
+// Client writes remain denied until a trusted executor is available.
+match /fattoExecutions/{operationId} {
+ allow get: if canReadDemoFatto();
+ allow list, create, update, delete: if false;
+}

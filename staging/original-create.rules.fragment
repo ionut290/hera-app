@@ -3,9 +3,10 @@
 function originalCommessaCreate() {
  let d=request.resource.data;
  return canManageCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalCreateEnabled',false)==true
  && d.keys().hasOnly(['nome','codice','excelModelVersion','priceListVersion','workItemsModelVersion','percentualeRibassoGenerale','excelModelActivatedAt','excelModelActivatedBy','nextImpiantoNumber','parentCommessaId','creatoDa','createdAt'])
  && d.keys().hasAll(['nome','codice','excelModelVersion','priceListVersion','workItemsModelVersion','percentualeRibassoGenerale','excelModelActivatedAt','excelModelActivatedBy','nextImpiantoNumber','parentCommessaId','creatoDa','createdAt'])
- && d.nome is string && d.nome.size()>0 && d.nome.size()<=200
+ && d.nome is string && d.nome.matches('.*[^\\s].*') && d.nome.size()<=200
  && d.codice is string && d.codice.size()<=200
  && d.excelModelVersion==2 && d.priceListVersion==2 && d.workItemsModelVersion==2
  && d.percentualeRibassoGenerale==0.01 && d.nextImpiantoNumber==1
@@ -16,10 +17,11 @@ function originalCommessaCreate() {
 function originalImpiantoCreate(commessaId) {
  let d=request.resource.data;
  return canManageCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalCreateEnabled',false)==true
  && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId))
  && d.keys().hasOnly(['denominazione','idSap','tipologiaImpianto','comune','indirizzo','gpsY','gpsX','codicePrezzo','area','dittaEsecutrice','note','stato','done','doneAt','doneBy','numeroProgressivo','commessaId','createdAt','updatedAt','updatedByUid','updatedByName'])
  && d.keys().hasAll(['denominazione','idSap','tipologiaImpianto','comune','indirizzo','gpsY','gpsX','codicePrezzo','area','dittaEsecutrice','note','stato','done','doneAt','doneBy','numeroProgressivo','commessaId','createdAt','updatedAt','updatedByUid','updatedByName'])
- && d.denominazione is string && d.denominazione.size()>0 && d.denominazione.size()<=250
+ && d.denominazione is string && d.denominazione.matches('.*[^\\s].*') && d.denominazione.size()<=250
  && d.idSap is string && d.idSap.size()<=200
  && d.tipologiaImpianto=='' && d.comune=='' && d.indirizzo=='' && d.gpsY==null && d.gpsX==null
  && d.codicePrezzo=='' && d.area=='' && d.dittaEsecutrice=='' && d.note==''

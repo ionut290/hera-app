@@ -3,8 +3,11 @@ function canManageCommesse() {
  return canReadDemoCommesse()
  && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin';
 }
+function canManagePrototypeCommesse() {
+ return canManageCommesse() && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('commesseWriteEnabled',false)==true;
+}
 function canManageCantieri() {
- return canManageCommesse();
+ return canManagePrototypeCommesse();
 }
 function commessaKeys() {
  return ['nome','codice','descrizione','cliente','committente','comune','indirizzo','attiva','tipo','createdAt','updatedAt','createdBy','updatedBy'];
@@ -13,13 +16,13 @@ function cantiereKeys() {
  return ['id','commessaId','nome','denominazione','comune','indirizzo','descrizione','coordinate','latitudine','longitudine','gpsX','gpsY','tipologia','note','stato','createdAt','updatedAt','createdBy','updatedBy'];
 }
 match /commesse/{commessaId} {
- allow create: if commessaId != 'sfalcio-cobo' && canManageCommesse()
+ allow create: if commessaId != 'sfalcio-cobo' && canManagePrototypeCommesse()
  && request.resource.data.keys().hasOnly(commessaKeys())
  && request.resource.data.keys().hasAll(['nome','createdAt','createdBy'])
  && request.resource.data.nome is string && request.resource.data.nome.size()>0
  && request.resource.data.createdBy==request.auth.uid
  && request.resource.data.createdAt==request.time;
- allow update: if commessaId != 'sfalcio-cobo' && canManageCommesse()
+ allow update: if commessaId != 'sfalcio-cobo' && canManagePrototypeCommesse()
  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(commessaKeys().toSet().difference(['createdAt','createdBy'].toSet()))
  && request.resource.data.createdBy==resource.data.createdBy
  && request.resource.data.createdAt==resource.data.createdAt

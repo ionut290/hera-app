@@ -14,7 +14,7 @@ function extractSync(name){const start=source.indexOf('function '+name+'(');asse
  try{
  await env.clearFirestore();
  await env.withSecurityRulesDisabled(async ctx=>{const db=ctx.firestore();for(const [id,uid] of [['demo-a','a'],['demo-b','b']]){
- await setDoc(doc(db,'tenants',id),{demo:true,status:'active'});
+ await setDoc(doc(db,'tenants',id),{demo:true,status:'active',originalCreateEnabled:true});
  for(const [u,role] of [[uid,'admin'],[uid+'-worker','employee']]){
  await setDoc(doc(db,'tenants',id,'members',u),{role,status:'active'});
  await setDoc(doc(db,'users',u,'memberships',id),{tenantId:id,role,status:'active'});
@@ -22,7 +22,7 @@ function extractSync(name){const start=source.indexOf('function '+name+'(');asse
  const dbFor=uid=>env.authenticatedContext(uid,{email_verified:true,email:uid+'@example.test'}).firestore();
  const make=(uid,tenant,role='admin')=>{
  const db=dbFor(uid),bridge=createOriginalCollectionBridge({path:n=>{assert.equal(n,'commesse');return 'tenants/'+tenant+'/'+n;},close(){}});
- const ref=path=>({async add(data){return addDoc(collection(db,path),data);},doc(id){assert(!id.includes('/'));return {collection(n){assert.equal(n,'impianti');return ref(path+'/'+id+'/'+n);}};}});
+ const ref=path=>({async add(data){return addDoc(collection(db,path),{...data});},doc(id){assert(!id.includes('/'));return {collection(n){assert.equal(n,'impianti');return ref(path+'/'+id+'/'+n);}};}});
  const user={uid,email:uid+'@example.test'},alerts=[],prompts=['Parco demo','SAP-1'];
  const scope=vm.createContext({auth:{currentUser:user},currentUser:user,ui:{commessaName:{value:'Verde demo'},commessaCode:{value:'V1'},commessaType:{value:'main'},commessaParent:{value:''},commessaForm:{reset(){}}},alert:m=>alerts.push(m),canManageData:()=>role==='admin',db:{collection:p=>{assert.equal(p,'tenants/'+tenant+'/commesse');return ref(p);}},getCommesseCollectionName:()=>bridge.getCommesseCollectionName(false),firebase:{firestore:{FieldValue:{serverTimestamp}}},driveAccessToken:null,closeNewCommessaDialog(){},updateCommessaParentField(){},window:{prompt:()=>prompts.shift()},managementCommessaId:'',commesseById:new Map(),getCommessaCachedImpianti:()=>[],normalizeManagementSearch:v=>String(v).trim().toLowerCase(),getOperatorDisplayName:()=>uid,managementEditingId:'',console});
  vm.runInContext([extract('createCommessa'),extract('addManagementImpianto'),extractSync('validateManagementPlant')].join('\n'),scope);
@@ -45,6 +45,23 @@ function extractSync(name){const start=source.indexOf('function '+name+'(');asse
  const pdata=plants.docs[0].data();
  await assertFails(setDoc(doc(a.db,'tenants','demo-a','commesse',parent.id,'impianti','fake-done'),{...pdata,done:true,createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));count++;
  await b.scope.createCommessa(click);assert.equal((await list(b,'demo-b')).size,1);assert.equal((await list(a,'demo-a')).size,1);count++;
- console.log('ORIGINAL HANDLERS: '+count+'/10');assert.equal(count,10);
+ const bParent=(await list(b,'demo-b')).docs[0];
+ a.scope.ui.commessaName.value='Subcommessa demo';
+ a.scope.ui.commessaType.value='sub';
+ a.scope.ui.commessaParent.value=parent.id;
+ await a.scope.createCommessa(click);
+ const sub=(await list(a,'demo-a')).docs.find(d=>d.data().parentCommessaId===parent.id);
+ assert(sub);count++;
+ a.scope.ui.commessaParent.value=bParent.id;
+ await assertFails(a.scope.createCommessa(click));count++;
+ assert.equal((await list(a,'demo-a')).size,2);count++;
+ const cdata={...parent.data(),createdAt:serverTimestamp(),excelModelActivatedAt:serverTimestamp(),creatoDa:'a-worker@example.test',excelModelActivatedBy:'a-worker@example.test'};
+ await assertFails(setDoc(doc(worker.db,'tenants','demo-a','commesse','unauthorized'),cdata));count++;
+ await assertFails(setDoc(doc(worker.db,'tenants','demo-a','commesse',parent.id,'impianti','unauthorized'),{...pdata,updatedByUid:'a-worker',createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));count++;
+ await assertFails(setDoc(doc(a.db,'tenants','demo-a','commesse','missing-parent','impianti','orphan'),{...pdata,commessaId:'missing-parent',createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));count++;
+ await env.withSecurityRulesDisabled(async ctx=>setDoc(doc(ctx.firestore(),'tenants','demo-a'),{originalCreateEnabled:false},{merge:true}));
+ a.scope.ui.commessaType.value='main';a.scope.ui.commessaParent.value='';
+ await assertFails(a.scope.createCommessa(click));count++;
+ console.log('ORIGINAL HANDLERS: '+count+'/17');assert.equal(count,17);
  }finally{await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1});

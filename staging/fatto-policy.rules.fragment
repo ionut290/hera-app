@@ -1,12 +1,15 @@
 // Candidate only; insert within /tenants/{tenantId}. No deployment.
-function canConfigureDemoFatto() {
+function canReadDemoFatto() {
  return activeMember(tenantId)
  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.demo == true
  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.fattoMode == 'configurable-demo'
- && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin'
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['admin','supervisor','employee']
  && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.status == 'active'
  && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.tenantId == tenantId
- && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == 'admin';
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role;
+}
+function canConfigureDemoFatto() {
+ return canReadDemoFatto() && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin';
 }
 function validFattoPolicy() {
  let d = request.resource.data;
@@ -23,7 +26,7 @@ function validFattoPolicy() {
  && d.updatedAt == request.time && d.updatedBy == request.auth.uid;
 }
 match /fattoSettings/{settingId} {
- allow get: if settingId == 'workflow' && canConfigureDemoFatto();
+ allow get: if settingId == 'workflow' && canReadDemoFatto();
  allow list, delete: if false;
  allow create: if settingId == 'workflow' && canConfigureDemoFatto() && validFattoPolicy() && request.resource.data.version == 1;
  allow update: if settingId == 'workflow' && canConfigureDemoFatto() && validFattoPolicy() && request.resource.data.version == resource.data.version + 1;

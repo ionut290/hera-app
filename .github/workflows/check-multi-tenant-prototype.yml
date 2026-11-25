@@ -1,0 +1,29 @@
+name: Multi-tenant prototype (local emulator only)
+on:
+  push:
+    branches: ['development/multi-azienda-v2']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolation:
+    if: github.ref == 'refs/heads/development/multi-azienda-v2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install isolated test dependencies
+        working-directory: tests/multi-tenant
+        run: |
+          npm install --no-save --package-lock=false firebase@11.10.0 @firebase/rules-unit-testing@4.0.1 firebase-tools@14
+      - name: Run Firestore synthetic tenant tests
+        working-directory: tests/multi-tenant
+        run: |
+          npx firebase emulators:exec --only firestore --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs'

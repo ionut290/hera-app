@@ -55,7 +55,8 @@ jobs:
       - name: Prepare isolated emulator
         working-directory: staging
         run: |
-          npm install --no-save --no-audit --no-fund firebase@13.4.0 @firebase/rules-unit-testing@6 firebase-tools@15.34.2
+          printf '%s' '{"name":"varga-emulator-ci","version":"1.0.0","private":true}' > package.json
+          npm install --no-save --no-audit --no-fund firebase@13.4.0 @firebase/rules-unit-testing@6.0.0 firebase-tools@15.34.2
           python3 -c "from pathlib import Path; b=Path('firestore-emulator-base.rules').read_text(); assert b.count('// VERDE_FRAGMENT')==1; Path('candidate.rules').write_text(b.replace('// VERDE_FRAGMENT',Path('verde-levato-readonly.rules.fragment').read_text()))"
           printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > emulator-ci.json
       - name: Test tenant isolation

@@ -7,6 +7,10 @@ match /{verdeCollection}/{documentId} {
     'verdeLevatoRecords', 'verdeLevatoCommesse', 'verdeLevatoConfig'
   ]
   && activeMember(tenantId)
+  && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['admin', 'supervisor', 'employee']
+  && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.status == 'active'
+  && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.tenantId == tenantId
+  && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role
   && get(/databases/$(database)/documents/tenants/$(tenantId)).data.demo == true;
   allow create, update, delete: if false;
 }

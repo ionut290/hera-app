@@ -38,7 +38,16 @@ await check(getDoc(ref('employee','demo-protected')),false);
 await check(deleteDoc(ref('admin')),false);
 await check(setDoc(ref('admin'),{...payload(3),updatedBy:'other'}),false);
 await check(setDoc(ref('admin'),{...payload(3),extra:true}),false);
-console.log('FATTO RESULT: '+count+'/22');
-if(count!==22)throw Error('Unexpected count');
+await env.withSecurityRulesDisabled(async c=>{for(const id of ['demo-a','demo-b','demo-protected'])await setDoc(doc(c.firestore(),'tenants',id,'fattoExecutions','op-a'),{tenantId:id});});
+const journal=(uid,id='demo-a')=>doc(db(uid),'tenants',id,'fattoExecutions','op-a');
+for(const uid of ['admin','supervisor','employee']){
+ await check(getDoc(journal(uid)),true);
+ await check(setDoc(journal(uid),{status:'done'}),false);
+ await check(deleteDoc(journal(uid)),false);
+ await check(getDoc(journal(uid,'demo-b')),false);
+ await check(getDoc(journal(uid,'demo-protected')),false);
+}
+console.log('FATTO RESULT: '+count+'/37');
+if(count!==37)throw Error('Unexpected count');
 }finally{await env.cleanup()}
 })().catch(e=>{console.error(e);process.exitCode=1});

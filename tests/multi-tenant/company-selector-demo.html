@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VARGA CANTIERI 2.0 — Demo aziende</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#11151b;color:#f1f3f6;font:16px system-ui,sans-serif}header{border-bottom:1px solid #343b45;padding:20px;display:flex;align-items:center;gap:14px}header b{color:#ffbe32;font-size:19px}header small{margin-left:auto;color:#b7c0ca}main{max-width:860px;margin:auto;padding:24px 18px}h1{font-size:28px;margin:22px 0 8px}h2{font-size:20px;margin:0 0 14px}p{color:#bdc5d0;line-height:1.5}.notice{border:1px solid #86703b;border-radius:12px;padding:14px;color:#ffdf95;background:#252218}.panel{margin-top:20px;border:1px solid #343b45;border-radius:16px;padding:20px;background:#1b212a}label{display:block;margin-bottom:8px}select,button{font:inherit;border-radius:9px;padding:12px;border:1px solid #4b5563;background:#242b35;color:white}select{width:100%}button{cursor:pointer}button:focus-visible,select:focus-visible{outline:3px solid #ffd367;outline-offset:3px}.company{display:flex;align-items:center;gap:12px;text-align:left;width:100%;margin-top:10px}.company:hover{border-color:#ffbe32}.initials{display:grid;place-items:center;background:#ffbe32;color:#141414;width:44px;height:44px;border-radius:10px;font-weight:bold}.details{flex:1}.details small{display:block;color:#b7c0ca;margin-top:4px}.primary{background:#ffbe32;color:#151515;font-weight:700;border-color:#ffbe32}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.metric{padding:16px;background:#242b35;border-radius:12px}.metric b{font-size:30px;display:block}.metric span{color:#bdc5d0}ul{padding-left:22px;line-height:1.9}footer{margin:24px 0;color:#9aa5b5;font-size:13px}[hidden]{display:none!important}@media(max-width:420px){main{padding:16px 12px}header{padding:14px}header small{font-size:12px}}
+</style>
+</head><body><header><b>VARGA CANTIERI</b><small>2.0 · Laboratorio</small></header>
+<main>
+<div class="notice">DEMO OFFLINE — aziende e utenti inventati. Nessun accesso a Firebase, nessun dato reale, nessuna registrazione effettiva.</div>
+<h1>Il tuo ambiente di lavoro</h1><p>Prova a cambiare utente e azienda per vedere come potrebbe funzionare il nuovo accesso.</p>
+<section class="panel"><label for="identity">Utente dimostrativo</label><select id="identity"><option value="alice">Alice · operatrice Demo A</option><option value="bob">Bob · amministratore Demo B</option><option value="multi">Marco · membro di A e B</option><option value="none">Utente senza aziende</option></select></section>
+<section class="panel" id="selector"><h2>Seleziona azienda</h2><div id="companies"></div></section>
+<section class="panel" id="workspace" hidden aria-live="polite"><h2 id="companyName"></h2><p id="role"></p><div class="grid"><div class="metric"><b id="jobs"></b><span>Commesse demo</span></div><div class="metric"><b id="workers"></b><span>Operatori demo</span></div></div><h3>Commesse di esempio</h3><ul id="jobList"></ul><button id="back" class="primary">Cambia azienda</button></section>
+<footer>Prototipo visivo: la separazione dei dati è simulata in memoria, non costituisce sicurezza reale. La registrazione, gli inviti e i permessi effettivi richiedono un backend verificato.</footer>
+</main>
+<script>
+'use strict';
+const companies = Object.freeze({a:{name:'Demo A · Verde',initials:'VA',workers:8,jobs:['Manutenzione parco Nord','Sfalcio area Sud']},b:{name:'Demo B · Edilizia',initials:'EB',workers:3,jobs:['Ristrutturazione edificio Est']}});
+const membership = Object.freeze({alice:{a:'Operatrice'},bob:{b:'Amministratore'},multi:{a:'Responsabile',b:'Operatore'},none:{}});
+const el = id => document.getElementById(id);
+let active = null;
+function allowed(){return membership[el('identity').value] || {};}
+function clearWorkspace(){active=null;el('companyName').textContent='';el('role').textContent='';el('jobs').textContent='';el('workers').textContent='';el('jobList').replaceChildren();el('workspace').hidden=true;el('selector').hidden=false;}
+function showCompanies(){clearWorkspace();const host=el('companies');host.replaceChildren();const entries=Object.entries(allowed());if(!entries.length){const p=document.createElement('p');p.textContent='Nessuna azienda associata. In futuro potrai richiedere un invito.';host.append(p);}
+for(const [id,role] of entries){const company=companies[id];const btn=document.createElement('button');btn.type='button';btn.className='company';const initials=document.createElement('span');initials.className='initials';initials.textContent=company.initials;const details=document.createElement('span');details.className='details';const name=document.createElement('b');name.textContent=company.name;const subtitle=document.createElement('small');subtitle.textContent=role;details.append(name,subtitle);btn.append(initials,details);btn.addEventListener('click',()=>openCompany(id));host.append(btn);}}
+function openCompany(id){clearWorkspace();if(!Object.hasOwn(allowed(),id)||!Object.hasOwn(companies,id))return;active=id;const company=companies[active];el('companyName').textContent=company.name;el('role').textContent='Ruolo demo: '+allowed()[active];el('jobs').textContent=String(company.jobs.length);el('workers').textContent=String(company.workers);for(const job of company.jobs){const li=document.createElement('li');li.textContent=job;el('jobList').append(li);}el('selector').hidden=true;el('workspace').hidden=false;}
+el('identity').addEventListener('change',showCompanies);el('back').addEventListener('click',showCompanies);showCompanies();
+</script></body></html>

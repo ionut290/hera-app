@@ -10,6 +10,11 @@ export function projectVerdeRecords(snapshot) {
       const value = data[field];
       if (typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) record[field] = value;
     }
+    for (const field of ['createdAt','updatedAt']) {
+      const value = data[field];
+      const millis = typeof value?.toMillis === 'function' ? value.toMillis() : value instanceof Date ? value.getTime() : null;
+      if (Number.isFinite(millis) && Math.abs(millis) <= 8640000000000000) record[field] = millis;
+    }
     return Object.freeze(record);
   });
 }

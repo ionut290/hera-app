@@ -18,5 +18,5 @@ export async function createOriginalArchiveRouter({db,user,tenantId,sdk}){
   if(!operational.has(name))throw Error('Collection not approved');
   return 'tenants/'+context.tenantId+'/'+name;
  }
- return Object.freeze({context,path,close(){closed=true;}});
+ return Object.freeze({projectId:db.app.options.projectId,context,path,close(){closed=true;}});
 }

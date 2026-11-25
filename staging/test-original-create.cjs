@@ -9,6 +9,7 @@ function extractSync(name){const start=source.indexOf('function '+name+'(');asse
 (async()=>{
  assert(process.env.FIRESTORE_EMULATOR_HOST,'Emulator required');
  const {createOriginalCollectionBridge}=await import('./original-collection-bridge.mjs');
+ const {createOriginalFirestoreCompat}=await import('./original-firestore-compat.mjs');
  const env=await initializeTestEnvironment({projectId:'demo-varga-original-create',firestore:{rules:fs.readFileSync(process.argv[2],'utf8')}});
  let count=0;
  try{
@@ -21,10 +22,11 @@ function extractSync(name){const start=source.indexOf('function '+name+'(');asse
  }}});
  const dbFor=uid=>env.authenticatedContext(uid,{email_verified:true,email:uid+'@example.test'}).firestore();
  const make=(uid,tenant,role='admin')=>{
- const db=dbFor(uid),bridge=createOriginalCollectionBridge({path:n=>{assert.equal(n,'commesse');return 'tenants/'+tenant+'/'+n;},close(){}});
+ const db=dbFor(uid),router={projectId:'demo-varga-original-create',context:{tenantId:tenant},path:n=>{assert.equal(n,'commesse');return 'tenants/'+tenant+'/'+n;},close(){}},bridge=createOriginalCollectionBridge(router);
  const ref=path=>({async add(data){return addDoc(collection(db,path),{...data});},doc(id){assert(!id.includes('/'));return {collection(n){assert.equal(n,'impianti');return ref(path+'/'+id+'/'+n);}};}});
+ const compat=createOriginalFirestoreCompat({db:{app:{options:{projectId:'demo-varga-original-create'}},collection:ref},router});
  const user={uid,email:uid+'@example.test'},alerts=[],prompts=['Parco demo','SAP-1'];
- const scope=vm.createContext({auth:{currentUser:user},currentUser:user,ui:{commessaName:{value:'Verde demo'},commessaCode:{value:'V1'},commessaType:{value:'main'},commessaParent:{value:''},commessaForm:{reset(){}}},alert:m=>alerts.push(m),canManageData:()=>role==='admin',db:{collection:p=>{assert.equal(p,'tenants/'+tenant+'/commesse');return ref(p);}},getCommesseCollectionName:()=>bridge.getCommesseCollectionName(false),firebase:{firestore:{FieldValue:{serverTimestamp}}},driveAccessToken:null,closeNewCommessaDialog(){},updateCommessaParentField(){},window:{prompt:()=>prompts.shift()},managementCommessaId:'',commesseById:new Map(),getCommessaCachedImpianti:()=>[],normalizeManagementSearch:v=>String(v).trim().toLowerCase(),getOperatorDisplayName:()=>uid,managementEditingId:'',console});
+ const scope=vm.createContext({auth:{currentUser:user},currentUser:user,ui:{commessaName:{value:'Verde demo'},commessaCode:{value:'V1'},commessaType:{value:'main'},commessaParent:{value:''},commessaForm:{reset(){}}},alert:m=>alerts.push(m),canManageData:()=>role==='admin',db:compat,getCommesseCollectionName:()=>bridge.getCommesseCollectionName(false),firebase:{firestore:{FieldValue:{serverTimestamp}}},driveAccessToken:null,closeNewCommessaDialog(){},updateCommessaParentField(){},window:{prompt:()=>prompts.shift()},managementCommessaId:'',commesseById:new Map(),getCommessaCachedImpianti:()=>[],normalizeManagementSearch:v=>String(v).trim().toLowerCase(),getOperatorDisplayName:()=>uid,managementEditingId:'',console});
  vm.runInContext([extract('createCommessa'),extract('addManagementImpianto'),extractSync('validateManagementPlant')].join('\n'),scope);
  return {scope,db,alerts};
  };
@@ -62,6 +64,9 @@ function extractSync(name){const start=source.indexOf('function '+name+'(');asse
  await env.withSecurityRulesDisabled(async ctx=>setDoc(doc(ctx.firestore(),'tenants','demo-a'),{originalCreateEnabled:false},{merge:true}));
  a.scope.ui.commessaType.value='main';a.scope.ui.commessaParent.value='';
  await assertFails(a.scope.createCommessa(click));count++;
- console.log('ORIGINAL HANDLERS: '+count+'/17');assert.equal(count,17);
+ assert.throws(()=>a.scope.db.collection('tenants/demo-b/commesse'));count++;
+ assert.throws(()=>a.scope.db.collection('appConfig'));count++;
+ a.scope.db.close();assert.throws(()=>a.scope.db.collection('commesse'));count++;
+ console.log('ORIGINAL HANDLERS: '+count+'/20');assert.equal(count,20);
  }finally{await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -37,3 +37,27 @@ jobs:
       - run: npm run build
         env:
           VITE_FIREBASE_API_KEY: compile-only-placeholder
+  firestore-emulator:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare isolated emulator
+        working-directory: staging
+        run: |
+          npm install --no-save --no-audit --no-fund firebase@13.4.0 @firebase/rules-unit-testing@6 firebase-tools@15.34.2
+          python3 -c "from pathlib import Path; b=Path('firestore-emulator-base.rules').read_text(); assert b.count('// VERDE_FRAGMENT')==1; Path('candidate.rules').write_text(b.replace('// VERDE_FRAGMENT',Path('verde-levato-readonly.rules.fragment').read_text()))"
+          printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > emulator-ci.json
+      - name: Test tenant isolation
+        working-directory: staging
+        run: npx --no-install firebase emulators:exec --config emulator-ci.json --only firestore --project demo-varga-verde-isolation 'node test-verde-isolation.cjs candidate.rules'

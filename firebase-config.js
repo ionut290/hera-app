@@ -1,11 +1,13 @@
-window.firebaseConfig = {
-  apiKey: "AIzaSyBHZG9D1H5YOT9QUzG-cdSdftlreDJNa_k",
-  authDomain: "hera-app-6cd2b.firebaseapp.com",
-  projectId: "hera-app-6cd2b",
-  storageBucket: "hera-app-6cd2b.firebasestorage.app",
-  messagingSenderId: "645390631375",
-  appId: "1:645390631375:web:df3659a23812560e4012ba"
-};
+// STAGING ONLY: supply the public Firebase web API key through a local runtime config.
+// Never reuse production Firebase credentials in this branch.
+const stagingFirebaseConfig = window.__VARGA_STAGING_FIREBASE_CONFIG__;
+window.firebaseConfig = Object.freeze({
+  apiKey: typeof stagingFirebaseConfig?.apiKey === "string" ? stagingFirebaseConfig.apiKey : "STAGING_KEY_NOT_CONFIGURED",
+  authDomain: "varga-cantieri-v2-staging.firebaseapp.com",
+  projectId: "varga-cantieri-v2-staging",
+  messagingSenderId: "394791335182",
+  appId: "1:394791335182:web:6c31c93ac34e64c881935f"
+});
 
 function recoverAbandonedFirestoreDiagnosticListeners() {
   const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Rome" });

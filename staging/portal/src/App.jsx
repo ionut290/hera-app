@@ -4,12 +4,13 @@ import {
   onAuthStateChanged,
   signOut
 } from 'firebase/auth';
-import { collection, getDocs, getDoc, doc, setDoc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, getDoc, getDocsFromServer, getDocFromServer, doc, setDoc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import './App.css';
 import pilotSource from '../../verde-levato-pilot.mjs?raw';
 import { buildVerdeFrame } from './verde-frame.mjs';
-const verdeFrame = buildVerdeFrame(pilotSource);
+import { loadTenantVerde } from '../../verde-tenant-loader.mjs';
+const VERDE_SERVER_ENABLED = false; // Enable only after staging rules and browser verification.
 import { resolveTenantContext } from '../../tenant-context.mjs';
 
 
@@ -17,9 +18,23 @@ function TenantPortal({ user, companies }) {
   const [selected, setSelected] = useState(null);
   const [verdeOpen, setVerdeOpen] = useState(false);
   const verdeRef = useRef(null);
+  const [verdeFrame, setVerdeFrame] = useState('');
+  const [verdeError, setVerdeError] = useState('');
+  const revision = useRef(0);
+  function closeVerde() { revision.current++; setVerdeOpen(false); setVerdeFrame(''); setVerdeError(''); }
+  async function openVerde() {
+    const request = ++revision.current;
+    setVerdeError(''); setVerdeOpen(false); setVerdeFrame('');
+    try {
+      const records = VERDE_SERVER_ENABLED ? await loadTenantVerde({db,user,tenantId:selected.id,sdk:{doc,collection,getDocFromServer,getDocsFromServer}}) : [];
+      if (request !== revision.current || auth.currentUser?.uid !== user.uid) return;
+      setVerdeFrame(buildVerdeFrame(pilotSource,records)); setVerdeOpen(true);
+    } catch { if (request === revision.current) setVerdeError('Archivio non disponibile.'); }
+  }
+  useEffect(() => () => { revision.current++; }, []);
   useEffect(() => {
     const close = event => {
-      if (event.origin === 'null' && event.source === verdeRef.current?.contentWindow && event.data === 'varga-verde-close') setVerdeOpen(false);
+      if (event.origin === 'null' && event.source === verdeRef.current?.contentWindow && event.data === 'varga-verde-close') closeVerde();
     };
     window.addEventListener('message', close);
     return () => window.removeEventListener('message', close);
@@ -67,7 +82,7 @@ function TenantPortal({ user, companies }) {
           </>
         ) : (
           <>
-            <button onClick={() => { setVerdeOpen(false); setSelected(null); }}>
+            <button onClick={() => { closeVerde(); setSelected(null); }}>
               Cambia azienda
             </button>
 
@@ -79,12 +94,13 @@ function TenantPortal({ user, companies }) {
                 <h3>Area aziendale</h3>
                 <p>Accesso effettuato correttamente.</p>
                 <small>Moduli operativi in sviluppo.</small>
-                <p><button onClick={() => setVerdeOpen(true)}>🌱 Verde Levato — anteprima demo</button></p>
+                <p><button onClick={openVerde}>🌱 Verde Levato — anteprima demo</button></p>
               </div>
             </article>
+            {verdeError && <p role="alert">{verdeError}</p>}
             {verdeOpen && (
               <section aria-label="Anteprima Verde Levato">
-                <button onClick={() => setVerdeOpen(false)}>Chiudi Verde Levato</button>
+                <button onClick={closeVerde}>Chiudi Verde Levato</button>
                 <p>Archivio dimostrativo vuoto. Nessun collegamento ai dati aziendali reali.</p>
                 <iframe key={selected.id} title="Verde Levato demo" ref={verdeRef} srcDoc={verdeFrame} sandbox="allow-scripts" style={{width:'100%',height:'75vh',border:'1px solid #ccd5ce',borderRadius:8,background:'white'}} />
               </section>

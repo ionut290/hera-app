@@ -22,8 +22,8 @@ jobs:
       - name: Install isolated test dependencies
         working-directory: tests/multi-tenant
         run: |
-          npm install --no-save --package-lock=false firebase@11.10.0 @firebase/rules-unit-testing@4.0.1 firebase-tools@14
+          npm install --no-save --package-lock=false firebase@11.10.0 @firebase/rules-unit-testing@4.0.1 firebase-tools@14 firebase-admin@13
       - name: Run Firestore synthetic tenant tests
         working-directory: tests/multi-tenant
         run: |
-          npx firebase emulators:exec --only firestore --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs'
+          npx firebase emulators:exec --only firestore --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs && node tenant-service.emulator.test.cjs'

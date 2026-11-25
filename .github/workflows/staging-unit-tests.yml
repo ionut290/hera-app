@@ -62,3 +62,21 @@ jobs:
       - name: Test tenant isolation
         working-directory: staging
         run: npx --no-install firebase emulators:exec --config emulator-ci.json --only firestore --project demo-varga-verde-isolation 'node test-shared-isolation.cjs candidate.rules && node test-fatto-policy.cjs candidate.rules && node test-cobo-write.cjs candidate.rules && node test-commesse-write.cjs candidate.rules && node test-original-create.cjs candidate.rules && node test-original-native.cjs candidate.rules && node test-original-archives.cjs candidate.rules'
+  original-preview-browser:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: staging/portal
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.55.0
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: node test-original-preview-browser.cjs

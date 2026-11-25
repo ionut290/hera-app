@@ -5,19 +5,57 @@ export function buildOriginalPreviewFrame(original,role){
  const script=String.raw`
 const get=id=>document.getElementById(id);
 const ui={commessaName:get('commessa-name'),commessaCode:get('commessa-code'),commessaType:get('commessa-type'),commessaParent:get('commessa-parent'),commessaForm:get('commessa-form'),commesseManageList:get('commesse-manage-list')};
+Object.assign(ui,{commessaTargetSelect:get('commessa-target-select'),manualImpiantoForm:get('manual-impianto-form'),manualImpiantoDenominazione:get('manual-impianto-denominazione'),manualImpiantoComune:get('manual-impianto-comune'),manualImpiantoIndirizzo:get('manual-impianto-indirizzo'),manualImpiantoCodice:get('manual-impianto-codice'),manualImpiantoFeedback:get('manual-impianto-feedback')});
 const commesseById=new Map();
+const impiantiByCommessaId=new Map();
+let selectedCommessaId='',selectedCommessaName='';const currentImpianti=[];
 const auth={currentUser:{email:'demo@example.test'}};
 const canManageData=()=>true;
 const getCommesseCollectionName=()=> 'commesse';
 const driveAccessToken=null;
 const firebase={firestore:{FieldValue:{serverTimestamp:()=>new Date()}}};
 const firestoreDateToMillis=v=>v instanceof Date?v.getTime():0;
-const getCommessaStats=()=>({total:0});
+const getCommessaStats=id=>({total:(impiantiByCommessaId.get(id)||[]).length});
 const unavailable=()=>{get('preview-feedback').textContent='Funzione non ancora collegata in questa anteprima.';};
-const openImpiantiManagement=unavailable,renameCommessa=unavailable,clearCommessaImpianti=unavailable,deleteCommessa=unavailable;
+const renameCommessa=unavailable,clearCommessaImpianti=unavailable,deleteCommessa=unavailable;
 let nextId=0;
-const db={collection(n){if(n!=='commesse')throw Error('Archive denied');return {async add(data){const id='demo-'+(++nextId);commesseById.set(id,normalizeCommessaDocument({id,data:()=>data}));renderList();return {id};}};}};
-function renderList(){renderCommesseManagementList();for(const el of ui.commesseManageList.querySelectorAll('button')){el.disabled=true;el.title='Non ancora disponibile in questa anteprima';}}
+const db={collection(n){
+ if(n!=='commesse')throw Error('Archive denied');
+ return {
+ async add(data){const id='demo-'+(++nextId);commesseById.set(id,normalizeCommessaDocument({id,data:()=>data}));renderList();return {id};},
+ doc(id){
+ if(!commesseById.has(id))throw Error('Parent missing');
+ return {
+ async set(data,options){if(options?.merge!==true||Object.keys(data).some(k=>k!=='nextImpiantoNumber'))throw Error('Update denied');Object.assign(commesseById.get(id),data);},
+ collection(name){
+ if(name!=='impianti')throw Error('Archive denied');
+ if(!impiantiByCommessaId.has(id))impiantiByCommessaId.set(id,[]);
+ const rows=impiantiByCommessaId.get(id);
+ return {
+ async get(){return {docs:rows.map(row=>({id:row.id,data:()=>({...row})}))};},
+ async add(data){if(data.done!==false||data.doneAt!==null)throw Error('Completion denied');const plantId='plant-'+(++nextId);rows.push({...data,id:plantId});return {id:plantId};},
+ doc(plantId){return {async update(data){const row=rows.find(r=>r.id===plantId);if(!row||Object.keys(data).some(k=>!['codicePrezzo','voceRiferimento','tipologiaIntervento','lavorazioniRichieste','frequenzaAnnua','hasOrdinario','hasStraordinario','tipoManutenzione'].includes(k)))throw Error('Update denied');Object.assign(row,data);}};}
+ };
+ }
+ };
+ }
+ };
+}};
+function renderList(){
+ renderCommesseManagementList();
+ for(const el of ui.commesseManageList.querySelectorAll('button')){
+ if(!['APRI','Gestisci impianti'].includes(el.textContent.trim())){el.disabled=true;el.title='Non ancora disponibile in questa anteprima';}
+ else el.addEventListener('click',()=>{selectedCommessaId=managementCommessaId;selectedCommessaName=commesseById.get(managementCommessaId)?.nome||'';refreshPlants();});
+ }
+}
+function refreshPlants(){
+ managementEditingId='';
+ renderImpiantiManagementTable();
+ const n=getCommessaStats(managementCommessaId).total;
+ get('impianti-management-meta').textContent='Cod. '+(commesseById.get(managementCommessaId)?.codice||'—')+' • '+n+' '+(n===1?'impianto':'impianti');
+ for(const el of get('impianti-management-screen').querySelectorAll('[data-row-action],[data-select-row],[data-select-all]'))el.disabled=true;
+}
+
 `+'\n'+original.handlers+String.raw`
 get('panel-commesse').classList.remove('hidden');
 get('open-organize-commesse-btn').disabled=true;
@@ -27,6 +65,15 @@ get('commesse-management-search').addEventListener('input',renderList);
 ui.commessaForm.addEventListener('submit',event=>createCommessa(event).catch(()=>{get('preview-feedback').textContent='Creazione demo non riuscita.';}));
 document.addEventListener('submit',event=>event.preventDefault());
 updateCommessaParentField();renderList();
+get('close-impianti-management-btn').addEventListener('click',()=>{closeImpiantiManagement();selectedCommessaId='';selectedCommessaName='';renderList();});
+const manualDetails=ui.manualImpiantoForm.closest('details');
+get('add-management-impianto-btn').addEventListener('click',()=>{manualDetails.open=true;ui.manualImpiantoDenominazione.focus();});
+for(const id of ['toggle-import-impianti-btn','export-all-impianti-btn','open-prezziario-btn','sheet-url-import-btn','download-excel-template-btn','excel-file','sheet-url'])get(id).disabled=true;
+get('snow-roads-section').classList.add('hidden');
+ui.manualImpiantoForm.addEventListener('submit',event=>addManualImpianto(event).then(refreshPlants).catch(()=>{ui.manualImpiantoFeedback.textContent='Inserimento demo non riuscito.';}));
+get('impianti-management-search').addEventListener('input',refreshPlants);
+get('clear-impianti-management-search').addEventListener('click',()=>{get('impianti-management-search').value='';refreshPlants();});
+for(const id of ['impianti-status-filter','impianti-comune-filter','impianti-tipologia-filter','impianti-operatore-filter'])get(id).addEventListener('change',refreshPlants);
 `;
  const markup=original.markup;
  const css=original.css.replace(/<\/style/gi,'<\\/style');

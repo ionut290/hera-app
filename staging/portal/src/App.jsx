@@ -5,7 +5,7 @@ import {
   signOut
 } from 'firebase/auth';
 import { collection, getDocs, getDoc, getDocsFromServer, getDocFromServer, doc, setDoc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth, db } from './firebase-staging.js';
 import './App.css';
 import pilotSource from '../../verde-levato-pilot.mjs?raw';
 import { buildVerdeFrame } from './verde-frame.mjs';

@@ -14,6 +14,7 @@ on:
         options:
           - DO_NOT_UPLOAD
           - UPLOAD_APP_STORE_CANDIDATE_ONLY
+          - UPLOAD_20029_PRIVACY_CORRECTION_ONLY
       build_number:
         description: "New CFBundleVersion above approved build 20029; verify live ASC first"
         type: string
@@ -34,7 +35,7 @@ permissions:
 jobs:
   preflight:
     name: Preflight on Linux (no Apple secrets or upload)
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY' || inputs.approval == 'UPLOAD_20029_PRIVACY_CORRECTION_ONLY') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -42,6 +43,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Validate manual input before allocating a macOS runner
         shell: bash
         env:
@@ -62,18 +64,39 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Refuse App Store upload until all review blockers are resolved
+      - name: Refuse ordinary App Store upload until all review blockers are resolved
+        if: inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY'
         shell: bash
+        run: node scripts/audit-app-review-full-access.cjs --require-ready
+
+      - name: Verify one-time owner-authorized privacy correction upload
+        if: inputs.approval == 'UPLOAD_20029_PRIVACY_CORRECTION_ONLY'
+        shell: bash
+        env:
+          IOS_BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
-          # READINESS=BLOCKED must be a failure here, unlike the read-only
-          # reporting workflow where it is emitted as a warning/summary.
-          node scripts/audit-app-review-full-access.cjs --require-ready
+          # Previous distributed version: 1.0 (20029), source proven by run
+          # 44910971948 and App Store Connect approval on 2026-11-25.
+          BASE=ad97b02eb8d275274d1a982dcd376eefb67419fa
+          [[ "$GITHUB_REF" == refs/heads/release/ios-1.0.1-from-approved-20029 ]]
+          [[ "$IOS_BUILD_NUMBER" == 20030 ]]
+          git merge-base --is-ancestor "$BASE" HEAD
+          # No functional, data, backend or security-rule changes are allowed.
+          git diff --exit-code "$BASE" HEAD -- . ':(exclude).github/workflows/ios-appstore-candidate.yml' ':(exclude).github/workflows/build-ios-simulator.yml'
+          echo "::warning::Owner authorized upload-only for urgent screenshot privacy correction. This does not certify App Review readiness."
+          node scripts/audit-app-review-full-access.cjs | tee "$RUNNER_TEMP/review-readiness.json"
+          {
+            echo '### Privacy correction: upload only'
+            echo 'Source matches approved build 20029; ordinary release gate is unchanged.'
+            echo 'App Review readiness remains separately unverified. No review submission or publication by this workflow.'
+            echo 'See Apple support case 103024475125 and successful unsigned compile run 45632534378.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   upload-appstore-candidate:
     name: Sign and upload App Store-eligible candidate (NO submission)
     needs: preflight
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY' || inputs.approval == 'UPLOAD_20029_PRIVACY_CORRECTION_ONLY') }}
     runs-on: macos-26
     timeout-minutes: 90
     # Existing protected environment holds validated Apple signing credentials.
@@ -342,7 +365,7 @@ jobs:
             > "$RUNNER_TEMP/ios-appstore-candidate-upload.log" 2>&1 ||
             { tail -n 80 "$RUNNER_TEMP/ios-appstore-candidate-upload.log"; exit 1; }
           echo "App Store-eligible candidate uploaded to App Store Connect only."
-          echo "NOT submitted to App Review. NOT released to customers. Select the new build manually in App Store Connect."
+          echo "NOT submitted to App Review. NOT released to customers. Check privacy and review readiness separately before submitting."
 
       - name: Remove temporary Apple signing material and Firebase configuration
         if: always()

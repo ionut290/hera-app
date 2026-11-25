@@ -1,0 +1,14 @@
+const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
+const {doc,setDoc,serverTimestamp}=require('firebase/firestore');const fs=require('node:fs');
+(async()=>{const env=await initializeTestEnvironment({projectId:'demo-varga-commesse-write',firestore:{rules:fs.readFileSync(process.argv[2],'utf8')}});
+try{await env.clearFirestore();await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();for(const t of ['azienda-a','azienda-b']){await setDoc(doc(db,'tenants',t),{demo:true,status:'active'});for(const [u,role] of [['admin','admin'],['worker','employee']]){await setDoc(doc(db,'tenants',t,'members',u),{status:'active',role});await setDoc(doc(db,'users',u,'memberships',t),{tenantId:t,status:'active',role});}}});
+const db=uid=>env.authenticatedContext(uid,{email_verified:true}).firestore();const comm=(uid,t,id)=>doc(db(uid),'tenants',t,'commesse',id);const site=(uid,t,c,id)=>doc(db(uid),'tenants',t,'commesse',c,'impianti',id);
+const cdata=()=>({nome:'Giardinaggio',createdBy:'admin',createdAt:serverTimestamp()});
+await assertSucceeds(setDoc(comm('admin','azienda-a','giardinaggio'),cdata()));
+await assertFails(setDoc(comm('worker','azienda-a','potature'),{...cdata(),createdBy:'worker'}));
+await assertSucceeds(setDoc(site('worker','azienda-a','giardinaggio','cantiere-1'),{id:'cantiere-1',commessaId:'giardinaggio',nome:'Parco',createdBy:'worker',createdAt:serverTimestamp(),stato:'da_fare'}));
+await assertFails(setDoc(site('worker','azienda-a','giardinaggio','cantiere-2'),{id:'cantiere-2',commessaId:'giardinaggio',nome:'Parco',createdBy:'worker',createdAt:serverTimestamp(),done:true}));
+await assertFails(setDoc(comm('admin','azienda-b','giardinaggio'),{...cdata(),createdBy:'admin'}).then(()=>{throw Error('unexpected')}));
+await assertFails(setDoc(site('admin','azienda-b','giardinaggio','x'),{id:'x',commessaId:'giardinaggio',nome:'X',createdBy:'admin',createdAt:serverTimestamp()}));
+console.log('COMMESSE: 6 checks passed');
+}finally{await env.cleanup();}})().catch(e=>{console.error(e);process.exitCode=1;});

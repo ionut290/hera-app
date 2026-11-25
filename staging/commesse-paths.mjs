@@ -16,5 +16,6 @@ export function commessePath(context, commessaId, impiantoId) {
  return path;
 }
 export function commessaDocumentPath(context,commessaId) {
+ if(commessaId===undefined) throw new Error('Commessa required');
  return commessePath(context,commessaId).slice(0,-1);
 }

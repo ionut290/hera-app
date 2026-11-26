@@ -1,6 +1,6 @@
 // Staging adapter only; not installed in the legacy runtime.
 import {resolveTenantContext} from './tenant-context.mjs';
-const operational = new Set(['commesse','neve_commesse','globalCommesse','squadreCommesse','squadreStorico','neve_squadre','neve_squadre_storico','personale','neve_personale','mezzi','neve_mezzi','oreReports','neve_ore','oreApprovalRequests','neve_ore_richieste','programmazioni','calendarEvents','commessaResources','verdeLevatoRecords','verdeLevatoCommesse','verdeLevatoConfig']);
+const operational = new Set(['commesse','neve_commesse','globalCommesse','squadreCommesse','squadreStorico','neve_squadre','neve_squadre_storico','personale','neve_personale','mezzi','neve_mezzi','oreReports','neve_ore','oreApprovalRequests','neve_ore_richieste','programmazioni','calendarEvents','commessaResources','oreLocks','appConfig','verdeLevatoRecords','verdeLevatoCommesse','verdeLevatoConfig']);
 const allowedRoles=new Set(['admin','supervisor','employee']);
 export async function createOriginalArchiveRouter({db,user,tenantId,sdk,getCurrentUser}){
  if(db?.app?.options?.projectId!=='varga-cantieri-v2-staging')throw Error('Staging required');

@@ -42,3 +42,7 @@ The scoped auth facade exposes the existing original module's already-installed 
 ## Snow creation checkpoint
 
 The emulator candidate enables the original `createCommessa` handler for `neve_commesse`, with parent validation in the same snow archive, and the original `app-snow.js` road-list batch handler. Both are gated by explicit demo capability flags and admin membership. The test checks two companies, no green/snow leakage, and denied completion writes. Route edits, automatic completion, snow-specific price lists, existing local catalog data, and all production/native activation remain outside this change.
+
+## Startup archive alignment
+
+The company runtime router now matches the candidate read-only rules for oreLocks, normal and snow personnel/vehicles, and the three exact original appConfig startup documents. The appConfig collection itself, arbitrary settings, credentials, writes and cross-company reads remain denied by emulator rules. The integrated emulator verifies the original startup query shapes and repeated document IDs across two companies. No rules deployed; no production records touched.

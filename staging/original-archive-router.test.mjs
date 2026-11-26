@@ -8,9 +8,9 @@ function fixture(tenantId='demo-a'){
  const sdk={doc:(_, ...p)=>p.join('/'),getDocFromServer:async p=>({exists:()=>docs.has(p),data:()=>docs.get(p)})};
  return {db,user,tenantId,sdk,docs,getCurrentUser:()=>user};
 }
-test('original archives preserve names within tenant',async()=>{const r=await createOriginalArchiveRouter(fixture());for(const name of ['commesse','neve_commesse','globalCommesse','personale','mezzi','oreReports','calendarEvents','verdeLevatoRecords'])assert.equal(r.path(name),'tenants/demo-a/'+name);});
+test('original archives preserve names within tenant',async()=>{const r=await createOriginalArchiveRouter(fixture());for(const name of ['commesse','neve_commesse','globalCommesse','personale','mezzi','neve_personale','neve_mezzi','appConfig','oreLocks','oreReports','calendarEvents','verdeLevatoRecords'])assert.equal(r.path(name),'tenants/demo-a/'+name);});
 test('same archive names separate companies',async()=>{const a=await createOriginalArchiveRouter(fixture()),b=await createOriginalArchiveRouter(fixture('demo-b'));assert.notEqual(a.path('commesse'),b.path('commesse'));});
-test('unreviewed, sensitive and injected collections denied',async()=>{const r=await createOriginalArchiveRouter(fixture());for(const n of ['appConfig','platformUsers','users','driveAdminSecret','sheetExportQueue','tenants/demo-b/commesse','../commesse','unknown'])assert.throws(()=>r.path(n));});
+test('unreviewed, sensitive and injected collections denied',async()=>{const r=await createOriginalArchiveRouter(fixture());for(const n of ['platformUsers','users','driveAdminSecret','sheetExportQueue','tenants/demo-b/commesse','../commesse','unknown'])assert.throws(()=>r.path(n));});
 test('closed scope cannot be reused',async()=>{const r=await createOriginalArchiveRouter(fixture());r.close();assert.throws(()=>r.path('commesse'));});
 test('production rejected',async()=>{const f=fixture();f.db.app.options.projectId='hera-app-6cd2b';await assert.rejects(createOriginalArchiveRouter(f));});
 test('unverified account rejected',async()=>{const f=fixture();f.user.getIdTokenResult=async()=>({claims:{email_verified:false}});await assert.rejects(createOriginalArchiveRouter(f));});

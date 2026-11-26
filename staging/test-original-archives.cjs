@@ -5,7 +5,7 @@ const {doc,collection,setDoc,getDoc,getDocs,updateDoc,deleteDoc}=require('fireba
 (async()=>{
  assert(process.env.FIRESTORE_EMULATOR_HOST,'Emulator required');
  const env=await initializeTestEnvironment({projectId:'demo-varga-original-archives',firestore:{rules:fs.readFileSync(process.argv[2],'utf8')}});
- const paths=['personale','mezzi','squadreCommesse','squadreStorico','neve_squadre','neve_squadre_storico','oreReports','oreApprovalRequests','neve_ore','neve_ore_richieste','commessaResources','oreLocks','neve_commesse','neve_commesse/c1/impianti','globalCommesse','globalCommesse/c1/impianti'];
+ const paths=['personale','mezzi','neve_personale','neve_mezzi','squadreCommesse','squadreStorico','neve_squadre','neve_squadre_storico','oreReports','oreApprovalRequests','neve_ore','neve_ore_richieste','commessaResources','oreLocks','neve_commesse','neve_commesse/c1/impianti','globalCommesse','globalCommesse/c1/impianti'];
  let count=0;
  try{
  await env.clearFirestore();
@@ -38,6 +38,15 @@ const {doc,collection,setDoc,getDoc,getDocs,updateDoc,deleteDoc}=require('fireba
  await run(deleteDoc(ref(db('a'),'demo-a')),false);
  await run(getDocs(collection(db('a'),...p.split('/'))),false);
  }
+ const cfg=(uid,t,id)=>doc(db(uid),'tenants',t,'appConfig',id);
+ await env.withSecurityRulesDisabled(async ctx=>{for(const t of ['demo-a','demo-b'])for(const id of ['activeCommesse','squadreView','neveSquadreView','driveAdminSecret'])await setDoc(doc(ctx.firestore(),'tenants',t,'appConfig',id),{name:t});});
+ for(const id of ['activeCommesse','squadreView','neveSquadreView']){
+ await run(getDoc(cfg('worker','demo-a',id)),true);
+ await run(getDoc(cfg('b','demo-a',id)),false);
+ await run(updateDoc(cfg('a','demo-a',id),{name:'changed'}),false);
+ }
+ await run(getDoc(cfg('a','demo-a','driveAdminSecret')),false);
+ await run(getDocs(collection(db('a'),'tenants','demo-a','appConfig')),false);
  const event=(uid,id)=>doc(db(uid),'tenants','demo-a','calendarEvents',id);
  await run(getDoc(event('worker','public')),true);
  await run(getDoc(event('worker','private')),false);
@@ -50,7 +59,7 @@ const {doc,collection,setDoc,getDoc,getDocs,updateDoc,deleteDoc}=require('fireba
  await run(getDoc(program('worker','unassigned')),false);
  await run(getDoc(program('a','unassigned')),true);
  await run(getDoc(program('b','assigned')),false);
- console.log('ORIGINAL ARCHIVES READ ONLY: '+count+'/282');
- assert.equal(count,282);
+ console.log('ORIGINAL ARCHIVES READ ONLY: '+count+'/327');
+ assert.equal(count,327);
  }finally{await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

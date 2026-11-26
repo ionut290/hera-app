@@ -26,6 +26,8 @@ const {doc,setDoc,serverTimestamp}=require('firebase/firestore');
     await setDoc(doc(db,'users',uid,'memberships',id),{tenantId:id,role:'admin',status:'active'});
    }
    await setDoc(doc(db,'tenants',id,'commesse','same-id'),{nome:id});
+   for(const archive of ['personale','mezzi','neve_personale','neve_mezzi','squadreStorico','neve_squadre_storico'])await setDoc(doc(db,'tenants',id,archive,'same-id'),{nome:id+' '+archive,createdAt:new Date('2026-01-01'),dateKey:'2026-01-01'});
+   for(const config of ['activeCommesse','squadreView','neveSquadreView'])await setDoc(doc(db,'tenants',id,'appConfig',config),{fixture:id});
   }
  });
  const make=uid=>{
@@ -88,7 +90,22 @@ const {doc,setDoc,serverTimestamp}=require('firebase/firestore');
   assert.equal(state.prices[0].prezzoRibassato,core.calculateDiscountedPrice(base,0.01,discount/100));
   return id;
  };
- const first=await setup('demo-a');assert.equal(first.scope.canManageData(),true);
+ const first=await setup('demo-a');
+ const verifyStartupArchives=async (runtime,tenant)=>{
+  const scoped=runtime.prepared.session.firestore;
+  for(const name of ['personale','mezzi','neve_personale','neve_mezzi']){
+   const rows=await scoped.collection(name).orderBy('createdAt','asc').get({source:'server'});
+   assert.equal(rows.size,1);assert.equal(rows.docs[0].data().nome,tenant+' '+name);
+  }
+  for(const name of ['squadreStorico','neve_squadre_storico']){
+   const rows=await scoped.collection(name).where('dateKey','==','2026-01-01').get({source:'server'});
+   assert.equal(rows.size,1);assert.equal(rows.docs[0].data().nome,tenant+' '+name);
+  }
+  for(const config of ['activeCommesse','squadreView','neveSquadreView'])assert.equal((await scoped.collection('appConfig').doc(config).get({source:'server'})).data().fixture,tenant);
+  await assertFails(scoped.collection('appConfig').doc('driveAdminSecret').get({source:'server'}));
+  await assertFails(scoped.collection('appConfig').get({source:'server'}));
+ };
+ await verifyStartupArchives(first,'demo-a');assert.equal(first.scope.canManageData(),true);
  await first.scope.createCommessa({preventDefault(){}});
  const listA=await first.prepared.session.firestore.collection('commesse').get({source:'server'});
  const newA=listA.docs.find(x=>x.data().nome==='Commessa integrata demo-a');assert(newA);
@@ -97,7 +114,7 @@ const {doc,setDoc,serverTimestamp}=require('firebase/firestore');
  const plants=await newA.ref.collection('impianti').get({source:'server'});
  assert.equal(plants.size,1);assert.equal(plants.docs[0].data().done,false);assert.equal(plants.docs[0].data().codicePrezzo,'A11');
  const priceA=await priceEditor(first,newA,12,10);
- const second=await setup('demo-b');assert.equal(first.scope.canManageData(),false);assert.throws(()=>newA.ref.collection('impianti'));
+ const second=await setup('demo-b');await verifyStartupArchives(second,'demo-b');console.log('INTEGRATED STARTUP ARCHIVES: personnel, vehicles, snow archives, team history and exact configuration documents isolated.');assert.equal(first.scope.canManageData(),false);assert.throws(()=>newA.ref.collection('impianti'));
  const listB=await second.prepared.session.firestore.collection('commesse').get({source:'server'});
  assert(!listB.docs.some(x=>x.id===newA.id));assert(!listB.docs.some(x=>x.data().nome==='Commessa integrata demo-a'));
  await second.scope.createCommessa({preventDefault(){}});

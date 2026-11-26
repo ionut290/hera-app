@@ -19,6 +19,7 @@ jobs:
         with:
           node-version: '22'
       - run: node --test staging/*.test.mjs
+      - run: node staging/audit-original-runtime.mjs
   portal-build:
     if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
     runs-on: ubuntu-latest

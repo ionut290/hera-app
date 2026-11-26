@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {auditOriginalRuntime} from './audit-original-runtime.mjs';
+test('inventory includes full original app and snow sources, not reconstructed UI',()=>{const r=auditOriginalRuntime();assert(r.originalAssets>90);assert(r.modules.some(m=>m.file==='app.js'));assert(r.modules.some(m=>m.file.startsWith('piano-neve/')));assert(r.archiveCandidates.commesse);assert.equal(r.productionDeploymentAllowed,false);});

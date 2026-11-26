@@ -1,5 +1,8 @@
 name: Varga Cantieri 2.0 isolated iOS compile
 on:
+  push:
+    branches: [varga-cantieri-v2-staging]
+    paths: ['.github/workflows/staging-ios-isolated-compile.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -8,6 +11,9 @@ jobs:
     if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
     runs-on: macos-26
     timeout-minutes: 40
+    concurrency:
+      group: varga-staging-ios-compile
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:

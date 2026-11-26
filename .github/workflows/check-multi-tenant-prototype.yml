@@ -1,13 +1,13 @@
 name: Multi-tenant prototype (local emulator only)
 on:
   push:
-    branches: ['development/multi-azienda-v2']
+    branches: ['development/multi-azienda-v2', 'development/multi-azienda-v2-full-app']
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   isolation:
-    if: github.ref == 'refs/heads/development/multi-azienda-v2'
+    if: github.ref == 'refs/heads/development/multi-azienda-v2' || github.ref == 'refs/heads/development/multi-azienda-v2-full-app'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

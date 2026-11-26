@@ -31,6 +31,19 @@ async function main(){
   const root='tenants/'+tenantId;
   assert.equal((await adapter.db.doc(root+'/members/'+owner.uid).get()).data().role,'owner');
   assert.equal((await adapter.db.doc(root+'/members/'+worker.uid).get()).exists,false);
+  // Provision a second company through the real local Auth adapter, not mock UI.
+  await adapter.db.doc(root+'/commesse/synthetic-existing').set({name:'Synthetic existing job'});
+  const emptyOwner=await account('empty-owner');
+  const emptyCompany=await call(admin,'createCompany',{name:'Synthetic empty company',ownerEmail:emptyOwner.email});
+  assert.notEqual(emptyCompany.tenantId,tenantId);
+  const emptyRoot='tenants/'+emptyCompany.tenantId;
+  for(const module of ['commesse','personale','squadre','mezzi','neve_commesse','servizioNevePercorsi','documents','rapportini']){
+    assert.equal((await adapter.db.collection(emptyRoot+'/'+module).limit(1).get()).empty,true,'New tenant unexpectedly contains '+module);
+  }
+  assert.equal((await adapter.db.doc(emptyRoot+'/members/'+emptyOwner.uid).get()).data().role,'owner');
+  assert.equal((await adapter.db.doc(emptyRoot+'/members/'+owner.uid).get()).exists,false);
+  assert.equal((await adapter.db.doc(root+'/commesse/synthetic-existing').get()).data().name,'Synthetic existing job');
+  await rejects(()=>call(owner,'invite',{tenantId:emptyCompany.tenantId,recipientEmail:worker.email,role:'worker'}),'forbidden');
   const invitation=await call(owner,'invite',{tenantId,recipientEmail:worker.email,role:'worker'});
   await call(worker,'accept',{tenantId,inviteToken:invitation.token,role:'owner'});
   assert.equal((await adapter.db.doc(root+'/members/'+worker.uid).get()).data().role,'worker');

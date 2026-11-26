@@ -13,9 +13,9 @@ export function createEstimateWorkbook(ExcelJS,contract,items,columns,summarize)
   if(['prezzoBase','prezzoRibassato','totale'].includes(f))col.numFmt='€ #,##0.00';
  });
  ws.getColumn(fields.length+1).width=24;
- for(const sheet of [ws,summary]){sheet.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};sheet.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF166534'}};}
  const report=summarize(items);
  summary.addRows([['STIMA DIMOSTRATIVA — NON CONSUNTIVO',''],['Commessa',String(contract.nome||'')],['Codice commessa',String(contract.codice||'')],['Lavorazioni',report.rows],['Valorizzate',report.verified],['Da verificare',report.missing],['Importo stimato parziale',report.estimated],['Nota','Solo importi valorizzati; non attesta lavorazioni eseguite, IVA o fatturazione.']]);
+ for(const sheet of [ws,summary]){sheet.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};sheet.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF166534'}};}
  summary.getColumn(1).width=45;summary.getColumn(2).width=85;summary.getCell('B7').numFmt='€ #,##0.00';
  return wb;
 }

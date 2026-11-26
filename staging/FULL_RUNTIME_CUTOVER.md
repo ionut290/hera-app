@@ -8,3 +8,7 @@ The owner has chosen the complete original root application over rebuilding isol
 4. Integrate the original runtime only after those gates are verified, then run full browser/mobile and tenant isolation tests. Keep the Netlify deployment block and native submission block. No paid services or production config changes.
 
 No live data migration, Firebase deployment or TestFlight upload is authorized by this source change. The demo portal is not the operational app.
+
+## Candidate source integration
+
+`original-runtime-source.mjs` prepares the complete original `app.js` in memory by replacing only the initial SDK acquisition statements. The generated candidate is syntax-checked and reversibility is tested. The startup auth, legacy approval/profile collections, local/native caches, direct SDK access in other modules, messaging, Functions and external integrations still require review. Do not load the generated candidate in the portal/native app or remove quarantine. Existing listeners and references are closed by the session scope; in-flight writes cannot be recalled and remain governed by server rules.

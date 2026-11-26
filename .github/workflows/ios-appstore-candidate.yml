@@ -1,13 +1,12 @@
 name: Varga Cantieri iOS App Store Candidate (manual upload only)
 
-# This workflow uploads a signed App Store-eligible candidate to App Store Connect ONLY.
-# It never submits it for review or publishes it to customers.
-# Manual confirmation + exact SHA are mandatory; reuse the protected Apple signing environment.
+# App Store-eligible candidate upload only; never submit or release.
+# Retain the protected signing environment, owner verification and exact commit gate.
 on:
   workflow_dispatch:
     inputs:
       approval:
-        description: "Explicit authorization to upload an App Store candidate (not submit/release)"
+        description: "Explicit authorization: App Store candidate upload ONLY, no App Review or public release"
         type: choice
         required: true
         default: DO_NOT_UPLOAD
@@ -15,10 +14,10 @@ on:
           - DO_NOT_UPLOAD
           - UPLOAD_APP_STORE_CANDIDATE_ONLY
       build_number:
-        description: "New CFBundleVersion above confirmed TestFlight build 1.0 (20016); verify live ASC first"
+        description: "New CFBundleVersion above confirmed TestFlight build 20032; verify live ASC first"
         type: string
         required: true
-        default: "20017"
+        default: "20033"
       reviewed_commit_sha:
         description: "Exact 40-character reviewed commit SHA shown in GitHub"
         required: true
@@ -50,10 +49,19 @@ jobs:
           IOS_BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
-          if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$ACTUAL_SHA" ]]; then
-            echo "::error::Reviewed SHA must match the exact commit running this workflow."
+          if [[ "$GITHUB_REPOSITORY" != "ionut290/hera-app" ||
+                "$GITHUB_REF" != "refs/heads/release/ios-1.1-snow-20032" ||
+                "$GITHUB_ACTOR" != "ionut290" ||
+                "$GITHUB_TRIGGERING_ACTOR" != "ionut290" ||
+                "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
+            echo "::error::Only the owner may start a new internal TestFlight dispatch from the isolated snow release branch."
             exit 1
           fi
+          if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$ACTUAL_SHA" ]]; then
+            echo "::error::Reviewed SHA must match the exact snow release commit running this workflow."
+            exit 1
+          fi
+          [[ "$IOS_BUILD_NUMBER" == "20033" ]] || { echo "::error::This isolated snow release is reserved for build 20033."; exit 1; }
           bash scripts/check-ios-appstore-build-number.sh "$IOS_BUILD_NUMBER"
           echo "Preflight OK: workflow parsed, Linux job started and manual inputs validated."
           echo "No App Store Connect upload or iPhone app modification performed."
@@ -62,19 +70,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Verify snow commission routing and required assets (no credentials)
+        run: node scripts/check-ios-snow-20032.cjs
       - name: Refuse App Store upload until all review blockers are resolved
         shell: bash
         run: |
           set -euo pipefail
-          # READINESS=BLOCKED must be a failure here, unlike the read-only
-          # reporting workflow where it is emitted as a warning/summary.
+          node scripts/check-account-privacy-client-runtime.js
+          node scripts/check-app-review-readiness-failclosed.cjs
           node scripts/audit-app-review-full-access.cjs --require-ready
 
   upload-appstore-candidate:
     name: Sign and upload App Store-eligible candidate (NO submission)
     needs: preflight
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY' }}
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 90
     # Existing protected environment holds validated Apple signing credentials.
     # Keep the same reviewer gate; no new secret copies are needed.
@@ -103,6 +113,16 @@ jobs:
           ACTUAL_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          # Re-check inside upload job: GitHub can rerun individual jobs
+          # without rerunning the first preflight. Never reuse approval.
+          if [[ "$GITHUB_REPOSITORY" != "ionut290/hera-app" ||
+                "$GITHUB_REF" != "refs/heads/release/ios-1.1-snow-20032" ||
+                "$GITHUB_ACTOR" != "ionut290" ||
+                "$GITHUB_TRIGGERING_ACTOR" != "ionut290" ||
+                "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
+            echo "::error::A new owner-authorized manual candidate upload is required."
+            exit 1
+          fi
           if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$ACTUAL_SHA" ]]; then
             echo "::error::The exact reviewed SHA must match this workflow checkout. No upload performed."
             exit 1
@@ -126,6 +146,7 @@ jobs:
             echo "::error::Starting April 2027, Apple requires the iOS 27 SDK or newer. Upgrade the macOS/Xcode runner before uploading."
             exit 1
           fi
+          [[ "$IOS_BUILD_NUMBER" == "20033" ]] || { echo "::error::This isolated snow release is reserved for build 20033."; exit 1; }
           bash scripts/check-ios-appstore-build-number.sh "$IOS_BUILD_NUMBER"
           echo "Reviewed commit, requested build number and supported Xcode verified; no upload yet."
 
@@ -155,6 +176,7 @@ jobs:
           ruby -c scripts/install-ios-google-signin.rb
           ruby -c scripts/configure-ios-distribution-signing.rb
           npm run android:aab:prepare
+          node scripts/check-ios-snow-20032.cjs www
           test -s www/index.html
           test -s www/icons/varga-cantieri-512.png
 
@@ -174,6 +196,14 @@ jobs:
           # Never remove repository locks or update unrelated production deps.
           (cd ios/App && pod update GTMSessionFetcher/Core)
           npx cap sync ios
+
+      - name: Configure native iOS capabilities for every candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          # These are required for the public candidate as well as internal
+          # TestFlight: Apple Sign-In must work and controls must stay below
+          # the iPhone camera/notch safe area.
           python3 scripts/mark-ios-native-safe-area.py
           ruby scripts/install-ios-native-geofence.rb
           ruby scripts/install-ios-apple-signin.rb
@@ -292,18 +322,21 @@ jobs:
             -authenticationKeyPath "$APPLE_API_KEY_PATH" \
             -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
             -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
-            MARKETING_VERSION=1.0 \
+            MARKETING_VERSION=1.1 \
             CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
             archive > "$RUNNER_TEMP/ios-private-archive.log" 2>&1 ||
             { tail -n 80 "$RUNNER_TEMP/ios-private-archive.log"; exit 1; }
           test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | grep -Fx '15.0' ||
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | awk 'BEGIN { ok=0 } { if ($1+0 >= 15.0) ok=1 } END { exit(ok ? 0 : 1) }' ||
             { echo "::error::Signed iOS archive must require iOS 15.0 or later."; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | grep -Fx '1.1'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
             grep -Fx "$IOS_BUILD_NUMBER"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
             grep -Fx 'it.vargacantieri.hera'
           test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/GoogleService-Info.plist"
+          node scripts/check-ios-snow-20032.cjs "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/public"
           codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app"
           echo "iOS Release archive signed and verified; no artifact exposed publicly."
 
@@ -339,8 +372,8 @@ jobs:
             -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
             > "$RUNNER_TEMP/ios-appstore-candidate-upload.log" 2>&1 ||
             { tail -n 80 "$RUNNER_TEMP/ios-appstore-candidate-upload.log"; exit 1; }
-          echo "App Store-eligible candidate uploaded to App Store Connect only."
-          echo "NOT submitted to App Review. NOT released to customers. Select the new build manually in App Store Connect."
+          echo "Signed App Store-eligible candidate uploaded to App Store Connect only."
+          echo "NOT submitted to App Review. NOT released to customers. Process for INTERNAL testers only."
 
       - name: Remove temporary Apple signing material and Firebase configuration
         if: always()

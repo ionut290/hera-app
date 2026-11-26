@@ -207,6 +207,29 @@ async function main(){
     mark('logout');
     await page.evaluate(()=>firebase.auth().signOut());
     await page.waitForFunction(()=>document.getElementById('varga-company-open').hidden&&document.getElementById('varga-company-jobs').children.length===0);
+    mark('first tenant access without legacy profile');
+    const freshEmail='tenant-only-'+randomUUID()+'@example.invalid',freshPassword='Demo-'+randomUUID();
+    const fresh=await adapter.auth.createUser({email:freshEmail,password:freshPassword,emailVerified:true});
+    assert.equal((await db.doc('platformUsers/'+fresh.uid).get()).exists,false);
+    await page.reload({waitUntil:'domcontentloaded'});
+    await page.locator('#auth-email-input').fill(freshEmail);
+    await page.locator('#auth-password-input').fill(freshPassword);
+    await page.locator('#auth-email-login-btn').click();
+    await page.waitForFunction(uid=>firebase.auth().currentUser?.uid===uid,fresh.uid,{timeout:35000});
+    await page.locator('#access-approval-screen').waitFor({state:'visible',timeout:35000});
+    await page.locator('#varga-company-entry-open').click();
+    await page.locator('#varga-company-dialog').waitFor({state:'visible'});
+    await page.locator('#varga-company-register-name').fill('First autonomous company');
+    await page.locator('#varga-company-register button[type=submit]').click();
+    await page.locator('#varga-company-name').getByText('First autonomous company',{exact:true}).waitFor();
+    await page.locator('#varga-company-plan-summary').getByText(/Commesse 0\/1.*Impianti 0\/10.*Admin 1\/1.*Operatori 0\/3/).waitFor();
+    assert.equal((await db.doc('platformUsers/'+fresh.uid).get()).exists,false,'Legacy profile unexpectedly created');
+    assert.equal(await page.evaluate(()=>document.body.classList.contains('access-approval-locked')),true,'Legacy gate must remain locked');
+    await page.locator('#varga-company-close').click();
+    await page.locator('#access-approval-screen').waitFor({state:'visible'});
+    await page.evaluate(()=>firebase.auth().signOut());
+    await page.waitForFunction(()=>document.getElementById('varga-company-entry').hidden);
+    console.log('Tenant-only first access passed without granting legacy approval');
     console.log(JSON.stringify({syntheticOriginalLoginAndSelector:'passed',pageErrors:errors}));
     // Errors remain diagnostic; full operational runtime and native login are not covered.
   }catch(error){

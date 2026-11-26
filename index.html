@@ -129,6 +129,12 @@
       <div class="access-approval-icon">🔐</div>
       <div id="access-approval-loading"><div class="approval-spinner"></div><h1>Checking access…</h1><p>Preparing your account…</p></div>
       <div id="access-approval-error" class="hidden"><h1>ACCESS CHECK FAILED</h1><p id="access-approval-error-message">Could not verify access. Check your connection and try again.</p><div class="access-approval-actions"><button id="access-approval-retry" class="btn" type="button">RETRY</button><button id="access-approval-error-request" class="btn access-whatsapp" type="button">REQUEST ACCESS FROM ADMIN</button><button id="access-approval-error-logout" class="btn" type="button">BACK TO SIGN IN</button></div></div>
+      <div id="varga-company-entry" hidden>
+        <h2>Varga Cantieri · La tua azienda</h2>
+        <p>Hai una nuova azienda o hai ricevuto un invito? Con un'email verificata puoi entrare nel piano base senza chiedere l'accesso all'azienda storica.</p>
+        <button id="varga-company-entry-open" class="btn btn-primary" type="button">Accedi alla tua azienda</button>
+        <p id="varga-company-entry-feedback" role="status" aria-live="polite"></p>
+      </div>
       <div id="access-approval-content" class="hidden"><h1 id="access-approval-title"></h1><p id="access-approval-description"></p><dl class="access-profile"><dt>Full name</dt><dd id="access-approval-name">—</dd><dt>Email</dt><dd id="access-approval-email">—</dd><dt>Status</dt><dd id="access-approval-status">—</dd></dl><p id="access-approval-feedback" class="access-feedback" role="status"></p><div class="access-approval-actions"><button id="access-request-whatsapp" class="btn access-whatsapp">REQUEST ACCESS VIA WHATSAPP</button><button id="access-check-approval" class="btn">CHECK APPROVAL</button><button id="access-approval-logout" class="btn">SIGN OUT</button></div></div>
     </div>
   </section>
@@ -999,6 +1005,6 @@
   </script>
   <script src="tenant-admin-panel.js?v=20261126-lab1"></script>
   <script src="tenant-runtime-session.js?v=20261126-1"></script>
-  <script src="tenant-company-selector.js?v=20261126-lab8"></script>
+  <script src="tenant-company-selector.js?v=20261126-lab9"></script>
 </body>
 </html>

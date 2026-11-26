@@ -385,6 +385,17 @@ async function main(){
   assert.equal((await viaHttp(admin.token,'listCompanyMembers',{tenantId:autonomousId})).status,403);
   assert.equal((await viaHttp(freshOwner.token,'getCompanyPlan',{tenantId:autonomousId})).result.plan.usage.operators,1);
   console.log('Verified-account self-service and invitation HTTP workflow passed without legacy profile');
+  // Entry authorization must not create/approve legacy profiles.
+  assert.equal((await viaHttp(freshOwner.token,'checkTenantEntry')).result.eligible,true);
+  assert.equal((await viaHttp(unverified.token,'checkTenantEntry')).status,401);
+  assert.equal((await viaHttp(review.token,'checkTenantEntry')).status,401);
+  const blockedEntry=await account('blocked-legacy-entry');
+  await adapter.db.doc('platformUsers/'+blockedEntry.uid).set({statoAccount:'bloccato',banned:true});
+  assert.equal((await viaHttp(blockedEntry.token,'checkTenantEntry')).status,403);
+  assert.equal((await viaHttp(blockedEntry.token,'registerCompany',{name:'Blocked account'})).status,403);
+  assert.equal((await viaHttp(blockedEntry.token,'listMyCompanies')).status,403);
+  assert.equal((await adapter.db.doc('platformUsers/'+freshOwner.uid).get()).exists,false);
+  console.log('Tenant-only entry does not approve legacy profiles and rejects blocked accounts');
   await adapter.auth.setCustomUserClaims(admin.uid,{});
   assert.equal((await viaHttp(admin.token,'listCompanies')).status,403);
   await rejects(()=>call(admin,'listCompanies'),'forbidden');

@@ -50,3 +50,11 @@ Modifiche ad altre sezioni dell'app non possono cambiare indirettamente il compo
 - La credenziale temporanea viene rimossa immediatamente dall'indirizzo della pagina di Varga Cantieri.
 - Se il trasferimento non riesce, resta disponibile il normale login recuperabile e non viene mostrata una schermata bianca.
 - Il passaggio non aggiunge letture, scritture o listener Firestore.
+
+## Estensione autorizzata 2.0: accesso aziendale autonomo in laboratorio
+
+- Consenso del proprietario del 26 novembre 2026: accesso autonomo dei nuovi clienti entro il piano base; solo il Super Admin autorizza ampliamenti.
+- Il pulsante nella schermata di verifica apre esclusivamente il dialog aziendale nel laboratorio loopback. Non rimuove il blocco storico, non approva platformUsers, non modifica login-retry-fix.js o app.js e non abilita la Home storica.
+- Email verificata e token Firebase non revocato sono obbligatori; il server verifica anche che un eventuale profilo storico non sia bloccato o rifiutato. Nessun accesso alle raccolte globali o alle aziende altrui.
+- Nessuna nuova lettura Firestore all'avvio del login originale. La verifica aggiuntiva è confinata alle richieste esplicite dell'API tenant.
+- Verificare in browser il primo accesso senza profilo storico, la permanenza del blocco storico, il logout e le regressioni precedenti. Native iOS, Android e PWA live rimangono da verificare prima del rilascio.

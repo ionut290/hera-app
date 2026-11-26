@@ -30,7 +30,18 @@ function createTenantDispatcher({auth,db,assertBoundary}){
     const caller={uid:user.uid,email:user.email,email_verified:true,
       platform_admin:decoded.platform_admin===true&&user.customClaims?.platform_admin===true};
     if(!payload||typeof payload!=='object'||Array.isArray(payload))fail('invalid-payload');
+    // Never convert a denied legacy account into a tenant session.
+    // Server read only on explicit tenant API requests, not on original login.
+    const profile=await db.doc('platformUsers/'+caller.uid).get();
+    if(profile.exists){
+      const p=profile.data(),status=String(p.statoAccount||p.accountStatus||'').trim().toLowerCase();
+      if(p.banned===true||(status&&!['attivo','active','approved','autorizzato','abilitato','in_attesa','richiesta_inviata','pending'].includes(status)))fail('forbidden');
+    }
     switch(action){
+      case 'checkTenantEntry':{
+        if(process.env.FIRESTORE_EMULATOR_HOST!=='127.0.0.1:8180'||process.env.FIREBASE_AUTH_EMULATOR_HOST!=='127.0.0.1:9199')fail('forbidden');
+        return {eligible:true};
+      }
       case 'registerCompany':return starter.register(caller,payload);
       case 'getCompanyPlan':return starter.get(caller,payload);
       case 'requestPlanUpgrade':return starter.request(caller,payload);

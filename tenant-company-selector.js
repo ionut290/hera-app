@@ -3,19 +3,19 @@
   const allowed=()=>window.VargaTenantLabEnabled===true&&["localhost","127.0.0.1"].includes(location.hostname)&&location.protocol==="http:"&&window.firebase?.apps?.length>0&&firebase.app().options.projectId==="demo-varga-multi-tenant";
   if(!allowed())return;
   const auth=firebase.auth(),el=id=>document.getElementById("varga-company-"+id);
-  const open=el("open"),dialog=el("dialog");if(!open||!dialog)return;
+  const open=el("open"),dialog=el("dialog"),entry=el("entry"),entryOpen=el("entry-open");if(!open||!dialog||!entry||!entryOpen)return;
   if(!window.VargaTenantSession)return;
   const session=window.VargaTenantSession.create(()=>auth.currentUser?.uid||null);
-  let epoch=0,controller=null,active=null,kind=null,cursor=null,jobsCursor=null,moduleCursor=null,moduleQuery=null,membersCursor=null;
+  let epoch=0,controller=null,active=null,kind=null,cursor=null,jobsCursor=null,moduleCursor=null,moduleQuery=null,membersCursor=null,entryAllowed=false,entryGeneration=0;
   const message=text=>{el("status").textContent=text;};
   function cancel(){epoch++;controller?.abort();controller=null;}
   function clearModule(){clearOperation();clearEditor();el("new-record").hidden=true;moduleCursor=null;moduleQuery=null;el("module-title").textContent="";el("module-rows").replaceChildren();el("module-more").hidden=true;}
   function clearSelection(){clearMembers();el("plan").hidden=true;el("upgrade").reset();session.clear();clearModule();el("new-job").hidden=true;active=null;kind=null;jobsCursor=null;el("selected").hidden=true;el("actions").hidden=true;el("name").textContent="";el("role").textContent="";el("jobs").replaceChildren();el("jobs-more").hidden=true;}
   function clear(){cancel();clearSelection();el("join-form").reset();el("join").open=false;el("register").reset();cursor=null;el("list").replaceChildren();el("more").hidden=true;message("");}
-  function hide(){clear();open.hidden=true;open.classList.add("hidden");if(dialog.open)dialog.close();}
+  function hide(){entryGeneration++;entryAllowed=false;entry.hidden=true;el("entry-feedback").textContent="";entryOpen.disabled=false;clear();open.hidden=true;open.classList.add("hidden");if(dialog.open)dialog.close();}
   function current(n,uid){return allowed()&&n===epoch&&auth.currentUser?.uid===uid&&dialog.open;}
   async function call(action,payload,n,uid,signal){
-    if(action!=="listMyCompanies"&&action!=="openCompany"&&action!=="registerCompany"&&action!=="accept")session.requireTenant(payload.tenantId);
+    if(action!=="listMyCompanies"&&action!=="openCompany"&&action!=="registerCompany"&&action!=="accept"&&action!=="checkTenantEntry")session.requireTenant(payload.tenantId);
     const token=await auth.currentUser.getIdTokenResult();
     if(!current(n,uid)||token.claims.email_verified!==true||token.claims.apple_review===true)throw Error("session");
     const res=await fetch("/api/v2/companies",{method:"POST",headers:{"content-type":"application/json","authorization":"Bearer "+token.token},body:JSON.stringify({action,payload}),cache:"no-store",credentials:"omit",redirect:"error",signal});
@@ -26,7 +26,7 @@
     return data.result;
   }
   async function run(task){
-    cancel();if(!allowed()||!dialog.open||open.hidden||!auth.currentUser)return;
+    cancel();if(!allowed()||!dialog.open||(!entryAllowed&&open.hidden)||!auth.currentUser)return;
     const n=epoch,uid=auth.currentUser.uid,ctrl=new AbortController();controller=ctrl;
     const timer=setTimeout(()=>ctrl.abort(),12000);
     try{message("Caricamento…");await task((action,payload)=>call(action,payload,n,uid,ctrl.signal));}
@@ -214,6 +214,23 @@
   }
   el("register").addEventListener("submit",e=>{e.preventDefault();const name=el("register-name").value;void run(async request=>{const result=await request("registerCompany",{name});el("register").reset();const id=result.tenantId;clearSelection();const ticket=session.begin(id);const data=await request("openCompany",{tenantId:id});session.commit(ticket,data);showCompany(data);if(data.plan)renderPlan(data.plan);message("Azienda pronta nel laboratorio.");});});
   el("upgrade").addEventListener("submit",e=>{e.preventDefault();if(!active)return;const tenantId=active,limits=Object.fromEntries(quotaKeys.map(k=>[k,Number(el("quota-"+k).value)])),reason=el("upgrade-reason").value;void run(async request=>{await request("requestPlanUpgrade",{tenantId,limits,reason});renderPlan((await request("getCompanyPlan",{tenantId})).plan);message("Richiesta inviata al Super Admin.");});});
+  // Tenant dialog is a separate surface; the original approval lock remains in place.
+  // Never toggle the legacy screen, Home, auth classes or a platformUsers profile.
+  entryOpen.addEventListener("click",async()=>{
+    if(!allowed()||entry.hidden||entryOpen.disabled||!auth.currentUser)return;
+    const generation=++entryGeneration,uid=auth.currentUser.uid;
+    entryOpen.disabled=true;el("entry-feedback").textContent="Verifica accesso aziendale…";
+    try{
+      const token=await auth.currentUser.getIdTokenResult();
+      if(token.claims.email_verified!==true||token.claims.apple_review===true)throw Error("forbidden");
+      const response=await fetch("/api/v2/companies",{method:"POST",headers:{"content-type":"application/json","authorization":"Bearer "+token.token},body:JSON.stringify({action:"checkTenantEntry",payload:{}}),cache:"no-store",credentials:"omit",redirect:"error",signal:AbortSignal.timeout(12000)});
+      const result=await response.json();
+      if(generation!==entryGeneration||auth.currentUser?.uid!==uid||!allowed())return;
+      if(!response.ok||result.ok!==true||result.result?.eligible!==true)throw Error("forbidden");
+      entryAllowed=true;el("entry-feedback").textContent="";clear();dialog.showModal();void list();
+    }catch{if(generation===entryGeneration&&auth.currentUser?.uid===uid)el("entry-feedback").textContent="Accesso aziendale non disponibile. Verifica l’email o riprova.";}
+    finally{if(generation===entryGeneration)entryOpen.disabled=false;}
+  });
   open.addEventListener("click",()=>{if(open.hidden||!allowed())return;clear();dialog.showModal();void list();});
   el("close").addEventListener("click",()=>dialog.close());dialog.addEventListener("close",clear);
   el("refresh").addEventListener("click",()=>void list());
@@ -223,6 +240,6 @@
   el("jobs-more").addEventListener("click",()=>{if(kind&&jobsCursor)void jobs(kind,true);});
   auth.onIdTokenChanged(async user=>{
     hide();const n=epoch;if(!user||!allowed())return;
-    try{const t=await user.getIdTokenResult();if(n===epoch&&auth.currentUser?.uid===user.uid&&t.claims.email_verified===true&&t.claims.apple_review!==true){open.hidden=false;open.classList.remove("hidden");}}catch{}
+    try{const t=await user.getIdTokenResult();if(n===epoch&&auth.currentUser?.uid===user.uid&&t.claims.email_verified===true&&t.claims.apple_review!==true){open.hidden=false;open.classList.remove("hidden");entry.hidden=false;}}catch{}
   },hide);
 })();

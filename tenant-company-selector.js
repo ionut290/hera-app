@@ -69,7 +69,7 @@
   const money=new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"});
   function formatRow(row){
     const parts=[row.name,row.code,row.unit,row.category,row.status,row.date];
-    if(typeof row.count==="number")parts.push(row.count+" elementi");
+    if(typeof row.count==="number")parts.push(row.count+" elementi");if(row.operator)parts.push(row.operator);if(typeof row.hours==="number")parts.push(row.hours+" ore");
     if(typeof row.activitiesCount==="number")parts.push(row.activitiesCount+" attività");
     if(typeof row.base==="number")parts.push("Base "+money.format(row.base));
     if(typeof row.discounted==="number")parts.push("Ribassato "+money.format(row.discounted));
@@ -82,7 +82,7 @@
     await run(async request=>{
       const data=await request("listCompanyModule",{tenantId,module:q.module,kind:q.kind,commessaId:q.commessaId,month:q.month,limit:25,after:append?moduleCursor:null});
       if(active!==data.company.id||q.module!==data.module||q.kind!==data.kind||(q.commessaId??null)!==data.commessaId)throw Error("session");
-      moduleQuery=q;el("new-record").hidden=!editableModules.has(q.module);for(const row of data.rows){const li=document.createElement("li");li.textContent=formatRow(row)+" · ID: "+row.id;if(editableModules.has(q.module)&&row.editable===true)addEdit(li,q,row.id);el("module-rows").append(li);}
+      moduleQuery=q;el("new-record").hidden=!editableModules.has(q.module);for(const row of data.rows){const li=document.createElement("li");li.textContent=formatRow(row)+" · ID: "+row.id;if(editableModules.has(q.module)&&row.editable===true)addEdit(li,q,row.id);if(q.module==="approvals"&&row.reviewable===true)addHoursReview(li,row,q.kind,true);el("module-rows").append(li);}
       moduleCursor=data.nextCursor||null;el("module-more").hidden=!moduleCursor;
       message(el("module-rows").children.length?"Dati aziendali · sola lettura.":"Nessun dato presente.");
     });
@@ -184,6 +184,20 @@
     const payload={tenantId,enabled,kind:el("grant-kind").value,memberUid:el("grant-user").value.trim(),commessaId:el("grant-job").value.trim(),plantId:el("grant-plant").value.trim()};
     void run(async request=>{await request("setPlantGrant",payload);el("grant-form").reset();message(enabled?"Accesso al cantiere autorizzato.":"Accesso al cantiere revocato.");});
   });
+  function addHoursReview(li,row,kind,admin){
+    if(row.status!=="pending_level1"&&!(admin&&row.status==="pending_admin"))return;
+    const tenantId=active;
+    for(const [decision,label] of [["approve",row.status==="pending_level1"?"Primo OK":"Approva definitivamente"],["reject","Rifiuta"]]){
+      const button=document.createElement("button");button.type="button";button.className="btn";button.textContent=label;
+      button.addEventListener("click",()=>{
+        if(!active||active!==tenantId)return;
+        let reason="";
+        if(decision==="reject"){const value=window.prompt("Motivo del rifiuto (facoltativo)","");if(value===null)return;reason=value.trim();}
+        if(!window.confirm(label+" per questa richiesta ore?"))return;
+        void run(async request=>{const result=await request("reviewHours",{tenantId,kind,requestId:row.id,expectedStatus:row.status,decision,reason});if(active!==result.company.id)throw Error("session");li.remove();message("Esito salvato: "+({pending_admin:"in attesa admin",approved:"approvata",rejected:"rifiutata"}[result.status]||result.status)+". Aggiorna l’elenco.");});
+      });li.append(button);
+    }
+  }
   function clearHours(){hoursDraft=null;el("my-hours-form").reset();el("my-hours-form").hidden=true;el("my-hours-plant").textContent="";}
   function openHours(row){
     if(!active)return;cancel();clearHours();
@@ -203,7 +217,7 @@
     await run(async request=>{
       const result=await request("listMyHours",{tenantId,kind,limit:25,after:append?myHoursCursor:null});
       if(active!==result.company.id||result.kind!==kind)throw Error("session");
-      for(const row of result.rows){const li=document.createElement("li");li.textContent=[row.date,row.commessa,row.hours+" ore",row.status==="pending_level1"?"In attesa":row.status].join(" · ");el("my-hours-list").append(li);}
+      for(const row of result.rows){const li=document.createElement("li");li.textContent=[row.date,row.commessa,row.hours+" ore",({pending_level1:"In attesa primo OK",pending_admin:"In attesa admin",approved:"Approvata",rejected:"Rifiutata"}[row.status]||row.status)].join(" · ");addHoursReview(li,row,kind,false);el("my-hours-list").append(li);}
       myHoursCursor=result.nextCursor||null;el("my-hours-more").hidden=!myHoursCursor;
       message(el("my-hours-list").children.length?"Richieste personali aggiornate.":"Nessuna richiesta personale.");
     });

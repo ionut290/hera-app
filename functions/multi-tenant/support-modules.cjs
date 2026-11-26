@@ -10,7 +10,7 @@ function project(module,id,d){
   if(module==='documents')return {id,name:str(d.name)||id,category:str(d.category),date:date(d.expirationDate),status:str(d.visibility)};
   if(module==='events')return {id,name:str(d.title)||id,date:date(d.startDate),status:str(d.type)};
   if(module==='notifications')return {id,name:str(d.title)||'Notifica',status:str(d.eventType)};
-  return {id,name:str(d.commessaName)||str(d.commessaNome)||'Rapporto ore',date:date(d.date),status:str(d.status)||str(d.stato),count:Array.isArray(d.entries)?d.entries.length:0};
+  return {id,name:str(d.commessaName)||str(d.commessaNome)||'Rapporto ore',date:date(d.date),status:str(d.status)||str(d.stato),count:Array.isArray(d.entries)?d.entries.length:0,...(module==='approvals'&&d.tenantLabHours===true&&d.tenantLabManaged===true&&Array.isArray(d.entries)&&d.entries.length===1&&Array.isArray(d.entries[0].rows)&&d.entries[0].rows.length===1?{reviewable:true,operator:str(d.entries[0].rows[0].operatore),hours:d.entries[0].rows[0].ore}: {})};
 }
 async function readSupport({tx,access,caller,payload,page,id}){
   const module=payload.module,kind=payload.kind;

@@ -433,7 +433,28 @@ async function main(){
   assert.equal((await adapter.db.collection('tenants/'+autonomousId+'/oreReports').get()).empty,true);
   assert.equal((await viaHttp(freshOwner.token,'setPlantGrant',{...grantPayload,enabled:false})).status,200);
   assert.equal((await viaHttp(freshWorker.token,'submitMyHours',{...hp,date:'2026-11-27',requestId:randomUUID()})).status,403);
+  // Original status names and role semantics. No final approval by worker,
+  // no duplicate report or cross-tenant approval, no destructive history changes.
+  const rv={tenantId:autonomousId,kind:'ordinary',requestId:submitted.result.recordId,expectedStatus:'pending_level1',decision:'approve'};
+  assert.equal((await viaHttp(otherWorker.token,'reviewHours',rv)).status,403);
+  assert.equal((await viaHttp(admin.token,'reviewHours',rv)).status,403);
+  assert.equal((await viaHttp(freshOwner.token,'reviewHours',{...rv,expectedStatus:'pending_admin'})).code,'invalid-hours-status');
+  assert.equal((await viaHttp(freshWorker.token,'reviewHours',{...rv,requestId:otherHours.result.recordId})).status,403);
+  assert.equal((await viaHttp(freshWorker.token,'reviewHours',rv)).result.status,'pending_admin');
+  assert.equal((await viaHttp(freshWorker.token,'reviewHours',{...rv,expectedStatus:'pending_admin'})).status,403);
+  const results=await Promise.all([0,1].map(()=>viaHttp(freshOwner.token,'reviewHours',{...rv,expectedStatus:'pending_admin'})));
+  assert.equal(results.filter(x=>x.status===200).length,1);
+  assert.equal(results.filter(x=>x.code==='invalid-hours-status').length,1);
+  const reportId=results.find(x=>x.status===200).result.reportId;
+  assert.equal(reportId,submitted.result.recordId);
+  const report=(await adapter.db.doc('tenants/'+autonomousId+'/oreReports/'+reportId).get()).data();
+  assert.equal(report.entries[0].rows[0].ore,7.5);assert.equal(report.createdByUid,freshWorker.uid);
+  assert.equal((await viaHttp(freshWorker.token,'listMyHours',{tenantId:autonomousId,kind:'ordinary'})).result.rows[0].status,'approved');
+  assert.equal((await viaHttp(freshOwner.token,'reviewHours',{...rv,requestId:otherHours.result.recordId,decision:'reject',reason:'Synthetic reject'})).result.status,'rejected');
+  assert.equal((await adapter.db.collection('tenants/'+autonomousId+'/oreReports').get()).size,1);
+  assert.equal((await adapter.db.doc('tenants/'+autonomousId+'/oreApprovalRequests/'+submitted.result.recordId).get()).data().entries[0].rows[0].ore,7.5);
   console.log('Worker identity-linked own pending hours, duplicate lock and revoked access passed');
+  console.log('Original-style two-stage synthetic hours approval, atomic report and rejection passed');
   assert.equal((await getAssigned(freshWorker)).result.plants.length,0);
   console.log('Worker explicit plant access, isolation and revocation passed');
   // Entry authorization must not create/approve legacy profiles.

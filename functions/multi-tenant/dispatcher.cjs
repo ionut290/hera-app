@@ -52,6 +52,7 @@ function createTenantDispatcher({auth,db,assertBoundary}){
       case 'openCompany':return workspace.openCompany(caller,payload);
       case 'listCompanyCommesse':return workspace.listCompanyCommesse(caller,payload);
       case 'bindWorkerPersonnel':return workspace.bindWorkerPersonnel(caller,payload);
+      case 'reviewHours':return workspace.reviewHours(caller,payload);
       case 'submitMyHours':return workspace.submitMyHours(caller,payload);
       case 'listMyHours':return workspace.listMyHours(caller,payload);
       case 'listMyPlants':return workspace.listMyPlants(caller,payload);

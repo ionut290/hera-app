@@ -110,10 +110,10 @@ const pricePreview=(()=>{
  });
  get('price-list-tbody').addEventListener('click',event=>{const b=event.target.closest('[data-price-action]');if(!b||b.disabled)return;const tr=b.closest('tr'),id=tr.dataset.priceId,action=b.dataset.priceAction;act(async()=>{if(action==='edit')state.priceEditing=id;else if(action==='cancel')state.priceEditing='';else if(action==='save')await savePrice(tr);else if(action==='duplicate')await addPrice(state.prices.find(p=>p.id===id));});});
  const matrixInput=get('excel-file'),matrixButton=get('import-btn'),matrixFeedback=get('import-feedback');
- let matrixFile=null,matrixPending=null,matrixBusy=false;
+ let matrixFile=null,matrixPending=null,matrixBusy=false,matrixGeneration=0;
  const matrixConfirm=document.createElement('button');matrixConfirm.type='button';matrixConfirm.className='btn btn-primary';matrixConfirm.textContent='Conferma matrice cantieri';matrixConfirm.hidden=true;matrixFeedback.after(matrixConfirm);
  const matrixCancel=document.createElement('button');matrixCancel.type='button';matrixCancel.className='btn';matrixCancel.textContent='Annulla matrice';matrixCancel.hidden=true;matrixConfirm.after(matrixCancel);
- const clearMatrix=()=>{matrixPending=null;matrixFile=null;matrixInput.value='';matrixConfirm.hidden=true;matrixCancel.hidden=true;matrixButton.disabled=true;};
+ const clearMatrix=()=>{matrixGeneration++;matrixPending=null;matrixFile=null;matrixInput.value='';matrixConfirm.hidden=true;matrixCancel.hidden=true;matrixButton.disabled=true;};
  matrixInput.accept=excelReady?'.xlsx,.csv':'.csv';
  get('toggle-import-impianti-btn').addEventListener('click',()=>get('impianti-import-card').classList.toggle('hidden'));
  matrixInput.addEventListener('change',()=>{if(matrixBusy)return;const file=matrixInput.files[0];clearMatrix();matrixFile=file||null;matrixButton.disabled=!matrixFile;matrixFeedback.textContent=file?'File selezionato: '+file.name:'';});
@@ -121,17 +121,17 @@ const pricePreview=(()=>{
   if(matrixBusy||!matrixFile)return;
   const id=managementCommessaId,contract=commesseById.get(id),file=matrixFile;
   if(!contract)return;
-  matrixBusy=true;clearMatrix();matrixFeedback.textContent='';
+  matrixBusy=true;clearMatrix();const generation=matrixGeneration;matrixFeedback.textContent='';
   try{
    const isExcel=/\.xlsx$/i.test(file.name);
    if(isExcel?(!excelReady||file.size>5000000):(!/\.csv$/i.test(file.name)||file.size>1000000))throw Error('Seleziona un CSV o XLSX valido.');
    const existing=impiantiByCommessaId.get(id)||[],snapshot=JSON.stringify(existing);
    const input=isExcel?await readPriceXlsx(await file.arrayBuffer(),globalThis.ExcelJS,aliases,key,'matrix'):parsePriceCsv(await file.text());
    const plan=planMatrixImport(input,existing,{mapped,norm,num,normalizeCode:core.normalizePriceCode});
-   if(id!==managementCommessaId||get('impianti-management-screen').classList.contains('hidden'))throw Error('Commessa cambiata.');
+   if(generation!==matrixGeneration||id!==managementCommessaId||get('impianti-management-screen').classList.contains('hidden'))return;
    matrixPending={id,snapshot,plan};matrixConfirm.hidden=false;matrixCancel.hidden=false;
    matrixFeedback.textContent='Anteprima: '+plan.groups.length+' nuovi cantieri, '+plan.workCount+' lavorazioni. Coordinate, stati e dati storici non importati.';
-  }catch(e){matrixFeedback.textContent=e.message||'Importazione non riuscita.';}finally{matrixBusy=false;}
+  }catch(e){if(generation===matrixGeneration)matrixFeedback.textContent=e.message||'Importazione non riuscita.';}finally{matrixBusy=false;}
  });
  matrixCancel.addEventListener('click',()=>{clearMatrix();matrixFeedback.textContent='Importazione annullata.';});
  matrixConfirm.addEventListener('click',()=>{

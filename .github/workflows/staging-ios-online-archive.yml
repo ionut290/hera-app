@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: python3 -m unittest -v test_validate_ios_profile.py
+      - run: python3 -m unittest -v test_validate_ios_profile.py test_prepare_v2_export.py
         working-directory: staging
       - run: node --test staging/apple-staging-preflight.test.mjs staging/fetch-v2-appstore-profile.test.cjs
   sign:
@@ -112,9 +112,32 @@ jobs:
           security cms -D -i "$APP/embedded.mobileprovision" > "$RUNNER_TEMP/varga-v2-signing/embedded.plist"
           python3 "$GITHUB_WORKSPACE/staging/validate_ios_profile.py" "$RUNNER_TEMP/varga-v2-signing/embedded.plist" "$RUNNER_TEMP/varga-v2-signing/leaf.der"
           echo 'V2 signed staging archive validated. Login-only candidate; not uploaded or released.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Export and verify local V2 IPA (no Apple upload)
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 staging/prepare_v2_export.py "$RUNNER_TEMP/VargaV2ExportOptions.plist"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/VargaV2.xcarchive" -exportPath "$RUNNER_TEMP/VargaV2LocalExport" -exportOptionsPlist "$RUNNER_TEMP/VargaV2ExportOptions.plist"
+          shopt -s nullglob
+          IPAS=("$RUNNER_TEMP/VargaV2LocalExport/"*.ipa)
+          test "${#IPAS[@]}" -eq 1
+          mkdir -p "$RUNNER_TEMP/VargaV2Unpacked"
+          ditto -x -k "${IPAS[0]}" "$RUNNER_TEMP/VargaV2Unpacked"
+          APPS=("$RUNNER_TEMP/VargaV2Unpacked/Payload/"*.app)
+          test "${#APPS[@]}" -eq 1
+          APP="${APPS[0]}"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx it.vargacantieri.staging
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx "$GITHUB_RUN_NUMBER"
+          test -s "$APP/public/PRIVATE_STAGING_NOT_RELEASED.txt"
+          test ! -e "$APP/public/LOCAL_TEST_ONLY.txt"
+          test ! -e "$APP/GoogleService-Info.plist"
+          codesign --verify --deep --strict "$APP"
+          security cms -D -i "$APP/embedded.mobileprovision" > "$RUNNER_TEMP/varga-v2-signing/exported.plist"
+          python3 staging/validate_ios_profile.py "$RUNNER_TEMP/varga-v2-signing/exported.plist" "$RUNNER_TEMP/varga-v2-signing/leaf.der"
+          echo 'V2 local IPA export validated. No Apple upload; operational functionality still gated.' >> "$GITHUB_STEP_SUMMARY"
       - name: Remove temporary signing material
         if: always()
         run: |
           security delete-keychain "$RUNNER_TEMP/varga-v2-signing/signing.keychain-db" 2>/dev/null || true
           if [[ -n "${V2_PROFILE_UUID:-}" ]]; then rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$V2_PROFILE_UUID.mobileprovision"; fi
-          rm -rf "$RUNNER_TEMP/varga-v2-signing" "$RUNNER_TEMP/VargaV2.xcarchive"
+          rm -rf "$RUNNER_TEMP/varga-v2-signing" "$RUNNER_TEMP/VargaV2.xcarchive" "$RUNNER_TEMP/VargaV2LocalExport" "$RUNNER_TEMP/VargaV2Unpacked" "$RUNNER_TEMP/VargaV2ExportOptions.plist"

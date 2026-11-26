@@ -67,6 +67,7 @@ function refreshPlants(){
  renderImpiantiManagementTable();
  const n=getCommessaStats(managementCommessaId).total;
  get('impianti-management-meta').textContent='Cod. '+(commesseById.get(managementCommessaId)?.codice||'—')+' • '+n+' '+(n===1?'impianto':'impianti');
+ pricePreview.renderWork();
  for(const el of get('impianti-management-screen').querySelectorAll('[data-row-action],[data-select-row],[data-select-all]'))el.disabled=true;
 }
 

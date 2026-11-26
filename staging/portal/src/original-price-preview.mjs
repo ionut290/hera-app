@@ -1,11 +1,12 @@
 import {parsePriceCsv,planPriceImport} from './price-import.mjs';
 import {inspectXlsxZip,readPriceXlsx} from './price-xlsx.mjs';
+import {projectPreviewWork,summarizePreviewWork} from './work-price-projection.mjs';
 // Local-only adapter for the original accounting-v2 price screen and handlers.
 export function pricePreviewScript(original){
  return String.raw`
 const pricePreview=(()=>{
  const state={commessa:null,prices:[],work:[],priceEditing:''};
- const archive=new Map();
+ const archive=new Map(),quantityArchive=new Map();
  const currentUser={uid:'demo-operator'};
  const getOperatorDisplayName=()=> 'Operatore demo';
  const total=()=>{throw Error('Linked work not enabled in preview');};
@@ -20,13 +21,48 @@ const pricePreview=(()=>{
  const notify=message=>{get('price-feedback').textContent=message;};
  const alert=notify;
  const confirm=()=>false;
- `+'\n'+original.priceHandlers+'\n'+parsePriceCsv.toString()+'\n'+planPriceImport.toString()+'\n'+inspectXlsxZip.toString()+'\n'+readPriceXlsx.toString()+'\n'+(original.excelHandlers||'')+String.raw`
+ `+'\n'+original.priceHandlers+'\n'+parsePriceCsv.toString()+'\n'+planPriceImport.toString()+'\n'+inspectXlsxZip.toString()+'\n'+readPriceXlsx.toString()+'\n'+projectPreviewWork.toString()+'\n'+summarizePreviewWork.toString()+'\n'+(original.excelHandlers||'')+String.raw`
  function clearPending(){pending=null;importControls.hidden=true;}
+ const workPanel=document.createElement('details');workPanel.className='import-mode-card';workPanel.id='preview-work-panel';
+ const heading=document.createElement('summary');heading.textContent='Lavorazioni e importi stimati';workPanel.append(heading);
+ const workBody=document.createElement('div');workPanel.append(workBody);
+ get('impianti-management-meta').closest('header').after(workPanel);
+ function quantitiesFor(id){if(!quantityArchive.has(id))quantityArchive.set(id,new Map());return quantityArchive.get(id);}
+ function renderWork(){
+  const id=managementCommessaId,contract=commesseById.get(id);
+  workBody.replaceChildren();if(!contract)return;
+  const quantities=quantitiesFor(id),items=projectPreviewWork(impiantiByCommessaId.get(id)||[],Array.from(rows(id).values()),contract.percentualeRibassoGenerale,quantities,core);
+  const report=summarizePreviewWork(items);
+  const note=document.createElement('p');note.id='preview-work-summary';
+  note.textContent='Importo stimato: '+money.format(report.estimated)+' • '+report.verified+'/'+report.rows+' lavorazioni valorizzate • '+report.missing+' da verificare. Non è un consuntivo.';
+  workBody.append(note);
+  const wrap=document.createElement('div');wrap.className='impianti-sheet-wrap';const table=document.createElement('table');table.className='impianti-sheet';table.id='preview-work-table';wrap.append(table);workBody.append(wrap);
+  const header=table.createTHead().insertRow();
+  for(const label of ['Impianto','Codice voce','Quantità','u.m.','Prezzo ribassato','Importo stimato','Verifica','Azioni']){const th=document.createElement('th');th.textContent=label;header.append(th);}
+  const tbody=table.createTBody();
+  for(const item of items){
+   const tr=tbody.insertRow();
+   const cell=value=>{const td=tr.insertCell();td.textContent=value;return td;};
+   cell(item.denominazione||'');cell(item.codiceVocePrezzo||'—');
+   const quantityCell=tr.insertCell(),input=document.createElement('input');input.type='number';input.min='0';input.max='100000000';input.step='any';input.value=item.quantita??'';input.setAttribute('aria-label','Quantità '+(item.denominazione||'')+' '+(item.codiceVocePrezzo||''));quantityCell.append(input);
+   const fixed=String(item.unitaMisura||'').trim().toUpperCase()==='AC';input.disabled=fixed;
+   cell(item.unitaMisura||'—');cell(item.prezzoRibassato==null?'—':money.format(item.prezzoRibassato));cell(item.totale==null?'—':money.format(item.totale));cell(item.priceListLinkStatus==='MISSING'?'Prezzo mancante o ambiguo':item.totale==null?'Quantità da verificare':'OK');
+   const save=document.createElement('button');save.type='button';save.className='btn';save.textContent='Salva quantità';save.disabled=fixed;
+   tr.insertCell().append(save);
+   save.addEventListener('click',()=>{
+    if(managementCommessaId!==id)return;
+    const value=input.value.trim()===''?null:num(input.value);
+    if(!input.validity.valid||value!==null&&(!Number.isFinite(value)||value<0||value>100000000)){input.reportValidity();return;}
+    quantities.set(item.id,value);renderWork();
+   });
+  }
+ }
+
  function render(){renderPrices();for(const b of get('price-list-tbody').querySelectorAll('[data-price-action="delete"]'))b.disabled=true;get('prezziario-meta').textContent=state.commessa.nome+' • '+state.prices.length+' voci';}
  async function open(){state.commessa=commesseById.get(managementCommessaId);if(!state.commessa)return;clearPending();state.priceEditing='';get('price-search').value='';notify('');await load();openPrices();get('impianti-management-screen').setAttribute('aria-hidden','true');get('prezziario-management-screen').setAttribute('aria-hidden','false');render();}
  async function act(fn){if(busy)return;clearPending();busy=true;notify('');try{await fn();render();}catch(e){notify(e.message||'Operazione non riuscita.');}finally{busy=false;}}
  get('open-prezziario-btn').addEventListener('click',()=>act(open));
- get('close-prezziario-btn').addEventListener('click',()=>{if(busy)return;clearPending();state.priceEditing='';get('prezziario-management-screen').classList.add('hidden');get('prezziario-management-screen').setAttribute('aria-hidden','true');get('impianti-management-screen').classList.remove('hidden');get('impianti-management-screen').setAttribute('aria-hidden','false');});
+ get('close-prezziario-btn').addEventListener('click',()=>{if(busy)return;clearPending();state.priceEditing='';get('prezziario-management-screen').classList.add('hidden');get('prezziario-management-screen').setAttribute('aria-hidden','true');get('impianti-management-screen').classList.remove('hidden');get('impianti-management-screen').setAttribute('aria-hidden','false');renderWork();});
  get('add-price-item-btn').addEventListener('click',()=>act(()=>addPrice()));
  get('price-search').addEventListener('input',()=>{if(!busy)render();});
  get('save-general-discount-btn').addEventListener('click',()=>act(async()=>{const d=num(get('general-discount').value);if(d==null||d<0||d>100)return notify('Percentuale ribasso non valida.');await commRef().set({percentualeRibassoGenerale:d/100,...actor()},{merge:true});state.commessa.percentualeRibassoGenerale=d/100;notify('Ribasso generale salvato.');}));
@@ -72,7 +108,7 @@ const pricePreview=(()=>{
   });
  });
  get('price-list-tbody').addEventListener('click',event=>{const b=event.target.closest('[data-price-action]');if(!b||b.disabled)return;const tr=b.closest('tr'),id=tr.dataset.priceId,action=b.dataset.priceAction;act(async()=>{if(action==='edit')state.priceEditing=id;else if(action==='cancel')state.priceEditing='';else if(action==='save')await savePrice(tr);else if(action==='duplicate')await addPrice(state.prices.find(p=>p.id===id));});});
- return Object.freeze({open});
+ return Object.freeze({open,renderWork});
 })();
 `;
 }

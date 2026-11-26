@@ -28,11 +28,12 @@ export function extractOriginalPreview(excelLibrary=''){
  const line=(src,marker)=>{const i=exactly(src,marker);return src.slice(i,src.indexOf('\n',i));};
  const declaration=(src,marker)=>{const i=exactly(src,marker);const e=src.indexOf('\n  };',i);if(e<i)throw Error('Missing pure helper end');return src.slice(i,e+5);};
  const priceHelpers=[declaration(priceCore,'const parseNumber = value => {'),line(priceCore,'const effectiveDiscount ='),declaration(priceCore,'const calculateDiscountedPrice =')].join('\n');
+ const workHelpers=[line(priceCore,'const normalizePriceCode ='),line(priceCore,'const splitLegacyValues ='),declaration(priceCore,'const toDate ='),declaration(priceCore,'const executionFields ='),declaration(priceCore,'const adaptLegacyPlantToWorkItems ='),line(priceCore,'const buildPriceMap ='),line(priceCore,'const resolvePriceItem ='),declaration(priceCore,'const calculateWorkItemTotal ='),declaration(priceCore,'const enrichWorkItem =')].join('\n');
  const priceFunctions=['function openPrices(){','function renderPrices(){','async function savePrice(tr){','async function addPrice(copy){'].map(n=>line(accounting,n)).join('\n');
  const priceDeclarations=['const money=','const esc=','const norm=','const discounted=','const commRef=','const server=','const actor=','const aliases=','const key=v=>'].map(n=>line(accounting,n)).join('\n');
  const exportStart=exactly(accounting,'async function exportWorkbook('),exportEnd=exactly(accounting,'  const aliases=');
  const excelHandlers=[line(accounting,'async function download(buffer,name)'),line(accounting,'const safe='),line(accounting,'function sheetStyle('),accounting.slice(exportStart,exportEnd).trim().replace('note:"Riga di esempio"','note:"ESEMPIO - NON IMPORTARE"')].join('\n');
- return {markup,handlers,css,excelLibrary,excelHandlers,priceHandlers:priceHelpers+'\nconst num=parseNumber; const core={calculateDiscountedPrice};\n'+priceDeclarations+'\n'+priceFunctions};
+ return {markup,handlers,css,excelLibrary,excelHandlers,priceHandlers:priceHelpers+'\n'+workHelpers+'\nconst num=parseNumber; const core={calculateDiscountedPrice,normalizePriceCode,parseNumber,adaptLegacyPlantToWorkItems,buildPriceMap,enrichWorkItem,calculateWorkItemTotal};\n'+priceDeclarations+'\n'+priceFunctions};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
  const result=extractOriginalPreview(await loadOriginalExcelLibrary());

@@ -83,7 +83,7 @@ updateCommessaParentField();renderList();
 get('close-impianti-management-btn').addEventListener('click',()=>{closeImpiantiManagement();selectedCommessaId='';selectedCommessaName='';renderList();});
 const manualDetails=ui.manualImpiantoForm.closest('details');
 get('add-management-impianto-btn').addEventListener('click',()=>{manualDetails.open=true;ui.manualImpiantoDenominazione.focus();});
-for(const id of ['toggle-import-impianti-btn','export-all-impianti-btn','sheet-url-import-btn','download-excel-template-btn','excel-file','sheet-url'])get(id).disabled=true;
+for(const id of ['export-all-impianti-btn','sheet-url-import-btn','sheet-url'])get(id).disabled=true;
 get('snow-roads-section').classList.add('hidden');
 for(const id of ['parent-commessa-form','move-subcommesse-form','snow-roads-form'])for(const el of get(id).querySelectorAll('input,select,textarea,button'))el.disabled=true;
 bindLocalForm(ui.manualImpiantoForm,async event=>{await addManualImpianto(event);refreshPlants();},ui.manualImpiantoFeedback);

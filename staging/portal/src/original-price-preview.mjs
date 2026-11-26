@@ -1,6 +1,7 @@
 import {parsePriceCsv,planPriceImport} from './price-import.mjs';
 import {inspectXlsxZip,verifyXlsxInflation,readPriceXlsx} from './price-xlsx.mjs';
 import {projectPreviewWork,summarizePreviewWork} from './work-price-projection.mjs';
+import {planMatrixImport} from './matrix-import.mjs';
 // Local-only adapter for the original accounting-v2 price screen and handlers.
 export function pricePreviewScript(original){
  return String.raw`
@@ -21,7 +22,7 @@ const pricePreview=(()=>{
  const notify=message=>{get('price-feedback').textContent=message;};
  const alert=notify;
  const confirm=()=>false;
- `+'\n'+original.priceHandlers+'\n'+parsePriceCsv.toString()+'\n'+planPriceImport.toString()+'\n'+inspectXlsxZip.toString()+'\n'+verifyXlsxInflation.toString()+'\n'+readPriceXlsx.toString()+'\n'+projectPreviewWork.toString()+'\n'+summarizePreviewWork.toString()+'\n'+(original.excelHandlers||'')+String.raw`
+ `+'\n'+original.priceHandlers+'\n'+parsePriceCsv.toString()+'\n'+planPriceImport.toString()+'\n'+inspectXlsxZip.toString()+'\n'+verifyXlsxInflation.toString()+'\n'+readPriceXlsx.toString()+'\n'+projectPreviewWork.toString()+'\n'+summarizePreviewWork.toString()+'\n'+planMatrixImport.toString()+'\n'+(original.excelHandlers||'')+String.raw`
  function clearPending(){pending=null;importControls.hidden=true;}
  const workPanel=document.createElement('details');workPanel.className='import-mode-card';workPanel.id='preview-work-panel';
  const heading=document.createElement('summary');heading.textContent='Lavorazioni e importi stimati';workPanel.append(heading);
@@ -108,6 +109,53 @@ const pricePreview=(()=>{
   });
  });
  get('price-list-tbody').addEventListener('click',event=>{const b=event.target.closest('[data-price-action]');if(!b||b.disabled)return;const tr=b.closest('tr'),id=tr.dataset.priceId,action=b.dataset.priceAction;act(async()=>{if(action==='edit')state.priceEditing=id;else if(action==='cancel')state.priceEditing='';else if(action==='save')await savePrice(tr);else if(action==='duplicate')await addPrice(state.prices.find(p=>p.id===id));});});
+ const matrixInput=get('excel-file'),matrixButton=get('import-btn'),matrixFeedback=get('import-feedback');
+ let matrixFile=null,matrixPending=null,matrixBusy=false;
+ const matrixConfirm=document.createElement('button');matrixConfirm.type='button';matrixConfirm.className='btn btn-primary';matrixConfirm.textContent='Conferma matrice cantieri';matrixConfirm.hidden=true;matrixFeedback.after(matrixConfirm);
+ const matrixCancel=document.createElement('button');matrixCancel.type='button';matrixCancel.className='btn';matrixCancel.textContent='Annulla matrice';matrixCancel.hidden=true;matrixConfirm.after(matrixCancel);
+ const clearMatrix=()=>{matrixPending=null;matrixFile=null;matrixInput.value='';matrixConfirm.hidden=true;matrixCancel.hidden=true;matrixButton.disabled=true;};
+ matrixInput.accept=excelReady?'.xlsx,.csv':'.csv';
+ get('toggle-import-impianti-btn').addEventListener('click',()=>get('impianti-import-card').classList.toggle('hidden'));
+ matrixInput.addEventListener('change',()=>{if(matrixBusy)return;const file=matrixInput.files[0];clearMatrix();matrixFile=file||null;matrixButton.disabled=!matrixFile;matrixFeedback.textContent=file?'File selezionato: '+file.name:'';});
+ matrixButton.addEventListener('click',async()=>{
+  if(matrixBusy||!matrixFile)return;
+  const id=managementCommessaId,contract=commesseById.get(id),file=matrixFile;
+  if(!contract)return;
+  matrixBusy=true;clearMatrix();matrixFeedback.textContent='';
+  try{
+   const isExcel=/\.xlsx$/i.test(file.name);
+   if(isExcel?(!excelReady||file.size>5000000):(!/\.csv$/i.test(file.name)||file.size>1000000))throw Error('Seleziona un CSV o XLSX valido.');
+   const existing=impiantiByCommessaId.get(id)||[],snapshot=JSON.stringify(existing);
+   const input=isExcel?await readPriceXlsx(await file.arrayBuffer(),globalThis.ExcelJS,aliases,key,'matrix'):parsePriceCsv(await file.text());
+   const plan=planMatrixImport(input,existing,{mapped,norm,num,normalizeCode:core.normalizePriceCode});
+   if(id!==managementCommessaId||get('impianti-management-screen').classList.contains('hidden'))throw Error('Commessa cambiata.');
+   matrixPending={id,snapshot,plan};matrixConfirm.hidden=false;matrixCancel.hidden=false;
+   matrixFeedback.textContent='Anteprima: '+plan.groups.length+' nuovi cantieri, '+plan.workCount+' lavorazioni. Coordinate, stati e dati storici non importati.';
+  }catch(e){matrixFeedback.textContent=e.message||'Importazione non riuscita.';}finally{matrixBusy=false;}
+ });
+ matrixCancel.addEventListener('click',()=>{clearMatrix();matrixFeedback.textContent='Importazione annullata.';});
+ matrixConfirm.addEventListener('click',()=>{
+  const selected=matrixPending;if(!selected||matrixBusy)return;clearMatrix();
+  const {id,snapshot,plan}=selected,contract=commesseById.get(id),existing=impiantiByCommessaId.get(id)||[];
+  if(!contract||id!==managementCommessaId||get('impianti-management-screen').classList.contains('hidden')||JSON.stringify(existing)!==snapshot){matrixFeedback.textContent='Commessa o cantieri cambiati: ripetere anteprima.';return;}
+  let number=Math.max(0,(Number(contract.nextImpiantoNumber)||1)-1,...existing.map(p=>Number(p.numeroProgressivo)||0));
+  const next=existing.slice(),quantities=new Map(quantitiesFor(id));
+  for(const group of plan.groups){
+   const codes=group.work.map(w=>w.code).join(' | '),ordinary=hasOrdinario(codes),extra=hasStraordinario(codes),plantId='plant-'+(++nextId);
+   const progress=++number;
+   const plant={...group.plant,id:plantId,codicePrezzo:codes,voceRiferimento:'',sfalci:'',areaMq:null,frequenzaAnnua:group.work.map(w=>w.frequency).join(' | '),tipologiaIntervento:group.work.map(w=>w.description).join(' | '),lavorazioniRichieste:'',gpsY:null,gpsX:null,numeroProgressivo:progress,sortOrder:progress,hasOrdinario:ordinary,hasStraordinario:extra,tipoManutenzione:ordinary?(extra?'Ordinaria + Straordinaria':'Ordinaria'):(extra?'Straordinaria':'Non specificata'),done:false,doneAt:null,doneBy:'',createdAt:new Date()};
+   next.push(plant);
+   for(const w of group.work)quantities.set(JSON.stringify([plantId,w.code]),w.quantity);
+  }
+  impiantiByCommessaId.set(id,next);quantityArchive.set(id,quantities);contract.nextImpiantoNumber=number+1;
+  refreshPlants();matrixFeedback.textContent='Importati '+plan.groups.length+' cantieri e '+plan.workCount+' lavorazioni demo.';
+ });
+ for(const id of ['close-impianti-management-btn','open-prezziario-btn'])get(id).addEventListener('click',clearMatrix);
+ get('download-excel-template-btn').disabled=!excelReady;
+ get('download-excel-template-btn').addEventListener('click',async()=>{
+  const id=managementCommessaId,contract=commesseById.get(id);if(!contract||!excelReady)return;
+  try{const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Matrice impianti');ws.addRow(['Distretto','ID SAP','Denominazione Impianto','Comune ubicazione Impianto','Via e civico di ubicazione Impianto','Voce di Riferimento Elenco Prezzi','Quantità','Frequenza annua minima','Tipologia di lavorazione / sfalcio','Stato']);ws.addRow(['Nord','SAP-ESEMPIO','ESEMPIO - NON IMPORTARE','Bologna','Via Roma 1','A11',100,1,'Sfalcio','DA FARE']);sheetStyle(ws,[14,18,32,28,32,24,12,20,32,16]);await download(await wb.xlsx.writeBuffer(),'MODELLO_MATRICE_CANTIERI.xlsx');}catch(e){matrixFeedback.textContent=e.message||'Esportazione non riuscita.';}
+ });
  return Object.freeze({open,renderWork});
 })();
 `;

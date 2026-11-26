@@ -46,12 +46,13 @@ export async function verifyXlsxInflation(buffer,entries){
  }
 }
 
-export async function readPriceXlsx(buffer,ExcelJS,aliases,key){
+export async function readPriceXlsx(buffer,ExcelJS,aliases,key,mode='prices'){
  const entries=inspectXlsxZip(buffer);await verifyXlsxInflation(buffer,entries);
  const wb=new ExcelJS.Workbook();await wb.xlsx.load(buffer);
- const ws=wb.getWorksheet('Elenco prezzi')||wb.worksheets[0];
+ const ws=mode==='matrix'?(wb.getWorksheet('Matrice impianti')||wb.worksheets[0]):(wb.getWorksheet('Elenco prezzi')||wb.worksheets[0]);
  if(!ws||ws.rowCount>501||ws.columnCount>64)throw Error('Massimo 500 voci e 64 colonne.');
- const allowed=new Set(['numeroProgressivoRiga','tipologiaLavorazione','codiceVocePrezzo','unitaMisura','prezzoBase','percentualeRibasso','note'].flatMap(f=>aliases[f].map(key)));
+ const fields=mode==='matrix'?['denominazione','comune','indirizzo','idSap','distretto','codiceVocePrezzo','quantita','frequenzaAnnua','tipologiaLavorazione','stato']:['numeroProgressivoRiga','tipologiaLavorazione','codiceVocePrezzo','unitaMisura','prezzoBase','percentualeRibasso','note'];
+ const allowed=new Set(fields.flatMap(f=>aliases[f].map(key)));
  const headers=[],seen=new Set();
  const scalar=cell=>{
   const v=cell.value;

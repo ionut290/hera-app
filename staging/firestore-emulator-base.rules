@@ -7,6 +7,7 @@ service cloud.firestore {
  function activeMember(tenantId) {
  return eligible() && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active' && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.status == 'active';
  }
+ // SUPER_ADMIN_FRAGMENT
  // Bootstrap metadata only; never grant access to operational documents here.
  match /users/{uid}/memberships/{tenantId} {
   allow get,list: if eligible() && request.auth.uid==uid;

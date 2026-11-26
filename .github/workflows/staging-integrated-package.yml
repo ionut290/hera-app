@@ -48,7 +48,7 @@ jobs:
         run: |
           printf '%s' '{"name":"varga-emulator-package-ci","version":"1.0.0","private":true}' > package.json
           npm install --no-save --no-audit --no-fund firebase-tools@15.34.2 firebase-admin
-          python3 -c "from pathlib import Path; b=Path('firestore-emulator-base.rules').read_text(); assert b.count('// VERDE_FRAGMENT')==1; Path('candidate.rules').write_text(b.replace('// VERDE_FRAGMENT', '\n'.join(Path(f).read_text() for f in ['verde-levato-readonly.rules.fragment','commesse-readonly.rules.fragment','commesse-write.rules.fragment','original-create.rules.fragment','original-manual-plant.rules.fragment','original-price-list.rules.fragment','original-archives-readonly.rules.fragment','fatto-policy.rules.fragment','cobo-write.rules.fragment'])))"
+          node assemble-candidate-rules.mjs
           printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}' > emulator-package.json
           npx --no-install firebase emulators:exec --config emulator-package.json --only firestore,auth --project varga-cantieri-v2-staging 'node portal/test-full-package-auth.cjs'
       - uses: actions/upload-artifact@v4

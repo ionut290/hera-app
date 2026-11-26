@@ -3,22 +3,15 @@ import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import {createOriginalRuntimeEntry} from '../original-runtime-entry.mjs';
 import {createLegacyFirebaseNamespace} from '../legacy-firebase-namespace.mjs';
+import {connectLocalFirebase} from '../firebase-runtime-provider.mjs';
 async function start(){
 const $=id=>document.getElementById(id);
-const projectId='varga-cantieri-v2-staging';
 const status=m=>$('status').textContent=m;
-const allowed=location.hostname==='127.0.0.1'||location.hostname==='localhost';
-if(!allowed||!['http:','https:','capacitor:'].includes(location.protocol))throw Error('Local emulator only');
-const app=firebase.initializeApp({apiKey:'demo-local-emulator-key',authDomain:'localhost',projectId,appId:'demo-local-emulator'});
-const auth=app.auth(),db=app.firestore();
-auth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true});
-db.useEmulator('127.0.0.1',8080);
-await auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
+const {auth,db,statics}=await connectLocalFirebase({firebase,location});
 const entry=createOriginalRuntimeEntry({auth,db});
 let prepared=null,revision=0;
 function closeRuntime(){revision++;$('runtime').removeAttribute('src');$('runtime').hidden=true;prepared=null;entry.leave();}
 function present(session){
- const statics={FieldValue:firebase.firestore.FieldValue,FieldPath:firebase.firestore.FieldPath,Timestamp:firebase.firestore.Timestamp,GeoPoint:firebase.firestore.GeoPoint};
  prepared=Object.freeze({session,namespace:createLegacyFirebaseNamespace({prepared:session,statics})});
  $('runtime').src='original.html';$('runtime').hidden=false;
 }

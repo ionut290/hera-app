@@ -54,3 +54,7 @@ The new `staging/portal/build-full-runtime.mjs` builds a single original applica
 ## Local package progress
 
 Real emulator Auth, verified company A, original iframe and tenant-specific document read passed; iframe-origin commessa write and backend count also passed before the test raced the asynchronous company B switch. The switch wait now tolerates the expected closed-session interval, without weakening access rules. iOS isolated compile is still unsigned, not a device/TestFlight build. Keep live staging rules and production unchanged until acceptance passes.
+
+## Delivery checkpoint: iOS compile and backend transition
+
+GitHub run 45753044631 successfully compiled the unsigned iOS simulator app with Xcode 26.6 and separate bundle ID it.vargacantieri.staging. Real integrated package run 45752360354 passed browser Auth, isolated company data reads/writes, switch and logout. The launcher now delegates Firebase initialization to `firebase-runtime-provider.mjs` (local emulator only); this is a first separation for the owner's agreed future Oracle migration, not an Oracle implementation. The Super Admin candidate rules are claim-based and permit metadata only, strictly non-destructive with atomic membership role/status mirror updates, and no broad operational bypass. Both CI workflows assemble the same candidate rules through a single generator. No live Firebase rules or production changes made.

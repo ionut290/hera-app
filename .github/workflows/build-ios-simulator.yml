@@ -1,6 +1,9 @@
 name: Varga Cantieri iOS Simulator (no deploy)
 
 on:
+  push:
+    branches: [release/ios-servizio-neve-20261126]
+    paths: ['.github/workflows/build-ios-simulator.yml']
   pull_request:
     branches:
       - main
@@ -16,7 +19,7 @@ permissions:
 jobs:
   build-ios-simulator:
     name: Unsigned iOS simulator build
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 50
 
     steps:
@@ -58,6 +61,9 @@ jobs:
           npm run android:aab:prepare
           test -s www/index.html
           test -s www/app.js
+          test -s www/app-snow.js
+          test -s www/salatura-strada-integration.js
+          test -s www/piano-neve/index.html
           test -s www/firebase-config.js
           test -s www/icons/varga-cantieri-512.png
           python3 -m py_compile scripts/configure-ios-plist.py
@@ -69,7 +75,10 @@ jobs:
           npm install --no-save --package-lock=false --no-audit --no-fund @capacitor/ios@7.6.10 @capacitor/core@7.6.10
           node -e "const c=require('@capacitor/core/package.json').version; const i=require('@capacitor/ios/package.json').version; if(c!==i)throw Error('Capacitor core/iOS mismatch: '+c+' vs '+i);"
           npx cap add ios
+          ruby scripts/install-ios-google-signin.rb
+          (cd ios/App && pod update GTMSessionFetcher/Core)
           npx cap sync ios
+          ruby scripts/install-ios-apple-signin.rb
           python3 scripts/mark-ios-native-safe-area.py
           ruby scripts/install-ios-native-geofence.rb
           IOS_APPLE_TEAM_ID=DEMO123456 IOS_PROFILE_NAME=VARGA_CI_TEST_PROFILE ruby scripts/configure-ios-distribution-signing.rb
@@ -89,7 +98,7 @@ jobs:
       - name: Configure registered Firebase iOS app when provided
         shell: bash
         env:
-          IOS_FIREBASE_CONFIG_BASE64: ${{ github.event_name == 'workflow_dispatch' && secrets.IOS_FIREBASE_CONFIG_BASE64 || '' }}
+          IOS_FIREBASE_CONFIG_BASE64: ''
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/configure-ios-firebase.py

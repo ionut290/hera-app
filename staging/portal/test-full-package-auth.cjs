@@ -31,6 +31,19 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   const context=await browser.newContext({serviceWorkers:'block'}),external=[];
   await context.route('**/*',route=>{const u=new URL(route.request().url());if(u.hostname==='127.0.0.1'&&['4173','8080','9099'].includes(u.port))return route.continue();external.push(u.hostname);return route.abort();});
   const page=await context.newPage();page.setDefaultTimeout(20000);
+  // Capture only transport metadata from the synthetic localhost Firestore.
+  // Never log auth headers, request bodies, passwords or token/query parameters.
+  const writeTrace=[];
+  const trace=(req,event,status)=>{
+   const u=new URL(req.url());
+   if(u.hostname!=='127.0.0.1'||u.port!=='8080'||!/(?:Write|commit)/i.test(u.pathname))return;
+   writeTrace.push({event,method:req.method(),path:u.pathname,status});
+   if(writeTrace.length>40)writeTrace.shift();
+  };
+  page.on('request',req=>trace(req,'request',null));
+  page.on('response',res=>trace(res.request(),'response',res.status()));
+  page.on('requestfailed',req=>trace(req,'failed',req.failure()?.errorText||'unknown'));
+
   await page.goto('http://127.0.0.1:4173/');
   await page.locator('#email').fill(email);await page.locator('#password').fill(password);await page.locator('#login button').click();
   await page.locator('[data-tenant="demo-a"]').click();
@@ -42,7 +55,18 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   // Writes from the actual iframe realm, using the selected company Firestore facade.
   const child=await (await page.locator('#runtime').elementHandle()).contentFrame();assert(child);await child.waitForFunction(()=>Boolean(window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__?.isActive()));
   console.log('REAL AUTH AND ORIGINAL FRAME: verified demo-a membership and isolated document read; frame URL '+new URL(child.url()).pathname);
+  try{
   await child.evaluate(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;const stamp=window.firebase.firestore.FieldValue.serverTimestamp();await s.session.firestore.collection('commesse').add({nome:'Created from actual frame',codice:'',excelModelVersion:2,priceListVersion:2,workItemsModelVersion:2,percentualeRibassoGenerale:0.01,excelModelActivatedAt:stamp,excelModelActivatedBy:s.auth.currentUser.email,nextImpiantoNumber:1,parentCommessaId:null,creatoDa:s.auth.currentUser.email,createdAt:stamp});});
+  }catch(error){
+   // A rejected create can still have reached the emulator. Diagnose, never retry
+   // the write and never turn a failed operation into an apparent success.
+   try{
+    const records=await db.collection('tenants/demo-a/commesse').get();
+    const matching=records.docs.filter(d=>d.data().nome==='Created from actual frame');
+    console.error('SYNTHETIC WRITE DIAGNOSTIC '+JSON.stringify({errorCode:error.code||null,total:records.size,matchingCreated:matching.length,otherCompanyCount:(await db.collection('tenants/demo-b/commesse').get()).size,writeTrace}));
+   }catch(diagnosticError){console.error('SYNTHETIC WRITE DIAGNOSTIC unavailable:',diagnosticError.code||'unknown');}
+   throw error;
+  }
   assert.equal((await db.collection('tenants/demo-a/commesse').get()).size,2);
   console.log('REAL FRAME WRITE: company A persisted the original commessa payload through scoped Firestore.');
   await page.locator('[data-tenant="demo-b"]').click();

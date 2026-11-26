@@ -12,7 +12,7 @@ function createWorkspaceService(db){
     const root=db.collection('tenants').doc(id(tenantId));
     const [company,member]=await Promise.all([tx.get(root),tx.get(root.collection('members').doc(id(uid)))]);
     if(!company.exists||!member.exists||company.data().status!=='active'||member.data().status!=='active'||!ROLES.has(member.data().role))return null;
-    return {root,company:{id:root.id,name:String(company.data().name||root.id),role:member.data().role}};
+    return {root,tenantData:company.data(),company:{id:root.id,name:String(company.data().name||root.id),role:member.data().role}};
   }
   async function listMyCompanies(caller,payload){
     const {limit,after}=page(payload),uid=id(caller.uid);

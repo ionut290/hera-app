@@ -2,6 +2,7 @@
 // Laboratory mutations. Only explicitly allowed fields, no deletes or protected workflows.
 const {randomUUID,createHash}=require('node:crypto');
 const core=require('../../inrete-work-items-v2.js');
+const {increment}=require('./starter-plan.cjs');
 const MODULES=new Set(['jobs','personnel','vehicles','prices']);
 const fields=Object.freeze({jobs:['nome','codice','parentCommessaId'],personnel:['cognome','nome'],vehicles:['nId','marca','modello'],prices:['codiceVoce','descrizione','unitaMisura','prezzoBase','percentualeRibasso']});
 function fail(code){throw Object.assign(new Error(code),{code});}
@@ -92,6 +93,8 @@ async function saveRecord({tx,access,caller,payload,id}){
       viewRows=rows.filter(x=>x?.id!==ref.id).concat([{...old.data(),...extra,...clean,id:ref.id,tenantLabManaged:true,tenantRevision:revision+1}]);
     }
   }
+  const nextPlan=!recordId&&['jobs','personnel'].includes(module)?increment(access.tenantData,module==='jobs'?'jobs':'personnel'):null;
+  if(nextPlan)tx.update(access.root,{starterPlan:nextPlan});
   const patch={...extra,...clean,tenantLabManaged:true,tenantRevision:revision+1,updatedAt:new Date(),updatedBy:caller.uid};
   if(!recordId)tx.create(ref,{...patch,createdAt:new Date()});else tx.update(ref,patch);
   if(viewRows)tx.update(view,{['payload.'+viewKey]:viewRows,updatedAt:new Date()});

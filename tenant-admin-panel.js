@@ -11,10 +11,10 @@
   const el = key => document.getElementById("varga-tenant-admin-" + key);
   const open = el("open"), dialog = el("dialog");
   if (!open || !dialog) return;
-  let epoch=0, busy=false, cursor=null, pending=null;
+  let epoch=0, busy=false, cursor=null, pending=null,planTarget=null;
   function message(value){el("status").textContent=value;}
   function reset(){
-    epoch++; busy=false; cursor=null; pending=null;
+    epoch++; busy=false; cursor=null; pending=null;planTarget=null;el("plan").hidden=true;el("plan-form").reset();
     el("list").replaceChildren(); el("more").hidden=true;
     el("form").reset(); el("state").reset(); el("state").hidden=true;
     el("target").textContent=""; message("");
@@ -54,7 +54,7 @@
         el("target").textContent=button.textContent+" "+row.name+" (nessuna cancellazione)";
         el("reason").value="";el("state").hidden=false;
       });
-      li.append(name,button);el("list").append(li);
+      const quota=document.createElement("button");quota.type="button";quota.className="btn";quota.textContent="Piano / richieste";quota.addEventListener("click",()=>void perform(async(n,u)=>{planTarget=null;el("plan").hidden=true;const data=await request("getPlanForAdmin",{tenantId:row.id},n,u);if(!current(n,u))return;const p=data.plan;el("plan").hidden=false;el("plan-summary").textContent=row.name+" · "+JSON.stringify(p.limits)+(p.pending?" → "+JSON.stringify(p.pending.limits)+" · "+p.pending.reason:" · Nessuna richiesta");el("plan-form").hidden=!p.pending;if(p.pending)planTarget={tenantId:row.id,requestId:p.pending.id};}));li.append(name,button,quota);el("list").append(li);
     }
   }
   async function list(n,uid,append=false){
@@ -81,5 +81,6 @@
   el("cancel").addEventListener("click",()=>{pending=null;el("state").hidden=true;});
   el("form").addEventListener("submit",e=>{e.preventDefault();const name=el("name").value.trim(),ownerEmail=el("email").value.trim();void perform(async(n,u)=>{await request("createCompany",{name,ownerEmail},n,u);if(!current(n,u))return;el("form").reset();await list(n,u);});});
   el("state").addEventListener("submit",e=>{e.preventDefault();if(!pending)return;const payload={...pending,reason:el("reason").value.trim()};void perform(async(n,u)=>{await request("setCompanyStatus",payload,n,u);if(!current(n,u))return;pending=null;el("state").hidden=true;await list(n,u);});});
+  el("plan-form").addEventListener("submit",e=>{e.preventDefault();if(!planTarget)return;const decision=e.submitter?.value;if(!["approve","reject"].includes(decision))return;const payload={...planTarget,decision,reason:el("plan-reason").value};void perform(async(n,u)=>{await request("reviewPlanUpgrade",payload,n,u);planTarget=null;el("plan").hidden=true;el("plan-form").reset();await list(n,u);});});
   auth.onIdTokenChanged(user=>void check(user),hide);
 })();

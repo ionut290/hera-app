@@ -10,18 +10,18 @@
   const message=text=>{el("status").textContent=text;};
   function cancel(){epoch++;controller?.abort();controller=null;}
   function clearModule(){clearOperation();clearEditor();el("new-record").hidden=true;moduleCursor=null;moduleQuery=null;el("module-title").textContent="";el("module-rows").replaceChildren();el("module-more").hidden=true;}
-  function clearSelection(){session.clear();clearModule();el("new-job").hidden=true;active=null;kind=null;jobsCursor=null;el("selected").hidden=true;el("actions").hidden=true;el("name").textContent="";el("role").textContent="";el("jobs").replaceChildren();el("jobs-more").hidden=true;}
+  function clearSelection(){el("plan").hidden=true;el("upgrade").reset();session.clear();clearModule();el("new-job").hidden=true;active=null;kind=null;jobsCursor=null;el("selected").hidden=true;el("actions").hidden=true;el("name").textContent="";el("role").textContent="";el("jobs").replaceChildren();el("jobs-more").hidden=true;}
   function clear(){cancel();clearSelection();cursor=null;el("list").replaceChildren();el("more").hidden=true;message("");}
   function hide(){clear();open.hidden=true;open.classList.add("hidden");if(dialog.open)dialog.close();}
   function current(n,uid){return allowed()&&n===epoch&&auth.currentUser?.uid===uid&&dialog.open;}
   async function call(action,payload,n,uid,signal){
-    if(action!=="listMyCompanies"&&action!=="openCompany")session.requireTenant(payload.tenantId);
+    if(action!=="listMyCompanies"&&action!=="openCompany"&&action!=="registerCompany")session.requireTenant(payload.tenantId);
     const token=await auth.currentUser.getIdTokenResult();
     if(!current(n,uid)||token.claims.email_verified!==true||token.claims.apple_review===true)throw Error("session");
     const res=await fetch("/api/v2/companies",{method:"POST",headers:{"content-type":"application/json","authorization":"Bearer "+token.token},body:JSON.stringify({action,payload}),cache:"no-store",credentials:"omit",redirect:"error",signal});
     const data=await res.json();
     if(!current(n,uid))throw Error("session");
-    if(action!=="listMyCompanies"&&action!=="openCompany")session.requireTenant(payload.tenantId);
+    if(action!=="listMyCompanies"&&action!=="openCompany"&&action!=="registerCompany")session.requireTenant(payload.tenantId);
     if(!res.ok||data.ok!==true)throw Error(data.code||"request-failed");
     return data.result;
   }
@@ -30,7 +30,7 @@
     const n=epoch,uid=auth.currentUser.uid,ctrl=new AbortController();controller=ctrl;
     const timer=setTimeout(()=>ctrl.abort(),12000);
     try{message("Caricamento…");await task((action,payload)=>call(action,payload,n,uid,ctrl.signal));}
-    catch(e){if(current(n,uid)){clearSelection();if(e.message==="forbidden"||e.message==="unauthenticated"){el("list").replaceChildren();cursor=null;el("more").hidden=true;}message("Operazione non confermata. Aggiorna l’elenco prima di riprovare.");}}
+    catch(e){if(current(n,uid)){clearSelection();if(e.message==="forbidden"||e.message==="unauthenticated"){el("list").replaceChildren();cursor=null;el("more").hidden=true;}message(e.message.startsWith("invalid-quota-")?"Limite raggiunto. Seleziona l’azienda e richiedi ampliamento.":"Operazione non confermata. Aggiorna l’elenco prima di riprovare.");}}
     finally{clearTimeout(timer);if(controller===ctrl)controller=null;}
   }
   function showCompany(data){
@@ -38,7 +38,7 @@
     el("selected").hidden=false;el("actions").hidden=!data.capabilities.readCommesse;
     message("Azienda verificata. L’area operativa completa non è ancora collegata.");
   }
-  async function choose(id){clearSelection();await run(async request=>{const ticket=session.begin(id);const data=await request("openCompany",{tenantId:id});session.commit(ticket,data);showCompany(data);});}
+  async function choose(id){clearSelection();await run(async request=>{const ticket=session.begin(id);const data=await request("openCompany",{tenantId:id});session.commit(ticket,data);showCompany(data);if(data.capabilities.readCommesse){try{renderPlan((await request("getCompanyPlan",{tenantId:id})).plan);}catch(e){if(e.message!=="invalid-plan-unavailable")throw e;}}});}
   async function list(append=false){
     clearSelection();if(!append){el("list").replaceChildren();cursor=null;el("more").hidden=true;}
     await run(async request=>{
@@ -163,6 +163,15 @@
   el("month").addEventListener("change",()=>{cancel();clearModule();});
   el("module-kind").addEventListener("change",()=>{cancel();clearModule();});
   el("module-more").addEventListener("click",()=>{if(moduleQuery&&moduleCursor)void showModule(moduleQuery,true);});
+  const quotaKeys=["jobs","plants","admins","operators"];
+  function renderPlan(plan){
+    el("plan").hidden=false;
+    el("plan-summary").textContent="Commesse "+plan.usage.jobs+"/"+plan.limits.jobs+" · Impianti "+plan.usage.plants+"/"+plan.limits.plants+" · Admin "+plan.usage.admins+"/"+plan.limits.admins+" · Operatori "+plan.usage.operators+"/"+plan.limits.operators+(plan.pending?" · Richiesta in attesa":"");
+    el("upgrade").hidden=!!plan.pending;
+    for(const k of quotaKeys){el("quota-"+k).min=String(plan.limits[k]);el("quota-"+k).value=String(plan.limits[k]);}
+  }
+  el("register").addEventListener("submit",e=>{e.preventDefault();const name=el("register-name").value;void run(async request=>{await request("registerCompany",{name});el("register").reset();message("Azienda pronta nel laboratorio. Aggiorna l’elenco.");});});
+  el("upgrade").addEventListener("submit",e=>{e.preventDefault();if(!active)return;const tenantId=active,limits=Object.fromEntries(quotaKeys.map(k=>[k,Number(el("quota-"+k).value)])),reason=el("upgrade-reason").value;void run(async request=>{await request("requestPlanUpgrade",{tenantId,limits,reason});renderPlan((await request("getCompanyPlan",{tenantId})).plan);message("Richiesta inviata al Super Admin.");});});
   open.addEventListener("click",()=>{if(open.hidden||!allowed())return;clear();dialog.showModal();void list();});
   el("close").addEventListener("click",()=>dialog.close());dialog.addEventListener("close",clear);
   el("refresh").addEventListener("click",()=>void list());

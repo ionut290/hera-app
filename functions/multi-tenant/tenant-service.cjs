@@ -3,6 +3,7 @@
 // The future HTTP/callable adapter MUST supply verified Auth claims, never client claims.
 // No endpoint, credentials or emails are created by this module.
 const { randomBytes, randomUUID, createHash } = require('node:crypto');
+const {increment}=require('./starter-plan.cjs');
 const roles = new Set(['admin','manager','team_lead','worker','client']);
 const adminRoles = new Set(['owner','admin']);
 const DAY = 86400000;
@@ -52,6 +53,7 @@ function makeTenantService(store, clock=Date.now) {
       if (tenant?.status!=='active' || membership?.status!=='active' || !adminRoles.has(membership.role)) fail('forbidden');
       // An admin may invite operational roles, not another admin.
       if (role==='admin' && membership.role!=='owner') fail('forbidden');
+      increment(tenant,role==='admin'?'admins':'operators',true);
       tx.create(root+'/invites/'+inviteId,{email:target,role,status:'pending',generation:tenant.inviteGeneration??0,createdBy:caller.uid,createdAt:now,expiresAt:now+7*DAY});
       tx.create(root+'/audit/'+randomUUID(),{event:'invite-created',actorUid:caller.uid,role,at:now});
     });
@@ -70,6 +72,8 @@ function makeTenantService(store, clock=Date.now) {
       if (issuer?.status!=='active'|| !adminRoles.has(issuer.role)|| (invitation.role==='admin'&&issuer.role!=='owner')) fail('invalid-invite');
       // Never overwrite active or historical/revoked memberships. Reactivation requires separate review.
       if (member) fail('membership-exists');
+      const plan=increment(tenant,invitation.role==='admin'?'admins':'operators');
+      if(plan)tx.set(root,{...tenant,starterPlan:plan});
       tx.create(memberPath(tenantId,caller.uid),{role:invitation.role,status:'active',email:caller.email,createdAt:now});
       tx.create(indexPath(tenantId,caller.uid),{role:invitation.role,status:'active'});
       tx.set(path,{...invitation,status:'used',usedBy:caller.uid,usedAt:now});

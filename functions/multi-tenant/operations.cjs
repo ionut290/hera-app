@@ -1,6 +1,7 @@
 'use strict';
 // Deliberately limited to synthetic emulator records; not the production operational runtime.
 const {randomUUID,createHash}=require('node:crypto');
+const {increment}=require('./starter-plan.cjs');
 const digest=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 function fail(code){throw Object.assign(new Error(code),{code});}
 function txt(x,max=150,required=false){if(typeof x!=='string')fail('invalid-field');x=x.trim().replace(/\s+/g,' ');if(x.length>max||(required&&!x))fail('invalid-field');return x;}
@@ -50,6 +51,8 @@ async function createOperation({tx,access,caller,payload,id}){
     const key=d=>JSON.stringify([d.idSap||'',d.denominazione||'',d.comune||'',d.indirizzo||''].map(v=>String(v).trim().toLowerCase()));
     if(existing.docs.some(d=>key(d.data())===key(clean)||(clean.idSap&&String(d.data().idSap||'').toLowerCase()===clean.idSap.toLowerCase())))fail('already-exists');
     const number=Math.max(0,Number(jobSnap.data().nextImpiantoNumber||1)-1,...existing.docs.map(d=>Number(d.data().numeroProgressivo)||0))+1;
+    const nextPlan=increment(access.tenantData,'plants');
+    if(nextPlan)tx.update(root,{starterPlan:nextPlan});
     const metadata={commessaId:jobId,tenantLabManaged:true,tenantLabPlant:true,createdAt:now,updatedAt:now,createdBy:caller.uid};
     tx.create(job.collection('impiantiFisici').doc(recordId),{...metadata,denominazione:clean.denominazione,idSap:clean.idSap,comune:clean.comune,indirizzo:clean.indirizzo,latitudine:clean.gpsY,longitudine:clean.gpsX,numeroProgressivoImpianto:number,statoGenerale:'DA FARE'});
     tx.create(job.collection('impianti').doc(recordId),{...metadata,...clean,physicalPlantId:recordId,numeroProgressivo:number,sortOrder:number,stato:'DA FARE',done:false,doneAt:null,doneBy:'',codicePrezzo:''});

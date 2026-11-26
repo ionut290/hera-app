@@ -313,6 +313,45 @@ async function main(){
   await call(admin,'setCompanyStatus',{tenantId:oa.tenantId,status:'suspended',reason:'Operational suspension test'});
   assert.equal((await op(opsOwner,'plant',{denominazione:'Blocked'})).status,403);
   console.log('Laboratory operational plant, team assignment and pending hours assertions passed');
+  // Self-service starter plan; all counters are enforced in the same transactions.
+  const starterOwner=await account('starter-owner');
+  const self=await viaHttp(starterOwner.token,'registerCompany',{name:'Starter company'});
+  assert.equal(self.status,200);const st=self.result.tenantId;
+  assert.equal((await viaHttp(starterOwner.token,'registerCompany',{name:'Second attempt'})).result.tenantId,st);
+  assert.equal((await viaHttp(starterOwner.token,'registerCompany',{name:'Override',limits:{jobs:100}})).status,400);
+  const plan=await viaHttp(starterOwner.token,'getCompanyPlan',{tenantId:st});
+  assert.deepEqual(plan.result.plan.limits,{jobs:1,plants:10,admins:1,operators:3});
+  assert.equal(plan.result.plan.usage.admins,1);
+  assert.equal((await viaHttp(worker.token,'getCompanyPlan',{tenantId:st})).status,403);
+  const sjob={tenantId:st,module:'jobs',kind:'ordinary',requestId:randomUUID(),data:{nome:'Starter job'}};
+  const createdStarterJob=await save(starterOwner,sjob);assert.equal(createdStarterJob.status,200);
+  assert.equal((await save(starterOwner,sjob)).result.recordId,createdStarterJob.result.recordId);
+  assert.equal((await save(starterOwner,{...sjob,kind:'snow',requestId:randomUUID()})).code,'invalid-quota-jobs');
+  for(let i=0;i<11;i++){
+    const r=await viaHttp(starterOwner.token,'createCompanyOperation',{tenantId:st,operation:'plant',kind:'ordinary',commessaId:createdStarterJob.result.recordId,requestId:randomUUID(),data:{denominazione:'Starter plant '+i}});
+    if(i<10)assert.equal(r.status,200);else assert.equal(r.code,'invalid-quota-plants');
+  }
+  await rejects(()=>call(starterOwner,'invite',{tenantId:st,recipientEmail:worker.email,role:'admin'}),'invalid-quota-admins');
+  const invitees=await Promise.all([0,1,2,3].map(i=>account('starter-worker-'+i)));
+  // Four invites may exist; only three concurrent acceptances can consume a seat.
+  const invitations=await Promise.all(invitees.map(u=>call(starterOwner,'invite',{tenantId:st,recipientEmail:u.email,role:'worker'})));
+  const accepted=await Promise.allSettled(invitees.map((u,i)=>call(u,'accept',{tenantId:st,inviteToken:invitations[i].token})));
+  assert.equal(accepted.filter(x=>x.status==='fulfilled').length,3);
+  assert.equal(accepted.filter(x=>x.status==='rejected'&&x.reason.code==='invalid-quota-operators').length,1);
+  for(let i=0;i<4;i++){const r=await save(starterOwner,{tenantId:st,module:'personnel',kind:i%2?'snow':'ordinary',requestId:randomUUID(),data:{nome:'Person '+i,cognome:'Starter'}});if(i<3)assert.equal(r.status,200);else assert.equal(r.code,'invalid-quota-personnel');}
+  const limits={jobs:2,plants:20,admins:2,operators:5};
+  const req=await viaHttp(starterOwner.token,'requestPlanUpgrade',{tenantId:st,limits,reason:'Need more capacity'});
+  assert.equal(req.status,200);
+  assert.equal((await viaHttp(starterOwner.token,'reviewPlanUpgrade',{tenantId:st,requestId:req.result.requestId,decision:'approve',reason:'Self approval'})).status,403);
+  assert.equal((await viaHttp(admin.token,'getPlanForAdmin',{tenantId:st})).result.plan.pending.id,req.result.requestId);
+  assert.equal((await save(starterOwner,{...sjob,requestId:randomUUID()})).code,'invalid-quota-jobs');
+  assert.equal((await viaHttp(admin.token,'reviewPlanUpgrade',{tenantId:st,requestId:req.result.requestId,decision:'approve',reason:'Approved synthetic'})).status,200);
+  assert.equal((await save(starterOwner,{...sjob,kind:'snow',requestId:randomUUID()})).status,200);
+  assert.deepEqual((await viaHttp(starterOwner.token,'getCompanyPlan',{tenantId:st})).result.plan.limits,limits);
+  const req2=await viaHttp(starterOwner.token,'requestPlanUpgrade',{tenantId:st,limits:{...limits,jobs:3},reason:'More jobs'});
+  assert.equal((await viaHttp(admin.token,'reviewPlanUpgrade',{tenantId:st,requestId:req2.result.requestId,decision:'reject',reason:'Not approved'})).status,200);
+  assert.deepEqual((await viaHttp(starterOwner.token,'getCompanyPlan',{tenantId:st})).result.plan.limits,limits);
+  console.log('Starter self-registration, transactional quotas and exclusive super-admin upgrades passed');
   await adapter.auth.setCustomUserClaims(admin.uid,{});
   assert.equal((await viaHttp(admin.token,'listCompanies')).status,403);
   await rejects(()=>call(admin,'listCompanies'),'forbidden');

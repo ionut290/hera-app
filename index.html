@@ -201,10 +201,19 @@
     <button class="btn" type="button" id="varga-company-close">Chiudi</button>
     <button class="btn" type="button" id="varga-company-refresh">Cambia azienda / aggiorna</button>
     <p id="varga-company-status" role="status" aria-live="polite"></p>
+    <form id="varga-company-register"><label for="varga-company-register-name">Crea la tua azienda (piano base)</label><input id="varga-company-register-name" required maxlength="100"><button type="submit" class="btn">Crea azienda</button></form>
     <ul id="varga-company-list"></ul>
     <button class="btn" type="button" id="varga-company-more" hidden>Altre aziende</button>
     <section id="varga-company-selected" hidden>
       <h3 id="varga-company-name"></h3><p id="varga-company-role"></p>
+      <section id="varga-company-plan" hidden><p id="varga-company-plan-summary"></p><form id="varga-company-upgrade">
+        <label>Commesse <input id="varga-company-quota-jobs" type="number" min="1" required></label>
+        <label>Impianti <input id="varga-company-quota-plants" type="number" min="10" required></label>
+        <label>Admin <input id="varga-company-quota-admins" type="number" min="1" required></label>
+        <label>Operatori <input id="varga-company-quota-operators" type="number" min="3" required></label>
+        <label>Motivazione <input id="varga-company-upgrade-reason" minlength="3" maxlength="250" required></label>
+        <button class="btn" type="submit">Richiedi ampliamento</button>
+      </form></section>
       <div id="varga-company-actions" hidden>
         <button class="btn" type="button" id="varga-company-ordinary">Commesse</button>
         <button class="btn" type="button" id="varga-company-snow">Servizio Neve</button>
@@ -270,6 +279,8 @@
       <input id="varga-tenant-admin-email" type="email" required maxlength="254">
       <button class="btn btn-primary" type="submit">Crea azienda vuota</button>
     </form>
+    <h3>Richieste di ampliamento</h3>
+    <section id="varga-tenant-admin-plan" hidden><p id="varga-tenant-admin-plan-summary"></p><form id="varga-tenant-admin-plan-form"><label>Motivazione <input id="varga-tenant-admin-plan-reason" minlength="3" maxlength="250" required></label><button class="btn" type="submit" value="approve">Approva richiesta</button><button class="btn" type="submit" value="reject">Rifiuta richiesta</button></form></section>
     <h3>Stato azienda</h3>
     <form id="varga-tenant-admin-state" hidden>
       <p id="varga-tenant-admin-target"></p>

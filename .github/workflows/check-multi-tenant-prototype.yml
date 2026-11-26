@@ -39,6 +39,7 @@ jobs:
           node --check tests/multi-tenant/flat-path-experiment.test.cjs
           node --check tests/multi-tenant/flat-session-scope.cjs
           node --check tests/multi-tenant/flat-session-runtime.test.cjs
+          node --check tests/multi-tenant/flat-session-auth.test.cjs
           node tests/multi-tenant/tenant-runtime-session.test.cjs
           node --check tests/multi-tenant/original-browser-smoke.cjs
           node --check tests/multi-tenant/legacy-commesse-scope.cjs
@@ -66,7 +67,7 @@ jobs:
       - name: Run Firestore synthetic tenant tests
         working-directory: tests/multi-tenant
         run: |
-          npx firebase emulators:exec --only firestore,auth --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs && node tenant-service.emulator.test.cjs && node auth-adapter.emulator.test.cjs && node legacy-commesse-runtime.test.cjs && node flat-path-experiment.test.cjs && node flat-session-runtime.test.cjs'
+          npx firebase emulators:exec --only firestore,auth --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs && node tenant-service.emulator.test.cjs && node auth-adapter.emulator.test.cjs && node legacy-commesse-runtime.test.cjs && node flat-path-experiment.test.cjs && node flat-session-runtime.test.cjs && node flat-session-auth.test.cjs'
   original-browser-smoke:
     if: github.ref == 'refs/heads/development/multi-azienda-v2-full-app'
     runs-on: ubuntu-24.04

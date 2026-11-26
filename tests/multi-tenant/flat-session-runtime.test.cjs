@@ -97,10 +97,21 @@ async function main(){
   await assert.rejects(old.get(),{code:'permission-denied'});x.r.close();
   const z=mk(phone,b,'phone');await z.r.load();assert.deepEqual(z.r.names(),[b+' commesse']);
   await seed(sessionPath(uid,'phone'),session(b,'revoked'));
-  await assertFails(getDocsFromServer(fq(phone,'commesse',b)));
+  // A reused active listener can return its last server snapshot while a
+  // dependent-rule change is propagating. Diagnose this separately from a
+  // genuinely new server request; do not interpret a cached answer as denial.
+  const beforeClose=await Promise.allSettled([getDocsFromServer(fq(phone,'commesse',b))]);
+  console.log('Revoked active-query observation: '+beforeClose[0].status);
+  z.r.close();
+  const freshPhone=client(uid,claims('phone'));
+  await assertFails(getDocFromServer(doc(freshPhone,'commesse/'+job('commesse',b))));
+  await assertFails(getDocsFromServer(fq(freshPhone,'commesse',b)));
   await assertSucceeds(getDocsFromServer(fq(tablet,'commesse',b)));
+  y.r.close();
   await seed('tenants/'+b+'/members/'+uid,{status:'revoked',role:'owner'});
-  await assertFails(getDocsFromServer(fq(tablet,'commesse',b)));
+  const freshTablet=client(uid,claims('tablet'));
+  await assertFails(getDocFromServer(doc(freshTablet,'commesse/'+job('commesse',b))));
+  await assertFails(getDocsFromServer(fq(freshTablet,'commesse',b)));
   console.log('Original commesse loader + flat per-device session rules: scoped normal/snow, cross-device isolation, denied writes, expiry and revocation passed.');
  }finally{for(const r of runtimes)r.close();await env.cleanup();}
 }

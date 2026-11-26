@@ -27,7 +27,13 @@ async function main() {
         seed('tenants/c/members/alice', { status: 'active', role: 'worker' }),
         seed('users/alice/memberships/a', { status: 'active' }),
         seed('users/bob/memberships/b', { status: 'active' }),
-        seed('tenants/a/commesse/example', { name: 'Synthetic job' })
+        seed('tenants/a/members/adminA', { status: 'active', role: 'admin' }),
+        seed('tenants/c/members/adminA', { status: 'active', role: 'admin' }),
+        seed('tenants/a/commesse/example', { name: 'Synthetic job A' }),
+        seed('tenants/b/commesse/example', { name: 'Synthetic job B' }),
+        seed('tenants/c/commesse/example', { name: 'Synthetic job C' }),
+        seed('tenants/a/commesse/example/impianti/secret', { name: 'Protected nested record' }),
+        seed('commesse/legacy', { name: 'Legacy record must remain inaccessible' })
       ]);
     });
     const alice = env.authenticatedContext('alice', { email_verified: true }).firestore();
@@ -52,8 +58,26 @@ async function main() {
     await assertFails(updateDoc(doc(alice, 'tenants/a/members/alice'), { role: 'owner' }));
     await assertFails(setDoc(doc(alice, 'tenants/b/members/alice'), { status: 'active', role: 'owner' }));
     await assertFails(setDoc(doc(alice, 'users/alice/memberships/b'), { status: 'active' }));
-    await assertFails(read(alice, 'tenants/a/commesse/example')); // Not implemented, fail closed.
-    console.log('17 tenant-boundary assertions passed.');
+    await assertFails(read(alice, 'tenants/a/commesse/example')); // Worker permission not enabled in this pilot.
+    const adminA = env.authenticatedContext('adminA', { email_verified: true }).firestore();
+    const superAdmin = env.authenticatedContext('platform', { email_verified: true, platform_admin: true }).firestore();
+    const adminReview = env.authenticatedContext('adminA', { email_verified: true, apple_review: true }).firestore();
+    await assertSucceeds(read(adminA, 'tenants/a/commesse/example'));
+    await assertSucceeds(read(bob, 'tenants/b/commesse/example'));
+    const own = await assertSucceeds(getDocs(collection(adminA, 'tenants/a/commesse')));
+    if (own.size !== 1 || own.docs[0].data().name !== 'Synthetic job A') throw Error('Unexpected tenant A data');
+    await assertFails(read(adminA, 'tenants/b/commesse/example'));
+    await assertFails(read(bob, 'tenants/a/commesse/example'));
+    await assertFails(getDocs(collection(adminA, 'tenants/b/commesse')));
+    await assertFails(read(adminA, 'tenants/c/commesse/example'));
+    await assertFails(read(superAdmin, 'tenants/a/commesse/example'));
+    await assertFails(read(adminReview, 'tenants/a/commesse/example'));
+    await assertFails(read(anon, 'tenants/a/commesse/example'));
+    await assertFails(read(adminA, 'tenants/a/commesse/example/impianti/secret'));
+    await assertFails(read(adminA, 'commesse/legacy'));
+    await assertFails(setDoc(doc(adminA, 'tenants/a/commesse/new'), { name: 'Forbidden write' }));
+    await assertFails(updateDoc(doc(adminA, 'tenants/a/commesse/example'), { name: 'Forbidden update' }));
+    console.log('Tenant membership and read-only commesse pilot assertions passed.');
   } finally {
     await env.cleanup();
   }

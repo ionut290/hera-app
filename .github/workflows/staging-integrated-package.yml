@@ -31,7 +31,7 @@ jobs:
           test -s full-runtime-dist/app-snow.js
           test -s full-runtime-dist/accounting-v2.js
           test -s full-runtime-dist/LOCAL_TEST_ONLY.txt
-          node --check full-runtime-dist/app.js
+          node -e "new (require('node:vm').Script)(require('node:fs').readFileSync('full-runtime-dist/app.js','utf8'));"
           node --check full-runtime-dist/launcher.js
           node --check full-runtime-dist/runtime-bootstrap.js
           test ! -e full-runtime-dist/sw.js

@@ -12,3 +12,7 @@ No live data migration, Firebase deployment or TestFlight upload is authorized b
 ## Candidate source integration
 
 `original-runtime-source.mjs` prepares the complete original `app.js` in memory by replacing only the initial SDK acquisition statements. The generated candidate is syntax-checked and reversibility is tested. The startup auth, legacy approval/profile collections, local/native caches, direct SDK access in other modules, messaging, Functions and external integrations still require review. Do not load the generated candidate in the portal/native app or remove quarantine. Existing listeners and references are closed by the session scope; in-flight writes cannot be recalled and remain governed by server rules.
+
+## Startup authorization and cache candidate
+
+`original-runtime-entry.mjs` combines the tested session scope with a fresh server membership check and a compatibility profile. Legacy built-in email privileges and globally saved profiles are not inputs. Its two bounded storage objects are disposable, in memory, and never touch the device's existing cache or offline outbox. These objects are NOT installed into `window` or the original app yet. Native Preferences, IndexedDB, service workers, direct global SDK calls, legacy approval UI and protected offline queues still require explicit integration and regression testing. Do not discard existing production offline records. No real runtime activation or deployment.

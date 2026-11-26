@@ -34,3 +34,30 @@ export function buildScopedOriginalAppCandidate(source){
  if(replaceExactly(code,scopedSdkInit,originalSdkInit)!==source)throw Error('Unexpected source change');
  return code;
 }
+
+// The original runtime candidate's auth gate is replaced only in memory.
+// Exact source anchors stop the build on unexpected upstream changes.
+const startupStart="  if (loggedIn) {\n    try {\n      const savedSession = savedStartupSession || await readPersistedSession();";
+const startupEnd="    if (!(await requireBiometricAtStartup())) return;";
+const oldAdmin="function canManageData() {\n  const email = normalizeEmail(currentUser?.email || \"\");\n  return isBuiltInSuperAdminEmail(email) || adminEmails.has(email);\n}";
+const newAdmin="function canManageData() {\n  const prepared = window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;\n  return Boolean(prepared?.isActive?.() && currentUser?.uid === prepared.session.context.uid && prepared.session.context.role === \"admin\");\n}";
+const newStartup="  if (loggedIn) {\n    try {\n      const prepared = window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;\n      if (!prepared?.isActive?.() || user.uid !== prepared.session.context.uid) throw new Error(\"Sessione aziendale non valida.\");\n      const authorization = await prepared.approval.verify(user);\n      if (!authorization.allowed || !prepared.isActive()) throw new Error(\"Autorizzazione aziendale non valida.\");\n      await savePersistedSession(user, authorization.profile);\n    } catch (error) {\n      currentUser = null;\n      setAuthenticationGateState(\"required\", \"Accesso aziendale non autorizzato.\");\n      hideStartupLoading();\n      return;\n    }\n";
+export function buildIntegratedRuntimeCandidate(source){
+ let code=buildScopedOriginalAppCandidate(source);
+ const from=code.indexOf(startupStart),end=code.indexOf(startupEnd,from);
+ if(from<0||end<0||code.indexOf(startupStart,from+1)>=0)throw Error('Startup gate changed');
+ const originalGate=code.slice(from,end);
+ if(!originalGate.includes('verifyPersistedSessionAgainstDatabase(user, savedSession)')||!originalGate.includes('window.HeraAccessApproval.verify(user)'))throw Error('Legacy approval markers changed');
+ code=replaceExactly(code,originalGate,newStartup);
+ code=replaceExactly(code,oldAdmin,newAdmin);
+ const builtIn=code.match(/const BUILT_IN_SUPER_ADMIN_EMAILS = [^\\n]+;/g);
+ if(!builtIn||builtIn.length!==1)throw Error('Legacy administrator list changed');
+ code=replaceExactly(code,builtIn[0],'const BUILT_IN_SUPER_ADMIN_EMAILS = [];');
+ // Bind only the app's unqualified cache identifiers; other modules and window/native
+ // APIs are not covered by this transform and must remain in quarantine.
+ const binding='const localStorage = window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.localStorage;\\nconst sessionStorage = window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.sessionStorage;\\n';
+ code=binding.replace(/\\\\n/g,'\\n')+code;
+ return code;
+}
+export const integratedStartupGate=newStartup;
+export const integratedAdminGate=newAdmin;

@@ -16,3 +16,9 @@ No live data migration, Firebase deployment or TestFlight upload is authorized b
 ## Startup authorization and cache candidate
 
 `original-runtime-entry.mjs` combines the tested session scope with a fresh server membership check and a compatibility profile. Legacy built-in email privileges and globally saved profiles are not inputs. Its two bounded storage objects are disposable, in memory, and never touch the device's existing cache or offline outbox. These objects are NOT installed into `window` or the original app yet. Native Preferences, IndexedDB, service workers, direct global SDK calls, legacy approval UI and protected offline queues still require explicit integration and regression testing. Do not discard existing production offline records. No real runtime activation or deployment.
+
+## Owner priority — fastest verified path to TestFlight
+
+Use the complete original runtime; stop adding reconstructed screens. Prefer direct integration and automated concrete checks over further independent prototypes. At each session report verified changes, CI status, remaining blockers and TestFlight readiness. Preserve original production and protected FATTO/WhatsApp behavior, no paid services. Do not report untested features as complete.
+
+The new integrated candidate connects the original startup gate, company role and in-memory cache identifiers in `app.js` itself (in-memory source transformation only). Tests execute the actual transformed startup gate, not a separately recreated login screen. Other original modules' direct Firebase, storage and native accesses remain blocked from live startup until isolation is validated. This is not a native build or a live application launch.

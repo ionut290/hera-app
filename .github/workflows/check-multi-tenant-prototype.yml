@@ -32,6 +32,7 @@ jobs:
           node --check functions/multi-tenant/operations.cjs
           node --check functions/multi-tenant/starter-plan.cjs
           node --check functions/multi-tenant/worker-access.cjs
+          node --check functions/multi-tenant/worker-hours.cjs
           node --check tenant-runtime-session.js
           node --check tests/multi-tenant/legacy-boundary-inventory.cjs
           node tests/multi-tenant/tenant-runtime-session.test.cjs

@@ -6,7 +6,7 @@
   const open=el("open"),dialog=el("dialog"),entry=el("entry"),entryOpen=el("entry-open");if(!open||!dialog||!entry||!entryOpen)return;
   if(!window.VargaTenantSession)return;
   const session=window.VargaTenantSession.create(()=>auth.currentUser?.uid||null);
-  let epoch=0,controller=null,active=null,kind=null,cursor=null,jobsCursor=null,moduleCursor=null,moduleQuery=null,membersCursor=null,workerCursor=null,entryAllowed=false,entryGeneration=0;
+  let epoch=0,controller=null,active=null,kind=null,cursor=null,jobsCursor=null,moduleCursor=null,moduleQuery=null,membersCursor=null,workerCursor=null,myHoursCursor=null,hoursDraft=null,entryAllowed=false,entryGeneration=0;
   const message=text=>{el("status").textContent=text;};
   function cancel(){epoch++;controller?.abort();controller=null;}
   function clearModule(){clearOperation();clearEditor();el("new-record").hidden=true;moduleCursor=null;moduleQuery=null;el("module-title").textContent="";el("module-rows").replaceChildren();el("module-more").hidden=true;}
@@ -56,7 +56,7 @@
       const data=await request("listCompanyCommesse",{tenantId,kind:nextKind,limit:25,after:append?jobsCursor:null});
       if(active!==data.company.id||data.kind!==nextKind)throw Error("session");
       kind=nextKind;el("new-job").hidden=false;for(const row of data.commesse){
-        const li=document.createElement("li"),name=document.createElement("span");name.textContent=row.name+" · ID: "+row.id+" ";li.append(name);if(row.editable===true)addEdit(li,{module:"jobs",kind:nextKind,title:"Commessa"},row.id);
+        const li=document.createElement("li"),name=document.createElement("span");name.textContent=row.name;const identifier=document.createElement("small");identifier.textContent=" · ID: "+row.id+" ";li.append(name,identifier);if(row.editable===true)addEdit(li,{module:"jobs",kind:nextKind,title:"Commessa"},row.id);
         for(const [module,label] of [["accounting","Contabilità"],["prices","Prezziario"],["plants","Cantieri / impianti"]]){
           const b=document.createElement("button");b.type="button";b.className="btn";b.textContent=label;
           b.addEventListener("click",()=>void showModule({module,kind:nextKind,commessaId:row.id,title:label+" · "+row.name}));li.append(b);
@@ -163,16 +163,16 @@
   el("month").addEventListener("change",()=>{cancel();clearModule();});
   el("module-kind").addEventListener("change",()=>{cancel();clearModule();});
   el("module-more").addEventListener("click",()=>{if(moduleQuery&&moduleCursor)void showModule(moduleQuery,true);});
-  function clearWorker(){workerCursor=null;el("worker-area").hidden=true;el("worker-list").replaceChildren();el("worker-more").hidden=true;el("grant-area").hidden=true;el("grant-form").reset();}
+  function clearWorker(){clearHours();myHoursCursor=null;el("my-hours-list").replaceChildren();el("my-hours-more").hidden=true;el("bind-form").reset();workerCursor=null;el("worker-area").hidden=true;el("worker-list").replaceChildren();el("worker-more").hidden=true;el("grant-area").hidden=true;el("grant-form").reset();}
   async function loadWorker(append=false){
     if(!active)return;const tenantId=active;
     await run(async request=>{
       const result=await request("listMyPlants",{tenantId,limit:25,after:append?workerCursor:null});
       if(active!==result.company.id)throw Error("session");
       if(!append)el("worker-list").replaceChildren();
-      for(const row of result.plants){const li=document.createElement("li");li.textContent=[row.name,row.commessa,row.comune,row.indirizzo,row.status].filter(Boolean).join(" · ");el("worker-list").append(li);}
+      for(const row of result.plants){const li=document.createElement("li"),label=document.createElement("span"),button=document.createElement("button");label.textContent=[row.name,row.commessa,row.comune,row.indirizzo,row.status].filter(Boolean).join(" · ");button.type="button";button.className="btn";button.textContent="Richiedi ore";button.addEventListener("click",()=>openHours(row));li.append(label,button);el("worker-list").append(li);}
       workerCursor=result.nextCursor||null;el("worker-more").hidden=!workerCursor;
-      message(el("worker-list").children.length?"Cantieri autorizzati · sola lettura.":"Nessun cantiere assegnato.");
+      message(el("worker-list").children.length?"Cantieri autorizzati.":"Nessun cantiere assegnato.");
     });
   }
   el("worker-refresh").addEventListener("click",()=>void loadWorker());
@@ -183,6 +183,38 @@
     if(!["grant","revoke"].includes(e.submitter?.value))return;
     const payload={tenantId,enabled,kind:el("grant-kind").value,memberUid:el("grant-user").value.trim(),commessaId:el("grant-job").value.trim(),plantId:el("grant-plant").value.trim()};
     void run(async request=>{await request("setPlantGrant",payload);el("grant-form").reset();message(enabled?"Accesso al cantiere autorizzato.":"Accesso al cantiere revocato.");});
+  });
+  function clearHours(){hoursDraft=null;el("my-hours-form").reset();el("my-hours-form").hidden=true;el("my-hours-plant").textContent="";}
+  function openHours(row){
+    if(!active)return;cancel();clearHours();
+    hoursDraft={tenantId:active,kind:row.kind,commessaId:row.commessaId,plantId:row.id,requestId:crypto.randomUUID()};
+    el("my-hours-plant").textContent=row.name+" · "+row.commessa;
+    const now=new Date();el("my-hours-date").value=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");el("my-hours-form").hidden=false;
+  }
+  el("my-hours-cancel").addEventListener("click",()=>{cancel();clearHours();});
+  el("my-hours-form").addEventListener("submit",e=>{
+    e.preventDefault();if(!hoursDraft||active!==hoursDraft.tenantId)return;
+    const payload={...hoursDraft,date:el("my-hours-date").value,hours:Number(el("my-hours-value").value)};
+    void run(async request=>{await request("submitMyHours",payload);clearHours();message("Richiesta ore inviata, in attesa di approvazione.");});
+  });
+  async function loadMyHours(append=false){
+    if(!active)return;const tenantId=active,kind=el("my-hours-kind").value;
+    if(!append){myHoursCursor=null;el("my-hours-list").replaceChildren();}
+    await run(async request=>{
+      const result=await request("listMyHours",{tenantId,kind,limit:25,after:append?myHoursCursor:null});
+      if(active!==result.company.id||result.kind!==kind)throw Error("session");
+      for(const row of result.rows){const li=document.createElement("li");li.textContent=[row.date,row.commessa,row.hours+" ore",row.status==="pending_level1"?"In attesa":row.status].join(" · ");el("my-hours-list").append(li);}
+      myHoursCursor=result.nextCursor||null;el("my-hours-more").hidden=!myHoursCursor;
+      message(el("my-hours-list").children.length?"Richieste personali aggiornate.":"Nessuna richiesta personale.");
+    });
+  }
+  el("my-hours-kind").addEventListener("change",()=>{cancel();myHoursCursor=null;el("my-hours-list").replaceChildren();el("my-hours-more").hidden=true;});
+  el("my-hours-refresh").addEventListener("click",()=>void loadMyHours());
+  el("my-hours-more").addEventListener("click",()=>{if(myHoursCursor)void loadMyHours(true);});
+  el("bind-form").addEventListener("submit",e=>{
+    e.preventDefault();if(!active)return;
+    const payload={tenantId:active,kind:el("bind-kind").value,memberUid:el("bind-user").value.trim(),personnelId:el("bind-person").value.trim()};
+    void run(async request=>{await request("bindWorkerPersonnel",payload);el("bind-form").reset();message("Anagrafica collegata all’operatore.");});
   });
   function clearInvite(){el("invite-code").value="";el("invite-result").hidden=true;}
   function clearMembers(){clearInvite();membersCursor=null;el("membership").hidden=true;el("members-list").replaceChildren();el("members-more").hidden=true;el("invite-form").reset();}

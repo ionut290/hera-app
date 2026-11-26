@@ -251,8 +251,27 @@
         <button class="btn" type="button" id="varga-company-worker-refresh">Aggiorna cantieri</button>
         <ul id="varga-company-worker-list"></ul>
         <button class="btn" type="button" id="varga-company-worker-more" hidden>Altri cantieri</button>
+        <form id="varga-company-my-hours-form" hidden>
+          <p id="varga-company-my-hours-plant"></p>
+          <label>Data <input id="varga-company-my-hours-date" type="date" required></label>
+          <label>Ore <input id="varga-company-my-hours-value" type="number" step="0.25" min="0.25" max="24" required></label>
+          <button type="submit" class="btn">Invia richiesta ore</button>
+          <button type="button" class="btn" id="varga-company-my-hours-cancel">Annulla</button>
+        </form>
+        <h4>Le mie richieste ore</h4>
+        <select id="varga-company-my-hours-kind" aria-label="Area richieste ore"><option value="ordinary">Ordinaria</option><option value="snow">Neve</option></select>
+        <button type="button" class="btn" id="varga-company-my-hours-refresh">Aggiorna richieste</button>
+        <ul id="varga-company-my-hours-list"></ul><button type="button" class="btn" id="varga-company-my-hours-more" hidden>Altre richieste</button>
       </section>
       <section id="varga-company-grant-area" hidden>
+        <h4>Collega l'account operatore all'anagrafica</h4>
+        <p>Collegamento univoco nel laboratorio: non può essere sovrascritto.</p>
+        <form id="varga-company-bind-form">
+          <label>UID operatore <input id="varga-company-bind-user" required maxlength="128"></label>
+          <label>Area <select id="varga-company-bind-kind"><option value="ordinary">Ordinaria</option><option value="snow">Neve</option></select></label>
+          <label>ID personale <input id="varga-company-bind-person" required maxlength="128"></label>
+          <button type="submit" class="btn">Collega operatore</button>
+        </form>
         <h4>Autorizza un operatore a un impianto</h4>
         <p>Usa gli identificativi dell'utente e dell'impianto mostrati negli elenchi. Solo dati di laboratorio.</p>
         <form id="varga-company-grant-form">
@@ -1038,7 +1057,7 @@
   </script>
   <script src="tenant-admin-panel.js?v=20261126-lab1"></script>
   <script src="tenant-runtime-session.js?v=20261126-1"></script>
-  <script src="tenant-company-selector.js?v=20261126-lab10"></script>
+  <script src="tenant-company-selector.js?v=20261126-lab11"></script>
   <script src="tenant-signup.js?v=20261126-lab1"></script>
 </body>
 </html>

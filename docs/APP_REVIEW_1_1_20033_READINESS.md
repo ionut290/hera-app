@@ -22,3 +22,12 @@ Solo catture autentiche dell'app con dati sintetici. Nessun nome reale (nemmeno 
 5. Nuovo upload candidato solo dopo esito positivo del gate; verificare numero build ancora libero, compilazione, firma, installazione e regressione della 20033 prima dell'invio. Nessun invio o pubblicazione automatica.
 
 Riferimenti: APP_REVIEW_FULL_ACCESS_PLAN_2026-11-20.md, ACCOUNT_DELETION_REQUEST_DEPLOY_GATE_2026-11-20.md, SOLO_OWNER_RELEASE_PROTOCOL_2026-11-20.md, IOS-APPSTORE-2519-REMEDIATION.md. Il presente documento non sostituisce le approvazioni privacy, non modifica la logica dell'audit e non autorizza distribuzioni Firebase.
+
+## Aggiornamento verificato: identità di collaudo
+
+Audit Firebase Authentication in sola lettura, progetto originale `hera-app-6cd2b`, ricerca esatta delle due identità già designate (nessun dato personale riportato):
+- Identità indicata in App Review: presente, apparentemente abilitata, provider email/password; ultimo accesso 26 novembre 2026. Claim, ruoli e isolamento non visibili nella schermata consultata. Non certificata come account dimostrativo isolato.
+- Identità distinta destinata al test di cancellazione: non trovata nella ricerca esatta. Questo sostituisce per lo stato attuale la precedente osservazione storica di account disabilitato; non prova quando o perché sia stata rimossa.
+- Nessuna modifica, riattivazione, cancellazione, invocazione di funzioni o accesso operativo a dati aziendali eseguito.
+
+I test CI [45876020664](https://github.com/ionut290/hera-app/actions/runs/45876020664) sono passati, compresi isolamento Firestore su emulatore e cancellazione simulata. L'esito App Review rimane BLOCKED. Occorre un account di test separato e verificato, con dati sintetici e senza collegamenti ai lavoratori reali, prima di un collaudo effettivo della cancellazione; non usare l'identità App Review esistente come account sacrificabile. Nessun rilascio o modifica alla produzione autorizzato da questo audit.

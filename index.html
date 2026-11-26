@@ -233,6 +233,15 @@
       <button class="btn" type="button" id="varga-company-new-record" hidden>Nuovo record</button>
       <ul id="varga-company-module-rows"></ul>
       <button class="btn" type="button" id="varga-company-module-more" hidden>Altri risultati</button>
+      <section id="varga-company-operation" hidden>
+        <h4 id="varga-company-operation-title"></h4>
+        <p>Operazioni sintetiche, senza approvazione ore o completamento impianti. Usa gli identificativi mostrati negli elenchi.</p>
+        <form id="varga-company-operation-form">
+          <div id="varga-company-operation-fields"></div>
+          <button type="submit" class="btn btn-primary" id="varga-company-operation-save">Registra</button>
+          <button type="button" class="btn" id="varga-company-operation-cancel">Annulla</button>
+        </form>
+      </section>
       <section id="varga-company-write" hidden>
         <h4 id="varga-company-write-title">Nuovo record</h4>
         <p>Modifica consentita solo sui record creati in laboratorio.</p>
@@ -945,6 +954,6 @@
     }
   </script>
   <script src="tenant-admin-panel.js?v=20261126-lab1"></script>
-  <script src="tenant-company-selector.js?v=20261126-lab4"></script>
+  <script src="tenant-company-selector.js?v=20261126-lab5"></script>
 </body>
 </html>

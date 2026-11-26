@@ -6,7 +6,7 @@ const REGISTRIES=Object.freeze({
   vehicles:['mezzi','neve_mezzi'],
   teams:['squadreCommesse','neve_squadre']
 });
-const ECONOMICS=Object.freeze({accounting:'lavorazioni',prices:'prezziario'});
+const ECONOMICS=Object.freeze({accounting:'lavorazioni',prices:'prezziario',plants:'impianti'});
 function fail(code){throw Object.assign(new Error(code),{code});}
 function own(obj,key){return Object.prototype.hasOwnProperty.call(obj,key);}
 function str(x){return typeof x==='string'?x.slice(0,250):'';}
@@ -15,6 +15,7 @@ function row(module,id,data){
   if(module==='personnel')return {id,name:str(data.fullName)||[str(data.cognome),str(data.nome)].filter(Boolean).join(' ')||id};
   if(module==='vehicles')return {id,name:[str(data.nId)||str(data.nome),str(data.marca),str(data.modello)].filter(Boolean).join(' · ')||id};
   if(module==='teams')return {id,name:str(data.commessaNome)||str(data.commessaId)||id,date:str(data.riferimentoData)||str(data.dateKey),count:Array.isArray(data.squadre)?data.squadre.length:0};
+  if(module==='plants')return {id,name:str(data.denominazione)||id,status:str(data.stato),category:str(data.comune)};
   if(module==='prices')return {id,name:str(data.descrizione)||str(data.codiceVoce)||id,code:str(data.codiceVoce),unit:str(data.unitaMisura),base:number(data.prezzoBase),discounted:number(data.prezzoRibassato)};
   return {id,name:str(data.denominazione)||str(data.tipologiaLavorazione)||id,code:str(data.codiceVocePrezzo),status:str(data.stato),total:number(data.totale)};
 }

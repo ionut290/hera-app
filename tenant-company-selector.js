@@ -7,7 +7,7 @@
   let epoch=0,controller=null,active=null,kind=null,cursor=null,jobsCursor=null,moduleCursor=null,moduleQuery=null;
   const message=text=>{el("status").textContent=text;};
   function cancel(){epoch++;controller?.abort();controller=null;}
-  function clearModule(){clearEditor();el("new-record").hidden=true;moduleCursor=null;moduleQuery=null;el("module-title").textContent="";el("module-rows").replaceChildren();el("module-more").hidden=true;}
+  function clearModule(){clearOperation();clearEditor();el("new-record").hidden=true;moduleCursor=null;moduleQuery=null;el("module-title").textContent="";el("module-rows").replaceChildren();el("module-more").hidden=true;}
   function clearSelection(){clearModule();el("new-job").hidden=true;active=null;kind=null;jobsCursor=null;el("selected").hidden=true;el("actions").hidden=true;el("name").textContent="";el("role").textContent="";el("jobs").replaceChildren();el("jobs-more").hidden=true;}
   function clear(){cancel();clearSelection();cursor=null;el("list").replaceChildren();el("more").hidden=true;message("");}
   function hide(){clear();open.hidden=true;open.classList.add("hidden");if(dialog.open)dialog.close();}
@@ -53,10 +53,10 @@
       if(active!==data.company.id||data.kind!==nextKind)throw Error("session");
       kind=nextKind;el("new-job").hidden=false;for(const row of data.commesse){
         const li=document.createElement("li"),name=document.createElement("span");name.textContent=row.name+" ";li.append(name);if(row.editable===true)addEdit(li,{module:"jobs",kind:nextKind,title:"Commessa"},row.id);
-        for(const [module,label] of [["accounting","Contabilità"],["prices","Prezziario"]]){
+        for(const [module,label] of [["accounting","Contabilità"],["prices","Prezziario"],["plants","Cantieri / impianti"]]){
           const b=document.createElement("button");b.type="button";b.className="btn";b.textContent=label;
           b.addEventListener("click",()=>void showModule({module,kind:nextKind,commessaId:row.id,title:label+" · "+row.name}));li.append(b);
-        }el("jobs").append(li);
+        }if(row.editable===true){for(const [operation,label] of [["plant","Nuovo impianto"],["team","Assegna squadra"],["hoursRequest","Richiedi ore"]]){const b=document.createElement("button");b.type="button";b.className="btn";b.textContent=label;b.addEventListener("click",()=>{cancel();clearEditor();openOperation({operation,kind:nextKind,commessaId:row.id,title:label+" · "+row.name});});li.append(b);}}el("jobs").append(li);
       }
       jobsCursor=data.nextCursor||null;el("jobs-more").hidden=!jobsCursor;
       message(el("jobs").children.length?"Commesse aziendali · sola lettura.":"Nessuna commessa in questa azienda.");
@@ -78,7 +78,7 @@
     await run(async request=>{
       const data=await request("listCompanyModule",{tenantId,module:q.module,kind:q.kind,commessaId:q.commessaId,month:q.month,limit:25,after:append?moduleCursor:null});
       if(active!==data.company.id||q.module!==data.module||q.kind!==data.kind||(q.commessaId??null)!==data.commessaId)throw Error("session");
-      moduleQuery=q;el("new-record").hidden=!editableModules.has(q.module);for(const row of data.rows){const li=document.createElement("li");li.textContent=formatRow(row);if(editableModules.has(q.module)&&row.editable===true)addEdit(li,q,row.id);el("module-rows").append(li);}
+      moduleQuery=q;el("new-record").hidden=!editableModules.has(q.module);for(const row of data.rows){const li=document.createElement("li");li.textContent=formatRow(row)+" · ID: "+row.id;if(editableModules.has(q.module)&&row.editable===true)addEdit(li,q,row.id);el("module-rows").append(li);}
       moduleCursor=data.nextCursor||null;el("module-more").hidden=!moduleCursor;
       message(el("module-rows").children.length?"Dati aziendali · sola lettura.":"Nessun dato presente.");
     });
@@ -96,7 +96,7 @@
   let editing=null,saving=false;
   function clearEditor(){editing=null;saving=false;el("write").hidden=true;el("write-fields").replaceChildren();el("write-save").disabled=false;}
   function editForm(q,record=null){
-    if(!active)return;clearEditor();
+    if(!active)return;clearOperation();clearEditor();
     editing={...q,tenantId:active,recordId:record?.recordId??null,revision:record?.revision??0,requestId:crypto.randomUUID()};
     el("write-title").textContent=(record?"Modifica ":"Nuovo · ")+q.title;
     for(const [field,label] of definitions[q.module]){
@@ -125,6 +125,28 @@
       if(active!==result.company.id)throw Error("session");
       clearEditor();message("Salvataggio confermato. Aggiorna l’elenco per visualizzarlo.");
     });
+  });
+  let operationForm=null,operationBusy=false;
+  const operationFields={plant:[["denominazione","Denominazione","text"],["idSap","ID SAP","text"],["comune","Comune","text"],["indirizzo","Indirizzo","text"],["gpsY","Latitudine","number"],["gpsX","Longitudine","number"]],team:[["date","Data","date"],["leaderId","ID caposquadra","text"],["personnelIds","ID operatori (separati da virgola)","text"],["vehicleIds","ID mezzi (separati da virgola)","text"],["plantIds","ID impianti (separati da virgola)","text"]],hoursRequest:[["date","Data","date"],["personnelId","ID operatore","text"],["hours","Ore (incrementi di 0,25)","number"]]};
+  function clearOperation(){operationForm=null;operationBusy=false;el("operation").hidden=true;el("operation-fields").replaceChildren();el("operation-save").disabled=false;}
+  function openOperation(q){
+    clearOperation();if(!active)return;
+    operationForm={...q,tenantId:active,requestId:crypto.randomUUID()};
+    el("operation-title").textContent=q.title;
+    for(const [key,label,type] of operationFields[q.operation]){
+      const l=document.createElement("label"),i=document.createElement("input");l.textContent=label;i.name=key;i.type=type;if(type==="number")i.step="any";
+      i.required=["denominazione","date","leaderId","personnelId","hours"].includes(key);
+      l.append(i);el("operation-fields").append(l);
+    }el("operation").hidden=false;
+  }
+  el("operation-cancel").addEventListener("click",()=>{if(!operationBusy){cancel();clearOperation();}});
+  el("operation-form").addEventListener("submit",e=>{
+    e.preventDefault();if(!operationForm||operationBusy||active!==operationForm.tenantId)return;
+    const q={...operationForm},data=Object.fromEntries(new FormData(el("operation-form")));
+    for(const k of ["personnelIds","vehicleIds","plantIds"])if(k in data)data[k]=data[k].split(",").map(x=>x.trim()).filter(Boolean);
+    for(const k of ["gpsY","gpsX","hours"])if(k in data)data[k]=data[k]===""?null:Number(data[k]);
+    operationBusy=true;el("operation-save").disabled=true;
+    void run(async request=>{const r=await request("createCompanyOperation",{tenantId:q.tenantId,operation:q.operation,kind:q.kind,commessaId:q.commessaId,requestId:q.requestId,data});if(active!==r.company.id)throw Error("session");clearOperation();message("Registrazione confermata. ID: "+r.recordId);});
   });
   const initialMonth=new Date();el("month").value=initialMonth.getFullYear()+"-"+String(initialMonth.getMonth()+1).padStart(2,"0");
   for(const [module,label] of [["documents","Miei documenti"],["events","Miei eventi"],["calendar","Riepilogo calendario"],["notifications","Notifiche create da me"],["integrations","Stato integrazioni"]]){

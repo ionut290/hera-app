@@ -2,6 +2,7 @@
 // Tenant-scoped workspace read service. No global collection fallback or client roles.
 const {readModule}=require('./modules.cjs');
 const {getRecord,saveRecord}=require('./writes.cjs');
+const {createOperation}=require('./operations.cjs');
 const ROLES=new Set(['owner','admin','manager','team_lead','worker','client']);
 function fail(code){throw Object.assign(new Error(code),{code});}
 function id(value){if(typeof value!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(value)||/^__.*__$/.test(value))fail('invalid-id');return value;}
@@ -57,6 +58,6 @@ function createWorkspaceService(db){
       return handler({tx,access,caller,payload,id});
     });
   }
-  return Object.freeze({listMyCompanies,openCompany,listCompanyCommesse,listCompanyModule,getCompanyRecord:(c,p)=>mutate(c,p,getRecord),saveCompanyRecord:(c,p)=>mutate(c,p,saveRecord)});
+  return Object.freeze({listMyCompanies,openCompany,listCompanyCommesse,listCompanyModule,getCompanyRecord:(c,p)=>mutate(c,p,getRecord),saveCompanyRecord:(c,p)=>mutate(c,p,saveRecord),createCompanyOperation:(c,p)=>mutate(c,p,createOperation)});
 }
 module.exports={createWorkspaceService};

@@ -38,7 +38,7 @@
     el("selected").hidden=false;el("actions").hidden=!data.capabilities.readCommesse;
     message("Azienda verificata. L’area operativa completa non è ancora collegata.");
   }
-  async function choose(id){clearSelection();await run(async request=>{const ticket=session.begin(id);const data=await request("openCompany",{tenantId:id});session.commit(ticket,data);showCompany(data);if(data.capabilities.readCommesse){try{renderPlan((await request("getCompanyPlan",{tenantId:id})).plan);}catch(e){if(e.message!=="invalid-plan-unavailable")throw e;}}});}
+  async function choose(id){clearSelection();await run(async request=>{const ticket=session.begin(id);const data=await request("openCompany",{tenantId:id});session.commit(ticket,data);showCompany(data);if(data.plan)renderPlan(data.plan);});}
   async function list(append=false){
     clearSelection();if(!append){el("list").replaceChildren();cursor=null;el("more").hidden=true;}
     await run(async request=>{
@@ -166,11 +166,11 @@
   const quotaKeys=["jobs","plants","admins","operators"];
   function renderPlan(plan){
     el("plan").hidden=false;
-    el("plan-summary").textContent="Commesse "+plan.usage.jobs+"/"+plan.limits.jobs+" · Impianti "+plan.usage.plants+"/"+plan.limits.plants+" · Admin "+plan.usage.admins+"/"+plan.limits.admins+" · Operatori "+plan.usage.operators+"/"+plan.limits.operators+(plan.pending?" · Richiesta in attesa":"");
+    el("plan-summary").textContent="Commesse "+plan.usage.jobs+"/"+plan.limits.jobs+" · Impianti "+plan.usage.plants+"/"+plan.limits.plants+" · Admin "+plan.usage.admins+"/"+plan.limits.admins+" · Operatori "+plan.usage.operators+"/"+plan.limits.operators+(plan.pending?" · Richiesta in attesa":plan.lastDecision?" · Ultima richiesta: "+(plan.lastDecision.decision==="approve"?"approvata":"rifiutata"):"");
     el("upgrade").hidden=!!plan.pending;
     for(const k of quotaKeys){el("quota-"+k).min=String(plan.limits[k]);el("quota-"+k).value=String(plan.limits[k]);}
   }
-  el("register").addEventListener("submit",e=>{e.preventDefault();const name=el("register-name").value;void run(async request=>{await request("registerCompany",{name});el("register").reset();message("Azienda pronta nel laboratorio. Aggiorna l’elenco.");});});
+  el("register").addEventListener("submit",e=>{e.preventDefault();const name=el("register-name").value;void run(async request=>{const result=await request("registerCompany",{name});el("register").reset();const id=result.tenantId;clearSelection();const ticket=session.begin(id);const data=await request("openCompany",{tenantId:id});session.commit(ticket,data);showCompany(data);if(data.plan)renderPlan(data.plan);message("Azienda pronta nel laboratorio.");});});
   el("upgrade").addEventListener("submit",e=>{e.preventDefault();if(!active)return;const tenantId=active,limits=Object.fromEntries(quotaKeys.map(k=>[k,Number(el("quota-"+k).value)])),reason=el("upgrade-reason").value;void run(async request=>{await request("requestPlanUpgrade",{tenantId,limits,reason});renderPlan((await request("getCompanyPlan",{tenantId})).plan);message("Richiesta inviata al Super Admin.");});});
   open.addEventListener("click",()=>{if(open.hidden||!allowed())return;clear();dialog.showModal();void list();});
   el("close").addEventListener("click",()=>dialog.close());dialog.addEventListener("close",clear);

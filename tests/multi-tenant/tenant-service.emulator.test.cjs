@@ -25,8 +25,8 @@ const rejects=(fn,code)=>assert.rejects(fn,{code});
 async function main(){
   await rejects(()=>service.createCompany(worker,{name:'Forbidden',ownerUid:worker.uid,ownerEmail:worker.email}),'forbidden');
   await rejects(()=>service.createCompany(auth('platform',{platform_admin:true,apple_review:true}),{name:'Review',ownerUid:alice.uid,ownerEmail:alice.email}),'unauthenticated');
-  const a=(await service.createCompany(platform,{name:'Synthetic A',ownerUid:alice.uid,ownerEmail:alice.email})).tenantId;
-  const b=(await service.createCompany(platform,{name:'Synthetic B',ownerUid:bob.uid,ownerEmail:bob.email})).tenantId;
+  const a=(await service.createCompany(platform,{name:'Synthetic A',ownerUid:alice.uid,ownerEmail:alice.email,approvedLimits:{jobs:10,plants:100,admins:3,operators:10}})).tenantId;
+  const b=(await service.createCompany(platform,{name:'Synthetic B',ownerUid:bob.uid,ownerEmail:bob.email,approvedLimits:{jobs:10,plants:100,admins:3,operators:10}})).tenantId;
   assert.notEqual(a,b);
   assert.equal((await db.doc('tenants/'+a+'/members/'+alice.uid).get()).data().role,'owner');
   await rejects(()=>service.invite(alice,{tenantId:b,recipientEmail:worker.email,role:'worker'}),'forbidden');

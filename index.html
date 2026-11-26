@@ -280,7 +280,14 @@
       <button class="btn btn-primary" type="submit">Crea azienda vuota</button>
     </form>
     <h3>Richieste di ampliamento</h3>
-    <section id="varga-tenant-admin-plan" hidden><p id="varga-tenant-admin-plan-summary"></p><form id="varga-tenant-admin-plan-form"><label>Motivazione <input id="varga-tenant-admin-plan-reason" minlength="3" maxlength="250" required></label><button class="btn" type="submit" value="approve">Approva richiesta</button><button class="btn" type="submit" value="reject">Rifiuta richiesta</button></form></section>
+    <button class="btn" type="button" id="varga-tenant-admin-inbox">Richieste in attesa</button>
+    <ul id="varga-tenant-admin-inbox-list"></ul><button class="btn" type="button" id="varga-tenant-admin-inbox-more" hidden>Altre richieste</button>
+    <section id="varga-tenant-admin-plan" hidden><p id="varga-tenant-admin-plan-summary"></p><form id="varga-tenant-admin-plan-form"><fieldset><legend>Limiti da autorizzare</legend>
+      <label>Commesse <input id="varga-tenant-admin-limit-jobs" type="number" step="1" required></label>
+      <label>Impianti <input id="varga-tenant-admin-limit-plants" type="number" step="1" required></label>
+      <label>Admin <input id="varga-tenant-admin-limit-admins" type="number" step="1" required></label>
+      <label>Operatori <input id="varga-tenant-admin-limit-operators" type="number" step="1" required></label>
+    </fieldset><label>Motivazione <input id="varga-tenant-admin-plan-reason" minlength="3" maxlength="250" required></label><button class="btn" type="submit" value="approve">Approva richiesta</button><button class="btn" type="submit" value="reject" formnovalidate>Rifiuta richiesta</button></form></section>
     <h3>Stato azienda</h3>
     <form id="varga-tenant-admin-state" hidden>
       <p id="varga-tenant-admin-target"></p>
@@ -966,6 +973,6 @@
   </script>
   <script src="tenant-admin-panel.js?v=20261126-lab1"></script>
   <script src="tenant-runtime-session.js?v=20261126-1"></script>
-  <script src="tenant-company-selector.js?v=20261126-lab6"></script>
+  <script src="tenant-company-selector.js?v=20261126-lab7"></script>
 </body>
 </html>

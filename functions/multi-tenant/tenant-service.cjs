@@ -3,7 +3,7 @@
 // The future HTTP/callable adapter MUST supply verified Auth claims, never client claims.
 // No endpoint, credentials or emails are created by this module.
 const { randomBytes, randomUUID, createHash } = require('node:crypto');
-const {increment}=require('./starter-plan.cjs');
+const {increment,starter}=require('./starter-plan.cjs');
 const roles = new Set(['admin','manager','team_lead','worker','client']);
 const adminRoles = new Set(['owner','admin']);
 const DAY = 86400000;
@@ -29,18 +29,19 @@ function indexPath(tenantId,uid) { return 'users/'+id(uid)+'/memberships/'+id(te
 // store.runTransaction(fn): tx.get(path) -> data/null, tx.create(path,data), tx.set(path,data).
 // All reads precede writes; implementation must be atomic, retry-safe and fail on create conflicts.
 function makeTenantService(store, clock=Date.now) {
-  async function createCompany(auth, {name,ownerUid,ownerEmail}) {
+  async function createCompany(auth, {name,ownerUid,ownerEmail,approvedLimits}) {
     const caller = actor(auth);
     if (!caller.platformAdmin) fail('forbidden');
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 100) fail('invalid-name');
     // ownerUid/email MUST be resolved server-side from Firebase Auth by future adapter.
     const uid=id(ownerUid), normalized=email(ownerEmail), tenantId=randomUUID(), now=clock();
+    const plan=starter(approvedLimits);
     const root=tenantPath(tenantId), member={role:'owner',status:'active',email:normalized,createdAt:now};
     await store.runTransaction(async tx=>{
-      tx.create(root,{name:name.trim(),status:'active',inviteGeneration:0,createdAt:now,createdBy:caller.uid});
+      tx.create(root,{name:name.trim(),status:'active',inviteGeneration:0,createdAt:now,createdBy:caller.uid,starterPlan:plan,starterUpgradePending:false});
       tx.create(memberPath(tenantId,uid),member);
       tx.create(indexPath(tenantId,uid),{role:'owner',status:'active'});
-      tx.create(root+'/audit/'+randomUUID(),{event:'company-created',actorUid:caller.uid,subjectUid:uid,at:now});
+      tx.create(root+'/audit/'+randomUUID(),{event:'company-created',actorUid:caller.uid,subjectUid:uid,approvedLimits:plan.limits,at:now});
     });
     return {tenantId};
   }

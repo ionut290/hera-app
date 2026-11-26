@@ -3,6 +3,7 @@
 const {readModule}=require('./modules.cjs');
 const {getRecord,saveRecord}=require('./writes.cjs');
 const {createOperation}=require('./operations.cjs');
+const {policy}=require('./starter-plan.cjs');
 const ROLES=new Set(['owner','admin','manager','team_lead','worker','client']);
 function fail(code){throw Object.assign(new Error(code),{code});}
 function id(value){if(typeof value!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(value)||/^__.*__$/.test(value))fail('invalid-id');return value;}
@@ -28,7 +29,7 @@ function createWorkspaceService(db){
     return db.runTransaction(async tx=>{
       const access=await membership(tx,caller.uid,payload.tenantId);
       if(!access)fail('forbidden');
-      return {company:access.company,capabilities:{readCommesse:['owner','admin'].includes(access.company.role),readModules:['owner','admin'].includes(access.company.role)}};
+      return {company:access.company,plan:['owner','admin'].includes(access.company.role)?policy(access.tenantData):null,capabilities:{readCommesse:['owner','admin'].includes(access.company.role),readModules:['owner','admin'].includes(access.company.role)}};
     });
   }
   async function listCompanyCommesse(caller,payload){

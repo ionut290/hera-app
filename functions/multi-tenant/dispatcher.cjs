@@ -34,6 +34,7 @@ function createTenantDispatcher({auth,db,assertBoundary}){
       case 'registerCompany':return starter.register(caller,payload);
       case 'getCompanyPlan':return starter.get(caller,payload);
       case 'requestPlanUpgrade':return starter.request(caller,payload);
+      case 'listPendingPlanUpgrades':return starter.listPending(caller,payload);
       case 'getPlanForAdmin':return starter.get(caller,payload,true);
       case 'reviewPlanUpgrade':return starter.review(caller,payload);
       case 'listMyCompanies':return workspace.listMyCompanies(caller,payload);
@@ -49,7 +50,7 @@ function createTenantDispatcher({auth,db,assertBoundary}){
         let owner;
         try{owner=await auth.getUserByEmail(payload.ownerEmail.trim());}catch{fail('invalid-owner');}
         if(owner.disabled||!owner.emailVerified||owner.customClaims?.apple_review===true)fail('invalid-owner');
-        return tenant.createCompany(caller,{name:payload.name,ownerUid:owner.uid,ownerEmail:owner.email});
+        return tenant.createCompany(caller,{name:payload.name,ownerUid:owner.uid,ownerEmail:owner.email,approvedLimits:payload.approvedLimits});
       }
       case 'invite':return tenant.invite(caller,{tenantId:payload.tenantId,recipientEmail:payload.recipientEmail,role:payload.role});
       case 'accept':return tenant.accept(caller,{tenantId:payload.tenantId,token:payload.inviteToken});

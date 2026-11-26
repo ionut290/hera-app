@@ -23,6 +23,11 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['owner', 'admin'];
         allow create, update, delete: if false;
       }
+      match /neve_commesse/{commessaId} {
+        allow get, list: if activeMember(tenantId)
+          && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['owner', 'admin'];
+        allow create, update, delete: if false;
+      }
       match /members/{uid} {
         allow get: if activeMember(tenantId) && request.auth.uid == uid;
         allow list, create, update, delete: if false;

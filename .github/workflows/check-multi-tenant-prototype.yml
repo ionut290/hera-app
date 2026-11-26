@@ -29,6 +29,8 @@ jobs:
           node --check functions/multi-tenant/support-modules.cjs
           node --check functions/multi-tenant/writes.cjs
           node --check functions/multi-tenant/operations.cjs
+          node --check tests/multi-tenant/legacy-commesse-scope.cjs
+          node --check tests/multi-tenant/legacy-commesse-runtime.test.cjs
           node --check tests/multi-tenant/company-http.emulator.cjs
           npm run check:fatto-whazzup-immutable
           npm run check:fatto-isolation
@@ -43,4 +45,4 @@ jobs:
       - name: Run Firestore synthetic tenant tests
         working-directory: tests/multi-tenant
         run: |
-          npx firebase emulators:exec --only firestore,auth --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs && node tenant-service.emulator.test.cjs && node auth-adapter.emulator.test.cjs'
+          npx firebase emulators:exec --only firestore,auth --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs && node tenant-service.emulator.test.cjs && node auth-adapter.emulator.test.cjs && node legacy-commesse-runtime.test.cjs'

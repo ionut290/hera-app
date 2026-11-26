@@ -15,10 +15,10 @@ on:
           - DO_NOT_UPLOAD
           - UPLOAD_APP_STORE_CANDIDATE_ONLY
       build_number:
-        description: "New CFBundleVersion above confirmed TestFlight build 1.0 (20016); verify live ASC first"
+        description: "New CFBundleVersion above last verified internal build 1.1 (20031); verify live ASC first"
         type: string
         required: true
-        default: "20017"
+        default: "20032"
       reviewed_commit_sha:
         description: "Exact 40-character reviewed commit SHA shown in GitHub"
         required: true
@@ -74,7 +74,7 @@ jobs:
     name: Sign and upload App Store-eligible candidate (NO submission)
     needs: preflight
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY' }}
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 90
     # Existing protected environment holds validated Apple signing credentials.
     # Keep the same reviewer gate; no new secret copies are needed.
@@ -154,8 +154,13 @@ jobs:
           ruby -c scripts/install-ios-apple-signin.rb
           ruby -c scripts/install-ios-google-signin.rb
           ruby -c scripts/configure-ios-distribution-signing.rb
+          node scripts/check-snow-castel-maggiore.js
           npm run android:aab:prepare
           test -s www/index.html
+          test -s www/app-snow.js
+          test -s www/snow-plan-operations.js
+          test -s www/salatura-strada-integration.js
+          test -s www/piano-neve/index.html
           test -s www/icons/varga-cantieri-512.png
 
       - name: Generate native iOS with safe patched Capacitor
@@ -292,13 +297,15 @@ jobs:
             -authenticationKeyPath "$APPLE_API_KEY_PATH" \
             -authenticationKeyID "$IOS_APPSTORE_KEY_ID" \
             -authenticationKeyIssuerID "$IOS_APPSTORE_ISSUER_ID" \
-            MARKETING_VERSION=1.0 \
+            MARKETING_VERSION=1.1 \
             CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
             archive > "$RUNNER_TEMP/ios-private-archive.log" 2>&1 ||
             { tail -n 80 "$RUNNER_TEMP/ios-private-archive.log"; exit 1; }
           test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | grep -Fx '15.0' ||
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | awk 'BEGIN { ok=0 } { if ($1+0 >= 15.0) ok=1 } END { exit(ok ? 0 : 1) }' ||
             { echo "::error::Signed iOS archive must require iOS 15.0 or later."; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" | grep -Fx '1.1'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
             grep -Fx "$IOS_BUILD_NUMBER"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |

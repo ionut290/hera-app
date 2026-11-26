@@ -7,6 +7,9 @@ export async function connectLocalFirebase({firebase,location}){
  const auth=app.auth(),db=app.firestore();
  auth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true});
  db.useEmulator('127.0.0.1',8080);
+ // Emulator browser CI: avoid streaming WebChannel reconnects during create-only writes.
+ // Do not change the live staging transport or retry a rejected write.
+ db.settings({experimentalForceLongPolling:true,experimentalAutoDetectLongPolling:false,merge:true});
  await auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
  const statics=Object.freeze({FieldValue:firebase.firestore.FieldValue,FieldPath:firebase.firestore.FieldPath,Timestamp:firebase.firestore.Timestamp,GeoPoint:firebase.firestore.GeoPoint});
  return Object.freeze({auth,db,statics});

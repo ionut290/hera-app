@@ -22,6 +22,11 @@ jobs:
       - name: Check staging client syntax
         run: |
           node --check tests/multi-tenant/staging-client.mjs
+          node --check tenant-admin-panel.js
+          node --check tests/multi-tenant/company-http.emulator.cjs
+          npm run check:fatto-whazzup-immutable
+          npm run check:fatto-isolation
+          npm run check:auth-stability
           node --check tests/multi-tenant/staging-bootstrap.cjs
           node -e "const a=require('node:assert/strict');const s=require('./tests/multi-tenant/staging-bootstrap.cjs');a.equal(s.ROOT,'projects/varga-cantieri-v2-staging/databases/(default)/documents');a.deepEqual(s.createWrite('test/x',{synthetic:true}).currentDocument,{exists:false});a.deepEqual(s.fields({synthetic:true,n:1}),{synthetic:{booleanValue:true},n:{integerValue:'1'}});"
           if node tests/multi-tenant/staging-bootstrap.cjs --execute hera-app-6cd2b invalid@example.invalid; then exit 1; fi

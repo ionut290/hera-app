@@ -9,6 +9,8 @@ for(const env of [{},{...valid,GOOGLE_CLOUD_PROJECT:'hera-app-6cd2b'},{...valid,
   assert.throws(()=>assertStagingEnvironment(env),{code:'staging-only'});
 }
 const adapter=createLocalAdapter();
+const {startLocalCompanyHttp}=require('./company-http.emulator.cjs');
+let http;
 const password='Demo-'+randomUUID();
 const rejects=(fn,code)=>assert.rejects(fn,{code});
 async function account(label,claims={},verified=true){
@@ -28,6 +30,26 @@ async function main(){
   const review=await account('review',{platform_admin:true,apple_review:true});
   const unverified=await account('unverified',{},false);
   const call=(u,action,payload)=>adapter.dispatch(u.token,action,payload);
+  http=await startLocalCompanyHttp(adapter.dispatch);
+  const viaHttp=async(token,action,payload={},origin=http.origin)=>{
+    const r=await fetch(http.origin+'/api/v2/companies',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+token,origin},body:JSON.stringify({action,payload})});
+    return {status:r.status,...await r.json()};
+  };
+  assert.equal((await viaHttp('invalid','listCompanies')).status,401);
+  assert.equal((await viaHttp(worker.token,'listCompanies')).status,403);
+  assert.equal((await viaHttp(admin.token,'listCompanies',{},'https://example.invalid')).status,403);
+  assert.equal((await viaHttp(admin.token,'invite',{})).status,400);
+  const httpOwner=await account('http-owner');
+  const created=await viaHttp(admin.token,'createCompany',{name:'HTTP synthetic company',ownerEmail:httpOwner.email});
+  assert.equal(created.status,200);
+  assert.ok(created.result.tenantId);
+  assert.equal((await adapter.db.collection('tenants/'+created.result.tenantId+'/commesse').get()).empty,true);
+  const list=await viaHttp(admin.token,'listCompanies',{limit:100});
+  assert.equal(list.status,200);
+  assert.ok(list.result.companies.some(c=>c.id===created.result.tenantId));
+  assert.equal((await viaHttp(admin.token,'setCompanyStatus',{tenantId:created.result.tenantId,status:'suspended',reason:'Synthetic HTTP test'})).status,200);
+  assert.equal((await adapter.db.doc('tenants/'+created.result.tenantId).get()).data().status,'suspended');
+  assert.equal((await viaHttp(admin.token,'setCompanyStatus',{tenantId:created.result.tenantId,status:'active',reason:'Synthetic HTTP test'})).status,200);
   await rejects(()=>adapter.dispatch('invalid-token','listCompanies'),'unauthenticated');
   await rejects(()=>call(review,'listCompanies'),'unauthenticated');
   await rejects(()=>call(unverified,'listCompanies'),'unauthenticated');
@@ -59,9 +81,10 @@ async function main(){
   await rejects(()=>call(owner,'invite',{tenantId,recipientEmail:worker.email,role:'worker'}),'forbidden');
   await call(admin,'setCompanyStatus',{tenantId,status:'active',reason:'Synthetic test'});
   await adapter.auth.setCustomUserClaims(admin.uid,{});
+  assert.equal((await viaHttp(admin.token,'listCompanies')).status,403);
   await rejects(()=>call(admin,'listCompanies'),'forbidden');
   await adapter.auth.updateUser(owner.uid,{disabled:true});
   await rejects(()=>call(owner,'invite',{tenantId,recipientEmail:worker.email,role:'worker'}),'unauthenticated');
   console.log('Firebase Auth emulator adapter integration passed');
 }
-main().catch(e=>{console.error(e.code||e.name);process.exitCode=1;}).finally(()=>adapter.close());
+main().catch(e=>{console.error(e.code||e.name);process.exitCode=1;}).finally(async()=>{if(http)await http.close();await adapter.close();});

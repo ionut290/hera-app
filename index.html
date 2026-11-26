@@ -158,6 +158,7 @@
         <button id="open-panel-personale" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">👤</span>Personale</button>
         <button id="open-panel-mezzi" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🚜</span>Mezzi</button>
         <button id="open-panel-utenti" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🔐</span>User management <span id="pending-users-menu-badge" class="pending-users-badge hidden">0</span></button>
+        <button id="varga-tenant-admin-open" class="btn menu-title-btn hidden" type="button" hidden>Gestione aziende · Super Admin</button>
         <button id="open-personal-services-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">📍</span>Servizi personali</button>
       </section>
       <section class="menu-section" aria-labelledby="menu-comunicazione-title">
@@ -192,6 +193,32 @@
       </section>
     </div>
   </aside>
+
+  <dialog id="varga-tenant-admin-dialog" aria-labelledby="varga-tenant-admin-title" style="width:min(94vw,620px);max-height:85vh;overflow:auto">
+    <h2 id="varga-tenant-admin-title">Gestione aziende</h2>
+    <p>Laboratorio 2.0 — solo dati sintetici.</p>
+    <button class="btn" type="button" id="varga-tenant-admin-close">Chiudi</button>
+    <p id="varga-tenant-admin-status" role="status" aria-live="polite"></p>
+    <button class="btn" type="button" id="varga-tenant-admin-refresh">Aggiorna elenco</button>
+    <ul id="varga-tenant-admin-list"></ul>
+    <button class="btn" type="button" id="varga-tenant-admin-more" hidden>Altre aziende</button>
+    <h3>Crea azienda</h3>
+    <form id="varga-tenant-admin-form">
+      <label for="varga-tenant-admin-name">Nome azienda</label>
+      <input id="varga-tenant-admin-name" required maxlength="100">
+      <label for="varga-tenant-admin-email">Email verificata dell'amministratore</label>
+      <input id="varga-tenant-admin-email" type="email" required maxlength="254">
+      <button class="btn btn-primary" type="submit">Crea azienda vuota</button>
+    </form>
+    <h3>Stato azienda</h3>
+    <form id="varga-tenant-admin-state" hidden>
+      <p id="varga-tenant-admin-target"></p>
+      <label for="varga-tenant-admin-reason">Motivazione</label>
+      <input id="varga-tenant-admin-reason" required minlength="3" maxlength="250">
+      <button class="btn" type="submit" id="varga-tenant-admin-confirm">Conferma</button>
+      <button class="btn" type="button" id="varga-tenant-admin-cancel">Annulla</button>
+    </form>
+  </dialog>
 
   <div id="menu-overlay" class="menu-overlay hidden"></div>
 
@@ -866,5 +893,6 @@
       });
     }
   </script>
+  <script src="tenant-admin-panel.js?v=20261126-lab1"></script>
 </body>
 </html>

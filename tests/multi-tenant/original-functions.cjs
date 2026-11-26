@@ -12,7 +12,7 @@ function originalFunctions(source){
    const list=declarations.get(n.id.name)||[];list.push(n);declarations.set(n.id.name,list);
   }
   for(const v of Object.values(n)){
-   if(Array.isArray(v))for(const child of v){if(child&&typeof child.type==='string')pending.push(child);}
+   if(Array.isArray(v)){for(const child of v){if(child&&typeof child.type==='string')pending.push(child);}}
    else if(v&&typeof v.type==='string')pending.push(v);
   }
  }

@@ -2,6 +2,12 @@
 const assert=require('node:assert/strict');
 const {randomUUID}=require('node:crypto');
 const {createLocalAdapter}=require('./auth-adapter.emulator.cjs');
+const {assertStagingEnvironment}=require('../../functions/multi-tenant/staging-adapter.cjs');
+const valid={VARGA_MULTI_TENANT_STAGING:'1',GOOGLE_CLOUD_PROJECT:'varga-cantieri-v2-staging'};
+assert.doesNotThrow(()=>assertStagingEnvironment(valid));
+for(const env of [{},{...valid,GOOGLE_CLOUD_PROJECT:'hera-app-6cd2b'},{...valid,GCLOUD_PROJECT:'hera-app-6cd2b'},{...valid,FIREBASE_CONFIG:'{"projectId":"hera-app-6cd2b"}'},{...valid,FIRESTORE_EMULATOR_HOST:'127.0.0.1:8180'},{...valid,FIREBASE_AUTH_EMULATOR_HOST:'127.0.0.1:9199'}]){
+  assert.throws(()=>assertStagingEnvironment(env),{code:'staging-only'});
+}
 const adapter=createLocalAdapter();
 const password='Demo-'+randomUUID();
 const rejects=(fn,code)=>assert.rejects(fn,{code});

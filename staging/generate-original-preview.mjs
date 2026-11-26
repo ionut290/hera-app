@@ -8,7 +8,7 @@ export function extractOriginalPreview(){
  const html=read('index.html'),source=read('app.js');
  const start=exactly(html,'<div id="panel-commesse" class="management-panel hidden">');
  const last='<div id="commesse-manage-list" class="commesse-manage-grid"></div>';
- const end=exactly(html,'<section id="prezziario-management-screen"');
+ const end=exactly(html,'<section id="clear-commessa-modal"');
  if(exactly(html,last)<start||exactly(html,last)>end)throw Error('Original list missing');
  if(end<=start)throw Error('Invalid original panel');
  const markup=html.slice(start,end)+'</div>';
@@ -23,7 +23,13 @@ export function extractOriginalPreview(){
  return source.slice(from,end+2);
  }).join('\n');
  const css=['style.css','management-v2.css','accounting-v2.css'].map(read).join('\n');
- return {markup,handlers,css};
+ const accounting=read('accounting-v2.js'),priceCore=read('inrete-work-items-v2.js');
+ const line=(src,marker)=>{const i=exactly(src,marker);return src.slice(i,src.indexOf('\n',i));};
+ const declaration=(src,marker)=>{const i=exactly(src,marker);const e=src.indexOf('\n  };',i);if(e<i)throw Error('Missing pure helper end');return src.slice(i,e+5);};
+ const priceHelpers=[declaration(priceCore,'const parseNumber = value => {'),line(priceCore,'const effectiveDiscount ='),declaration(priceCore,'const calculateDiscountedPrice =')].join('\n');
+ const priceFunctions=['function openPrices(){','function renderPrices(){','async function savePrice(tr){','async function addPrice(copy){'].map(n=>line(accounting,n)).join('\n');
+ const priceDeclarations=['const money=','const esc=','const norm=','const discounted=','const commRef=','const server=','const actor='].map(n=>line(accounting,n)).join('\n');
+ return {markup,handlers,css,priceHandlers:priceHelpers+'\nconst num=parseNumber; const core={calculateDiscountedPrice};\n'+priceDeclarations+'\n'+priceFunctions};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
  const result=extractOriginalPreview();

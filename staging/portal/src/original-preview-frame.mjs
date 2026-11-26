@@ -1,3 +1,4 @@
+import {pricePreviewScript} from './original-price-preview.mjs';
 // No auth data, real databases, network, storage or external integrations enter this frame.
 const nonce='original-demo-7f3a';
 export function buildOriginalPreviewFrame(original,role){
@@ -69,7 +70,7 @@ function refreshPlants(){
  for(const el of get('impianti-management-screen').querySelectorAll('[data-row-action],[data-select-row],[data-select-all]'))el.disabled=true;
 }
 
-`+'\n'+original.handlers+String.raw`
+`+'\n'+original.handlers+'\n'+pricePreviewScript(original)+String.raw`
 get('panel-commesse').classList.remove('hidden');
 get('open-organize-commesse-btn').disabled=true;
 get('open-new-commessa-btn').addEventListener('click',openNewCommessaDialog);
@@ -81,7 +82,7 @@ updateCommessaParentField();renderList();
 get('close-impianti-management-btn').addEventListener('click',()=>{closeImpiantiManagement();selectedCommessaId='';selectedCommessaName='';renderList();});
 const manualDetails=ui.manualImpiantoForm.closest('details');
 get('add-management-impianto-btn').addEventListener('click',()=>{manualDetails.open=true;ui.manualImpiantoDenominazione.focus();});
-for(const id of ['toggle-import-impianti-btn','export-all-impianti-btn','open-prezziario-btn','sheet-url-import-btn','download-excel-template-btn','excel-file','sheet-url'])get(id).disabled=true;
+for(const id of ['toggle-import-impianti-btn','export-all-impianti-btn','sheet-url-import-btn','download-excel-template-btn','excel-file','sheet-url'])get(id).disabled=true;
 get('snow-roads-section').classList.add('hidden');
 for(const id of ['parent-commessa-form','move-subcommesse-form','snow-roads-form'])for(const el of get(id).querySelectorAll('input,select,textarea,button'))el.disabled=true;
 bindLocalForm(ui.manualImpiantoForm,async event=>{await addManualImpianto(event);refreshPlants();},ui.manualImpiantoFeedback);

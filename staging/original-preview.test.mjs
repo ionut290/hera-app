@@ -9,3 +9,5 @@ test('preview uses original plant form and rendering',()=>{const p=extractOrigin
 
 import {Script} from 'node:vm';
 test('generated offline preview script is syntactically valid and uses local submit guard',()=>{const frame=buildOriginalPreviewFrame(extractOriginalPreview(),'admin');const match=frame.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);assert(match);assert.doesNotThrow(()=>new Script(match[1]));assert.match(match[1],/function bindLocalForm/);assert.match(frame,/form-action 'none'/);});
+
+test('original accounting price panel and handlers are extracted',()=>{const p=extractOriginalPreview();assert.match(p.markup,/id="prezziario-management-screen"/);assert.match(p.priceHandlers,/async function savePrice\(tr\)/);assert.match(p.priceHandlers,/const calculateDiscountedPrice/);assert.match(p.priceHandlers,/async function addPrice\(copy\)/);});

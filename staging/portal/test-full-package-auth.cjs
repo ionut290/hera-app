@@ -18,6 +18,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await db.doc('tenants/'+id+'/members/'+uid).set({role:'admin',status:'active',demo:true,historicalId:'preserved-local-admin'});
   await db.doc('users/'+uid+'/memberships/'+id).set({tenantId:id,role:'admin',status:'active'});
   await db.doc('tenants/'+id+'/commesse/same-id').set({nome:id+' original',createdAt:new Date(),excelModelVersion:2});
+  if(id==='demo-a'){await db.doc('tenants/'+id+'/members/'+superUid).set({role:'employee',status:'active',demo:true,historicalId:'preserved-local-super'});await db.doc('users/'+superUid+'/memberships/'+id).set({tenantId:id,role:'employee',status:'active'});}
  }
  const server=http.createServer((req,res)=>{
   const rel=decodeURIComponent(new URL(req.url,'http://localhost').pathname).replace(/^\/+/,'')||'index.html',file=path.resolve(root,rel);
@@ -69,15 +70,26 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   }
   assert.equal((await db.collection('tenants/demo-a/commesse').get()).size,2);
   console.log('REAL FRAME WRITE: company A persisted the original commessa payload through scoped Firestore.');
+  assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('company-runtime')),true);
+  await page.locator('#company-return').click();
   await page.locator('[data-tenant="demo-b"]').click();
   await page.waitForFunction(()=>{try{return window.__vargaLocalRuntime().session.session.context.tenantId==='demo-b';}catch{return false;}});
   assert.equal(await page.evaluate(async()=>{const s=window.__vargaLocalRuntime().session;return (await s.session.firestore.collection('commesse').doc('same-id').get({source:'server'})).data().nome;}),'demo-b original');
   assert.equal(await page.evaluate(()=>{try{window.__oldLocalScope.session.firestore.collection('commesse');return false;}catch{return true;}}),true);
   assert.equal((await db.collection('tenants/demo-b/commesse').get()).size,1);
-  await page.locator('#logout').click();await page.locator('#login').waitFor({state:'visible'});
+  await page.locator('#company-return').click();await page.locator('#logout').click();await page.locator('#login').waitFor({state:'visible'});
   assert.equal(await page.locator('#runtime').isHidden(),true);
   assert.equal(await page.locator('#admin-panel').isHidden(),true);
   await page.locator('#email').fill(superEmail);await page.locator('#password').fill(password);await page.locator('#login button').click();
+  await page.locator('[data-tenant="demo-a"]').waitFor({state:'visible'});
+  assert.equal(await page.locator('#admin-panel').isHidden(),true);
+  assert.equal(await page.locator('[data-tenant="demo-b"]').count(),0);
+  await page.locator('[data-tenant="demo-a"]').click();
+  await page.waitForFunction(()=>{try{return window.__vargaLocalRuntime().session.session.context.tenantId==='demo-a';}catch{return false;}});
+  assert.equal(await page.evaluate(()=>window.__vargaLocalRuntime().session.session.context.role),'employee');
+  assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('company-runtime')),true);
+  await page.locator('#company-return').click();
+  await page.locator('#admin-toggle').click();
   const arow=page.locator('[data-admin-tenant="demo-a"]');
   await arow.waitFor({state:'visible'});
   await arow.getByRole('button',{name:'Utenti',exact:true}).click();

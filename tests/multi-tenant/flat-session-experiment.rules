@@ -1,0 +1,36 @@
+// LOCAL EMULATOR EXPERIMENT ONLY. Never deploy.
+// A server-issued per-session claim is a hypothesis; no token issuer is implemented.
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function verifiedSession() {
+   return request.auth != null && request.auth.token.get('email_verified',false)==true
+    && request.auth.token.get('apple_review',false)==false
+    && request.auth.token.get('vargaExperimentSession','') is string
+    && request.auth.token.get('vargaExperimentSession','').matches('^[a-zA-Z0-9_-]{1,80}$');
+  }
+  function selected(tenantId) {
+   let session = get(/databases/$(database)/documents/experimentSessions/$(request.auth.uid)/devices/$(request.auth.token.vargaExperimentSession)).data;
+   return session.tenantId==tenantId && session.status=='active'
+    && session.expiresAt is timestamp && session.expiresAt>request.time
+    && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status=='active'
+    && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.status=='active'
+    && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['owner','admin'];
+  }
+  function selectedJob(area,jobId) {
+   let job=get(/databases/$(database)/documents/$(area)/$(jobId)).data;
+   return job.get('flatSessionExperiment',false)==true && selected(job.tenantId);
+  }
+  match /{area}/{jobId} {
+   allow get,list: if area in ['commesse','neve_commesse'] && verifiedSession()
+    && resource.data.flatSessionExperiment==true && selected(resource.data.tenantId);
+   allow create,update,delete: if false;
+   match /{child}/{recordId} {
+    allow get,list: if area in ['commesse','neve_commesse'] && child in ['impianti','impiantiFisici','lavorazioni','prezziario']
+     && verifiedSession() && selectedJob(area,jobId);
+    allow create,update,delete: if false;
+   }
+  }
+  match /{document=**} { allow read,write: if false; }
+ }
+}

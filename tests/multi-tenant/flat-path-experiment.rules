@@ -1,0 +1,40 @@
+// ISOLATED EXPERIMENT ONLY. Never deploy. Not a replacement for existing rules.
+// Flat paths retained to examine compatibility with protected legacy functions.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function verified() {
+      return request.auth != null && request.auth.token.get('email_verified',false)==true
+        && request.auth.token.get('apple_review',false)==false;
+    }
+    function selected(tenantId) {
+      return verified()
+        && get(/databases/$(database)/documents/experimentActiveCompany/$(request.auth.uid)).data.tenantId == tenantId
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active'
+        && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.status == 'active'
+        && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['owner','admin'];
+    }
+    function selectedJob(area, jobId) {
+      let job = get(/databases/$(database)/documents/$(area)/$(jobId)).data;
+      return job.get('flatPathExperiment',false)==true && selected(job.tenantId);
+    }
+    match /{area}/{jobId} {
+      allow get, list: if area in ['commesse','neve_commesse']
+        && resource.data.flatPathExperiment == true && selected(resource.data.tenantId);
+      allow create, update, delete: if false;
+      match /{child}/{recordId} {
+        allow get, list: if area in ['commesse','neve_commesse']
+          && child in ['impianti','impiantiFisici','lavorazioni']
+          && selectedJob(area,jobId);
+        // Only a test marker can be updated. No FATTO fields or production writes.
+        allow update: if area in ['commesse','neve_commesse']
+          && child in ['impianti','impiantiFisici','lavorazioni']
+          && selectedJob(area,jobId) && resource.data.get('flatPathExperiment',false)==true
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['experimentMarker'])
+          && request.resource.data.experimentMarker is string;
+        allow create, delete: if false;
+      }
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

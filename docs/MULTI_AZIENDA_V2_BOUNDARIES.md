@@ -41,3 +41,11 @@ questo inventario.
 
 ## Verifica dei costi della separazione fisica
 La documentazione ufficiale Firestore (https://firebase.google.com/docs/firestore/pricing, consultata il 26 novembre 2026) conferma una sola banca dati con quota gratuita per progetto; ulteriori database richiedono l'upgrade del piano di fatturazione. Non attivare database aggiuntivi o fatturazione senza una decisione separata. Il laboratorio resta a costo cloud nullo ed emulator-only.
+
+## Alternativa concreta a database multipli: percorsi originali, tenant esplicito
+
+Il 26 novembre, il confronto con le funzioni sigillate ha confermato che setImpiantoDone usa il percorso `commesse/{id}/impianti` (o neve), `impiantiFisici`, `lavorazioni` e batch; isImpiantoPersistedAsDone usa lo stesso percorso. Le funzioni di coda Whazzup accedono direttamente a localStorage. Non è ammesso avvolgerle o riscriverle.
+
+Esperimento separato, non attivo nel runtime: mantenere i percorsi originali in un solo database, ID commessa univoci globalmente, metadato tenant sul padre e autorizzazione server dell'azienda selezionata. Le query globali non filtrate devono fallire, mentre quelle esplicitamente filtrate devono leggere solo l'azienda attiva. Le sottocollezioni verificano il padre. Il test tenta batch misti e verifica che non siano parzialmente applicati, nega cambi tenant arbitrari, verifica revoca e cambio azienda. Le sole mutazioni consentite sono marker sintetici; le scritture FATTO vere vengono negate intenzionalmente. Non certifica la compatibilità FATTO, non implementa una variante del pulsante, non modifica app.js e non cambia lo schema esistente.
+
+Questa ipotesi evita di presupporre nuovi database a pagamento, ma richiede una revisione delle query non sigillate, regole operative complete (quote e campi autorizzati), ID univoci con relazioni intatte, separazione di tutte le raccolte globali, cache e coda offline. Una selezione server per UID, come nel test, ha il limite delle sessioni contemporanee su più dispositivi; serve una soluzione prima dell'uso reale. Verificare anche storage, integrazioni, prezzari, aggregati e notifiche. Non cambiare risolutori o cache protette per forzare l'integrazione. Non migrare Avola, non scegliere una architettura definitiva e non pubblicare sulla base della prova.

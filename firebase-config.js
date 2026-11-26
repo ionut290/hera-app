@@ -1,11 +1,6 @@
-window.firebaseConfig = {
-  apiKey: "AIzaSyBHZG9D1H5YOT9QUzG-cdSdftlreDJNa_k",
-  authDomain: "hera-app-6cd2b.firebaseapp.com",
-  projectId: "hera-app-6cd2b",
-  storageBucket: "hera-app-6cd2b.firebasestorage.app",
-  messagingSenderId: "645390631375",
-  appId: "1:645390631375:web:df3659a23812560e4012ba"
-};
+// Multi-azienda working copy — staging only. Do not deploy until all integrations and tenant rules are verified.
+// No production fallback. Storage and external integrations require separate configuration.
+window.firebaseConfig = {apiKey:'AIzaSyC3ujdb0XyHKk-B0eGt8IVr_U_DKEXxaLI',authDomain:'varga-cantieri-v2-staging.firebaseapp.com',projectId:'varga-cantieri-v2-staging',appId:'1:394791335182:web:6c31c93ac34e64c881935f'};
 
 function recoverAbandonedFirestoreDiagnosticListeners() {
   const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Rome" });

@@ -1,5 +1,5 @@
 import {parsePriceCsv,planPriceImport} from './price-import.mjs';
-import {inspectXlsxZip,readPriceXlsx} from './price-xlsx.mjs';
+import {inspectXlsxZip,verifyXlsxInflation,readPriceXlsx} from './price-xlsx.mjs';
 import {projectPreviewWork,summarizePreviewWork} from './work-price-projection.mjs';
 // Local-only adapter for the original accounting-v2 price screen and handlers.
 export function pricePreviewScript(original){
@@ -21,7 +21,7 @@ const pricePreview=(()=>{
  const notify=message=>{get('price-feedback').textContent=message;};
  const alert=notify;
  const confirm=()=>false;
- `+'\n'+original.priceHandlers+'\n'+parsePriceCsv.toString()+'\n'+planPriceImport.toString()+'\n'+inspectXlsxZip.toString()+'\n'+readPriceXlsx.toString()+'\n'+projectPreviewWork.toString()+'\n'+summarizePreviewWork.toString()+'\n'+(original.excelHandlers||'')+String.raw`
+ `+'\n'+original.priceHandlers+'\n'+parsePriceCsv.toString()+'\n'+planPriceImport.toString()+'\n'+inspectXlsxZip.toString()+'\n'+verifyXlsxInflation.toString()+'\n'+readPriceXlsx.toString()+'\n'+projectPreviewWork.toString()+'\n'+summarizePreviewWork.toString()+'\n'+(original.excelHandlers||'')+String.raw`
  function clearPending(){pending=null;importControls.hidden=true;}
  const workPanel=document.createElement('details');workPanel.className='import-mode-card';workPanel.id='preview-work-panel';
  const heading=document.createElement('summary');heading.textContent='Lavorazioni e importi stimati';workPanel.append(heading);

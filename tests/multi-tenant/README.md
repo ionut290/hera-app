@@ -75,3 +75,6 @@ Run 45852517627: isolamento superato; Chromium installato e avvio dell'index/app
 
 ## Inventario automatico dei confini originali
 Aggiunta analisi statica di riferimenti Firestore, cache, storage, trigger e servizi esterni; produce artefatto GitHub con file/riga, senza dati o credenziali. Il documento docs/MULTI_AZIENDA_V2_BOUNDARIES.md distingue integrazioni già provate e decisioni ancora aperte. Non modifica alcun runtime o autorizzazione. È una base per integrazione e revisione, non certificazione di sicurezza né release.
+
+## Profilo autorizzato nel browser
+Run 45854645126: inventario (266 file), isolamento e gate protetti superati; login email originale riuscito con signInWithPassword, lookup e refresh Auth HTTP 200. La verifica accesso originale ha restituito errore; menu non raggiunto. Il test nuovo usa proxy Firestore WebChannel streaming su loopback, inoltrando credenziali reali SDK e risposte emulator, senza simulare profilo o disabilitare regole. Richiede lettura server del proprio profilo sintetico e completamento del gate di approvazione prima del menu. L'esito rimane da verificare. Nessuna modifica alle regole live o al login originale.

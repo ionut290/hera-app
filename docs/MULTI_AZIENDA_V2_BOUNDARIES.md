@@ -38,3 +38,6 @@ artefatto per la revisione sul ramo di sviluppo.
 
 Non migrare dati, non pubblicare e non dichiarare l'app pronta sulla base di
 questo inventario.
+
+## Verifica dei costi della separazione fisica
+La documentazione ufficiale Firestore (https://firebase.google.com/docs/firestore/pricing, consultata il 26 novembre 2026) conferma una sola banca dati con quota gratuita per progetto; ulteriori database richiedono l'upgrade del piano di fatturazione. Non attivare database aggiuntivi o fatturazione senza una decisione separata. Il laboratorio resta a costo cloud nullo ed emulator-only.

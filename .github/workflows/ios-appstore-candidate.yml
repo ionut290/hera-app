@@ -12,6 +12,7 @@ on:
         default: DO_NOT_UPLOAD
         options:
           - DO_NOT_UPLOAD
+          - VERIFY_CANDIDATE_ONLY
           - UPLOAD_APP_STORE_CANDIDATE_ONLY
       build_number:
         description: "New CFBundleVersion above confirmed TestFlight build 20032; verify live ASC first"
@@ -33,7 +34,7 @@ permissions:
 jobs:
   preflight:
     name: Preflight on Linux (no Apple secrets or upload)
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.approval == 'VERIFY_CANDIDATE_ONLY' || inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -54,7 +55,7 @@ jobs:
                 "$GITHUB_ACTOR" != "ionut290" ||
                 "$GITHUB_TRIGGERING_ACTOR" != "ionut290" ||
                 "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
-            echo "::error::Only the owner may start a new internal TestFlight dispatch from the isolated snow release branch."
+            echo "::error::Only the owner may start a new App Store candidate dispatch from the isolated snow release branch."
             exit 1
           fi
           if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$ACTUAL_SHA" ]]; then
@@ -72,13 +73,17 @@ jobs:
           node-version: "22"
       - name: Verify snow commission routing and required assets (no credentials)
         run: node scripts/check-ios-snow-20032.cjs
-      - name: Refuse App Store upload until all review blockers are resolved
+      - name: Verify privacy controls and readiness audit (no credentials)
         shell: bash
         run: |
           set -euo pipefail
           node scripts/check-account-privacy-client-runtime.js
           node scripts/check-app-review-readiness-failclosed.cjs
-          node scripts/audit-app-review-full-access.cjs --require-ready
+          node scripts/audit-app-review-full-access.cjs | tee "$RUNNER_TEMP/asc-candidate-readiness.json"
+          echo "Verification only is not App Review clearance. No signing or upload performed."
+      - name: Refuse App Store upload until all review blockers are resolved
+        if: inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY'
+        run: node scripts/audit-app-review-full-access.cjs --require-ready
 
   upload-appstore-candidate:
     name: Sign and upload App Store-eligible candidate (NO submission)

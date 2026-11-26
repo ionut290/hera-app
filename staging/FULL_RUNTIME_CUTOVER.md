@@ -62,3 +62,7 @@ GitHub run 45753044631 successfully compiled the unsigned iOS simulator app with
 ## Staging rules assembly correction and connection preparation
 
 Literal callback substitution fixes JavaScript's special `$'` replacement syntax when inserting the unchanged COBO regex. A unit test checks every fragment is byte-for-byte included. `connectStagingFirebase` is an unwired, explicitly native-only connection provider with fixed project ID, app ID and auth domain, separate from the already verified local emulator. It does not activate the original frame against live data. Real staging rules, staging account configuration, operational isolation and native permission regression are still release gates. No deployment or billing change.
+
+## Separate build modes (no release activation)
+
+The build now explicitly accepts `local-emulator` (default, existing acceptance test) or `private-staging` (separate output directory, requires validated staging web config). The latter can authenticate and inspect the user's own demo memberships but cannot open the operational original frame; it is not ready for TestFlight. Compile-only CI uses a synthetic key and never connects to Firebase. The local frame receives a scoped auth facade rather than raw auth; compatibility must be retested. Production sources, Firebase rules and native plugins remain untouched. Before any live operational beta, require verified rules, staging test identities, protected FATTO/WhatsApp regression, review of persisted/native data isolation, and Apple signing.

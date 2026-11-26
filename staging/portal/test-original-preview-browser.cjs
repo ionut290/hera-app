@@ -55,6 +55,15 @@ const {chromium}=require('playwright');
  }
  await addPrice(f,12,10);
  assert.match(await f.locator('#price-list-tbody').innerText(),/10,80/);
+ const csv=Buffer.from('N.;Descrizione tipologia attività;Tipo Attività / Codice voce;u.m.;Unitario Base d’asta;Percentuale ribasso;Note\n1;Sfalcio importato;A11;mq;12,00;;\n2;"Potatura; siepe";B21;m;25,00;20%;demo');
+ await f.locator('#price-file').setInputFiles({name:'prezzi.csv',mimeType:'text/csv',buffer:csv});
+ await f.locator('#price-feedback').filter({hasText:'1 nuove voci, 1 aggiornamenti'}).waitFor();
+ assert.equal(await f.locator('#price-list-tbody tr[data-price-id]').count(),1);
+ await f.getByRole('button',{name:'Conferma importazione CSV'}).click();
+ await f.locator('#price-feedback').filter({hasText:'Importate 2 voci'}).waitFor();
+ assert.equal(await f.locator('#price-list-tbody tr[data-price-id]').count(),2);
+ assert.match(await f.locator('#price-list-tbody').innerText(),/20,00/);
+ assert.match(await f.locator('#price-list-tbody').innerText(),/Potatura; siepe/);
  await f.locator('#close-prezziario-btn').click();
  await f.locator('#close-impianti-management-btn').click();
  assert.match(await f.locator('.commessa-manage-card').innerText(),/1 impianto/);

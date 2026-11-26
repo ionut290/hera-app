@@ -28,7 +28,7 @@ export function extractOriginalPreview(){
  const declaration=(src,marker)=>{const i=exactly(src,marker);const e=src.indexOf('\n  };',i);if(e<i)throw Error('Missing pure helper end');return src.slice(i,e+5);};
  const priceHelpers=[declaration(priceCore,'const parseNumber = value => {'),line(priceCore,'const effectiveDiscount ='),declaration(priceCore,'const calculateDiscountedPrice =')].join('\n');
  const priceFunctions=['function openPrices(){','function renderPrices(){','async function savePrice(tr){','async function addPrice(copy){'].map(n=>line(accounting,n)).join('\n');
- const priceDeclarations=['const money=','const esc=','const norm=','const discounted=','const commRef=','const server=','const actor='].map(n=>line(accounting,n)).join('\n');
+ const priceDeclarations=['const money=','const esc=','const norm=','const discounted=','const commRef=','const server=','const actor=','const aliases=','const key=v=>'].map(n=>line(accounting,n)).join('\n');
  return {markup,handlers,css,priceHandlers:priceHelpers+'\nconst num=parseNumber; const core={calculateDiscountedPrice};\n'+priceDeclarations+'\n'+priceFunctions};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){

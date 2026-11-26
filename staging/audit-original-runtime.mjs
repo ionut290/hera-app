@@ -44,4 +44,6 @@ if(process.argv[1]===fileURLToPath(import.meta.url)){
  const report=auditOriginalRuntime();
  if(report.missing.length){console.error('Original source dependencies missing:',report.missing);process.exitCode=1;}
  console.log(JSON.stringify({assets:report.originalAssets,archiveCandidates:Object.keys(report.archiveCandidates).length,modulesRequiringReview:report.modules.length,missing:report.missing,productionDeploymentAllowed:false},null,2));
+ console.log('Archive candidates (not permissions): '+Object.keys(report.archiveCandidates).join(', '));
+ console.log('Modules with data/side-effect candidates: '+report.modules.map(m=>m.file).join(', '));
 }

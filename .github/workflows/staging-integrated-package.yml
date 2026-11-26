@@ -9,8 +9,8 @@ permissions:
 jobs:
   full-package:
     if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: staging/portal

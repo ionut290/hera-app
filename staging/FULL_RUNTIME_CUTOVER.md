@@ -38,3 +38,7 @@ The emulator integration runs original handler code in the Firebase SDK's realm 
 ## Legacy authentication guard integration
 
 The scoped auth facade exposes the existing original module's already-installed guard marker, and its observer verifies the actual selected-company membership before delivering a user. It does not create `platformUsers` or overwrite the original module. The browser fixture returns empty read-only responses for the two startup indexes; these fixture responses are not real permissions. External services and unsupported archive access remain denied. Continue verification with the real emulator and preserve the production guards.
+
+## Snow creation checkpoint
+
+The emulator candidate enables the original `createCommessa` handler for `neve_commesse`, with parent validation in the same snow archive, and the original `app-snow.js` road-list batch handler. Both are gated by explicit demo capability flags and admin membership. The test checks two companies, no green/snow leakage, and denied completion writes. Route edits, automatic completion, snow-specific price lists, existing local catalog data, and all production/native activation remain outside this change.

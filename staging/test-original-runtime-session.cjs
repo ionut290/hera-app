@@ -20,7 +20,7 @@ const {doc,setDoc,serverTimestamp}=require('firebase/firestore');
  await env.withSecurityRulesDisabled(async ctx=>{
   const db=ctx.firestore();
   for(const [id,uids] of [['demo-a',['u','only-a']],['demo-b',['u','only-b']]]){
-   await setDoc(doc(db,'tenants',id),{demo:true,status:'active',name:id,originalCreateEnabled:true,originalManualEnabled:true,priceListEnabled:true,priceListWriteEnabled:true});
+   await setDoc(doc(db,'tenants',id),{demo:true,status:'active',name:id,originalCreateEnabled:true,originalManualEnabled:true,priceListEnabled:true,priceListWriteEnabled:true,originalArchivesEnabled:true,snowCreateEnabled:true});
    for(const uid of uids){
     await setDoc(doc(db,'tenants',id,'members',uid),{role:'admin',status:'active'});
     await setDoc(doc(db,'users',uid,'memberships',id),{tenantId:id,role:'admin',status:'active'});
@@ -56,11 +56,11 @@ const {doc,setDoc,serverTimestamp}=require('firebase/firestore');
  // Connect the integrated candidate's actual original handlers to the entry and
  // the real compat SDK. UI values are synthetic; all database writes use emulator rules.
  const client=make('u'),entry=createOriginalRuntimeEntry({auth:client.auth,db:client.db});runtimes.push(entry);
- const setup=async id=>{
+ const setup=async (id,archive='commesse')=>{
   const prepared=await entry.enter(id),approval=await prepared.approval.verify(client.auth.currentUser);assert(approval.allowed);
   const user=client.auth.currentUser,alerts=[];
   const ui={commessaName:{value:'Commessa integrata '+id},commessaCode:{value:'V2'},commessaType:{value:'main'},commessaParent:{value:''},commessaForm:{reset(){}},commessaTargetSelect:{value:''},manualImpiantoDenominazione:{value:'Parco integrato'},manualImpiantoComune:{value:'Bologna'},manualImpiantoIndirizzo:{value:'Via demo'},manualImpiantoCodice:{value:'A11'},manualImpiantoFeedback:{},manualImpiantoForm:{reset(){}}};
-  const bindings={window:{__VARGA_ISOLATED_RUNTIME_CANDIDATE__:prepared},db:prepared.session.firestore,auth:client.auth,currentUser:user,ui,alert:m=>alerts.push(m),driveAccessToken:null,closeNewCommessaDialog(){},updateCommessaParentField(){},getCommesseCollectionName:()=> 'commesse',commesseById:new Map(),selectedCommessaId:'',selectedCommessaName:'',firebase:{firestore:{FieldValue:{serverTimestamp}}}};
+  const bindings={window:{__VARGA_ISOLATED_RUNTIME_CANDIDATE__:prepared},db:prepared.session.firestore,auth:client.auth,currentUser:user,ui,alert:m=>alerts.push(m),driveAccessToken:null,closeNewCommessaDialog(){},updateCommessaParentField(){},getCommesseCollectionName:()=> archive,commesseById:new Map(),selectedCommessaId:'',selectedCommessaName:'',firebase:{firestore:{FieldValue:{serverTimestamp}}}};
   // Compile the original functions in the SDK's own realm; compat Firestore rejects
   // plain object literals originating in a different VM realm.
   const names=['canManageData','createCommessa','addManualImpianto','getTargetCommessaId','getTargetCommessaName','buildImpiantoKey','mergeMultiValue','splitCodes','hasOrdinario','hasStraordinario','classifyTipoManutenzione'];
@@ -110,5 +110,25 @@ const {doc,setDoc,serverTimestamp}=require('firebase/firestore');
  await assertFails(client.db.doc('tenants/demo-a/commesse/'+newB.id+'/prezziario/'+priceB).get({source:'server'}));
  console.log('INTEGRATED ORIGINAL HANDLERS: real emulator create commessa, insert plant, company switch and isolation passed.');
  console.log('INTEGRATED ORIGINAL PRICES: original accounting add/save, same code A11, separate prices and discounts passed.');
+ const snowSource=fs.readFileSync('../app-snow.js','utf8');
+ const snowExtract=name=>{const marker='function '+name+'(',i=snowSource.indexOf(marker),end=snowSource.indexOf('\n  }\n',i);assert(i>=0&&end>i);return snowSource.slice(snowSource.slice(i-6,i)==='async '?i-6:i,end+4);};
+ const snow=await setup('demo-a','neve_commesse');snow.ui.commessaName.value='Neve integrata A';
+ await snow.scope.createCommessa({preventDefault(){}});
+ const snowDB=snow.prepared.session.firestore;
+ const snowA=(await snowDB.collection('neve_commesse').get({source:'server'})).docs.find(d=>d.data().nome==='Neve integrata A');assert(snowA);
+ const textarea={value:'Via demo 1\nVia demo 2'},feedback={textContent:''};
+ const snowBindings={db:snowDB,ui:{commessaTargetSelect:{value:snowA.id}},selectedCommessaId:'',currentUser:client.auth.currentUser,firebase:{firestore:{FieldValue:{serverTimestamp}}},canManageData:snow.scope.canManageData,isSnowServiceContext:()=>true,document:{getElementById:id=>id==='snow-roads-list'?textarea:feedback},alert:m=>{throw Error(m);}};
+ const addRoads=vm.compileFunction(['parseSnowRoadLines','addSnowRoadsToSelectedCommessa'].map(snowExtract).join('\n')+'\nreturn addSnowRoadsToSelectedCommessa;',Object.keys(snowBindings))(...Object.values(snowBindings));
+ await addRoads({preventDefault(){}});
+ const roads=await snowA.ref.collection('impianti').get({source:'server'});assert.equal(roads.size,2);assert(roads.docs.every(d=>d.data().snowRoad===true&&d.data().done===false&&d.data().roadStatus==='todo'));
+ assert.equal((await snowDB.collection('commesse').doc(snowA.id).get({source:'server'})).exists,false);
+ await assertFails(client.db.doc('tenants/demo-a/neve_commesse/'+snowA.id+'/impianti/'+roads.docs[0].id).update({done:true}));
+ await assertFails(b.db.doc('tenants/demo-a/neve_commesse/'+snowA.id).get({source:'server'}));
+ const snowB=await setup('demo-b','neve_commesse');assert.equal((await snowB.prepared.session.firestore.collection('neve_commesse').get({source:'server'})).size,0);
+ assert.throws(()=>snowA.ref.collection('impianti'));
+ snowB.ui.commessaName.value='Neve integrata B';await snowB.scope.createCommessa({preventDefault(){}});
+ const secondSnow=(await snowB.prepared.session.firestore.collection('neve_commesse').get({source:'server'})).docs[0];assert.equal(secondSnow.data().nome,'Neve integrata B');
+ assert.equal((await secondSnow.ref.collection('impianti').get({source:'server'})).size,0);
+ console.log('INTEGRATED SNOW: original contract and road creation, green/snow separation, company isolation and denied completion.');
  }finally{for(const runtime of runtimes)runtime.close();await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

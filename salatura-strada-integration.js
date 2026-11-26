@@ -155,6 +155,6 @@ function init(){
  },1000);
  render();
 }
-window.VargaSalaturaStrada={routes,seed,render,url,resolveCommessa};
+window.VargaSalaturaStrada={routes,seed,render,url,resolveCommessa,currentRouteIndex:selected};
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();

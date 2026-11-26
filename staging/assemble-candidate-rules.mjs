@@ -7,7 +7,7 @@ export function assembleRules(){
  let rules=read('firestore-emulator-base.rules');
  for(const [marker,code] of [['// SUPER_ADMIN_FRAGMENT',read('superadmin.rules.fragment')],['// VERDE_FRAGMENT',fragments.map(f=>read(f+'.rules.fragment')).join('\n')]]){
   if(rules.split(marker).length!==2)throw Error('Rules marker mismatch: '+marker);
-  rules=rules.replace(marker,code);
+  rules=rules.replace(marker,()=>code);
  }
  return rules;
 }

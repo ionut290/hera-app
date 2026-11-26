@@ -4,6 +4,8 @@ on:
     branches: [release/ios-servizio-neve-20261126]
     paths:
       - 'scripts/check-ios-appstore-build-number.cjs'
+      - 'scripts/audit-app-review-full-access.cjs'
+      - 'scripts/check-app-review-readiness-failclosed.cjs'
       - '.github/workflows/ios-appstore-candidate.yml'
       - '.github/workflows/check-ios-appstore-release-safety.yml'
   pull_request:
@@ -39,6 +41,8 @@ jobs:
           node scripts/check-salatura-unified.cjs
           node scripts/check-account-privacy-client-runtime.js
           node scripts/check-account-privacy-sw-cache.cjs
+          node scripts/check-app-review-readiness-failclosed.cjs
+          node scripts/audit-app-review-full-access.cjs
       - name: Verify no deployment credentials or App Store request in this check
         run: |
           set -euo pipefail

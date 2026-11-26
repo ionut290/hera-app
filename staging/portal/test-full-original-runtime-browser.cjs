@@ -12,16 +12,17 @@ const leafletPath=require.resolve('leaflet/dist/leaflet.js');
  try{
   const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
   const external=[],errors=[],served=new Set();
-  await context.addInitScript(()=>{
+  const {createLegacyFirebaseNamespace}=await import('../legacy-firebase-namespace.mjs');
+  await context.addInitScript({content:'('+((createNamespace)=>{
    const storage=()=>{const m=new Map();return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),clear:()=>m.clear()};};
    const uid='smoke-operator',projectId='varga-cantieri-v2-staging',app={name:'fixture',options:{projectId}};
    const user={uid,email:'smoke@example.test',displayName:'Operatore demo'};
    const auth={app,currentUser:user,onAuthStateChanged(){window.__vargaAuthObserverReached=true;return()=>{};}};
    const firestore={collection(){throw Error('Runtime smoke: database operations blocked');}};
    window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__={projectId,auth,session:{context:{uid,tenantId:'demo-smoke',role:'employee'},firestore},isActive:()=>true,localStorage:storage(),sessionStorage:storage(),approval:{verify:async()=>({allowed:true,profile:{uid,role:'user'}})}};
-   window.firebase={initializeApp(){throw Error('Unscoped Firebase blocked');},auth(){throw Error('Unscoped auth blocked');},firestore(){throw Error('Unscoped Firestore blocked');}};
+   window.firebase=createNamespace({prepared:window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__});
    window.__VARGA_STAGING_FIREBASE_CONFIG__={apiKey:'fixture-only'};
-  });
+  }).toString()+')('+createLegacyFirebaseNamespace.toString()+');'});
   await context.route('**/*',async route=>{
    const url=new URL(route.request().url());
    if(url.origin!==origin){external.push(url.hostname);return route.abort();}
@@ -48,7 +49,7 @@ const leafletPath=require.resolve('leaflet/dist/leaflet.js');
    const ext=path.extname(file),types={'.js':'application/javascript','.css':'text/css','.html':'text/html','.json':'application/json','.webmanifest':'application/manifest+json','.png':'image/png','.svg':'image/svg+xml'};
    served.add(rel);return route.fulfill({contentType:types[ext]||'application/octet-stream',body:fs.readFileSync(file)});
   });
-  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(10000);
+  const page=await context.newPage();page.on('pageerror',e=>errors.push(String(e.stack||e.message).split('\n').slice(0,4).join('\n')));page.setDefaultTimeout(10000);
   await page.goto(origin+'/',{waitUntil:'domcontentloaded'});
   for(const id of ['app-startup-loading','auth-gate','side-menu','open-panel-commesse','open-panel-squadre','open-hours-btn','open-urban-furniture-btn','green-assistant-overlay']){
    assert.equal(await page.locator('#'+id).count(),1,'Original shell missing '+id);
@@ -56,6 +57,8 @@ const leafletPath=require.resolve('leaflet/dist/leaflet.js');
   assert(served.has('app.js'),'Complete candidate not loaded');
   const bootstrap=await page.evaluate(()=>window.__vargaRuntimeBootstrap);
   assert.deepEqual(bootstrap,{bound:true,error:null});
+  assert.equal(await page.evaluate(()=>firebase.firestore()===window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore),true);
+  assert.equal(await page.evaluate(()=>{try{firebase.app().functions();return false;}catch{return true;}}),true);
   assert.equal(await page.evaluate(()=>window.L?.version),'1.9.4');
   console.log('Original auth observer reached: '+Boolean(await page.evaluate(()=>window.__vargaAuthObserverReached)));
   console.log('FULL ORIGINAL SHELL: original HTML, original asset scripts, candidate SDK bootstrap verified.');

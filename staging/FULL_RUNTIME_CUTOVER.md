@@ -26,3 +26,7 @@ The new integrated candidate connects the original startup gate, company role an
 ## Original shell browser smoke
 
 `staging/portal/test-full-original-runtime-browser.cjs` serves the actual root HTML and local original scripts in a headless browser with the integrated app.js candidate. Network requests cannot reach external hosts; no Firebase token or live database is provided. It checks original shell elements and the actual candidate SDK bootstrap, and logs remaining browser exceptions as diagnostic blockers, not proof of operational readiness. The root CSP is not changed on disk. This test-only fixture cannot be deployed.
+
+## Shared legacy SDK namespace
+
+`legacy-firebase-namespace.mjs` gives original scripts calling `firebase.firestore()` or `firebase.app().firestore()` the same selected-company facade. The browser smoke now exercises this namespace; external Firebase services and creation of alternate apps are refused. Auth profile views are limited; the original app candidate still has its trusted entry auth reference. Do not treat this client namespace as a substitute for server-side rules, and do not enable live operation yet. Direct SDK static types and module-specific permissions must be reviewed in actual runtime tests.

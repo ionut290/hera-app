@@ -30,6 +30,7 @@ jobs:
           node --check functions/multi-tenant/writes.cjs
           node --check functions/multi-tenant/operations.cjs
           node --check tenant-runtime-session.js
+          node --check tests/multi-tenant/legacy-boundary-inventory.cjs
           node tests/multi-tenant/tenant-runtime-session.test.cjs
           node --check tests/multi-tenant/original-browser-smoke.cjs
           node --check tests/multi-tenant/legacy-commesse-scope.cjs
@@ -41,6 +42,15 @@ jobs:
           node --check tests/multi-tenant/staging-bootstrap.cjs
           node -e "const a=require('node:assert/strict');const s=require('./tests/multi-tenant/staging-bootstrap.cjs');a.equal(s.ROOT,'projects/varga-cantieri-v2-staging/databases/(default)/documents');a.deepEqual(s.createWrite('test/x',{synthetic:true}).currentDocument,{exists:false});a.deepEqual(s.fields({synthetic:true,n:1}),{synthetic:{booleanValue:true},n:{integerValue:'1'}});"
           if node tests/multi-tenant/staging-bootstrap.cjs --execute hera-app-6cd2b invalid@example.invalid; then exit 1; fi
+      - name: Inventory original runtime boundaries
+        run: |
+          VARGA_INVENTORY_OUTPUT="$RUNNER_TEMP/varga-boundaries.json" node tests/multi-tenant/legacy-boundary-inventory.cjs
+      - name: Upload source boundary inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: varga-2-legacy-boundaries
+          path: ${{ runner.temp }}/varga-boundaries.json
+          retention-days: 7
       - name: Install isolated test dependencies
         working-directory: tests/multi-tenant
         run: |

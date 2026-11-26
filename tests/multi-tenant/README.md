@@ -72,3 +72,6 @@ Il run 45850736117 ha completato la suite isolamento ma il browser non è partit
 
 ## Diagnostica login browser
 Run 45852517627: isolamento superato; Chromium installato e avvio dell'index/app originali superato senza page errors. Timeout nel login email/password prima dell'identità Firebase. Il nuovo test verifica preventivamente le credenziali sintetiche via REST dell'emulatore e usa un trasporto Auth same-origin confinato alla route di test, inoltrando richieste e risposte reali a 127.0.0.1:9199 senza iniettare token, profili o risultati di successo nel browser. Verifica submit del form originale, risposta effettiva signInWithPassword, identità e fase di approvazione. Registra categorie di errori e status, non credenziali o token. Correzione del solo laboratorio; esito del login ancora da confermare. Nessun deploy.
+
+## Inventario automatico dei confini originali
+Aggiunta analisi statica di riferimenti Firestore, cache, storage, trigger e servizi esterni; produce artefatto GitHub con file/riga, senza dati o credenziali. Il documento docs/MULTI_AZIENDA_V2_BOUNDARIES.md distingue integrazioni già provate e decisioni ancora aperte. Non modifica alcun runtime o autorizzazione. È una base per integrazione e revisione, non certificazione di sicurezza né release.

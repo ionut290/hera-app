@@ -8,6 +8,7 @@ permissions:
   contents: read
 jobs:
   checks:
+    # Verify both read-only Apple API requests before any signing secret is available.
     if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
     runs-on: ubuntu-24.04
     steps:

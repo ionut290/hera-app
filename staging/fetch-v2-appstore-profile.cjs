@@ -40,7 +40,7 @@ async function fetchActiveProfile(env, request = fetch) {
   const appUrl = new URL("/v1/apps/" + EXPECTED_APP, API);
   appUrl.searchParams.set("fields[apps]", "bundleId,name");
   const appResponse = await request(appUrl.toString(), {
-    method: "GET", headers: { Authorization: "Bearer " + jwt, Accept: "application/json" },
+    method: "GET", redirect: "error", headers: { Authorization: "Bearer " + jwt, Accept: "application/json" },
     signal: AbortSignal.timeout(20000)
   });
   if (!appResponse.ok) throw new Error("V2 app metadata unavailable (HTTP " + appResponse.status + ")");
@@ -54,6 +54,7 @@ async function fetchActiveProfile(env, request = fetch) {
   url.searchParams.set("include", "bundleId");
   url.searchParams.set("limit", "200");
   const response = await request(url.toString(), {
+    method: "GET", redirect: "error",
     headers: { Authorization: "Bearer " + jwt, Accept: "application/json" },
     signal: AbortSignal.timeout(20000)
   });

@@ -82,3 +82,7 @@ Run 45753988405 passed both iPhone simulator and unsigned iPhone device architec
 ## Integrated Super Admin panel
 
 The full application launcher now opens the Super Admin panel directly when the verified server token contains the `superAdmin` claim. Local emulator mode supports creation/rename/suspension of demo companies and atomic role/status updates for existing demo memberships; server rules deny destructive operations and cross-company changes. Private live staging mode is read-only until the actual ruleset is established. The integrated browser test exercises real emulator Auth custom claims, company creation and mirrored membership role changes, checking preserved historical IDs and unaffected second company. No protected FATTO/WhatsApp source, production or real personnel records changed. This is not a live release.
+
+## Apple distribution metadata gate
+
+New read-only Apple API preflight checks exactly `it.vargacantieri.staging` for a registered Apple bundle, App Store Connect record and active App Store distribution profile. The existing protected environment governs credentials and any required approval; no secret is copied, printed or published, no Apple creation/update/upload request is made, and the original app's provisioning profile is never downloaded. Missing credentials or denied environment access are explicit blockers. This preflight cannot sign or release an app. No changes to Firebase, protected operational functions or production.

@@ -42,11 +42,11 @@ async function readModule({tx,access,caller,payload,page,id}){
       const sorted=records.filter(x=>x&&typeof x.id==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(x.id)&&!/^__.*__$/.test(x.id)).sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);
       const filtered=after?sorted.filter(x=>x.id>after):sorted;
       const rows=filtered.slice(0,limit);
-      return {company:access.company,module,kind,commessaId,rows:rows.map(x=>row(module,x.id,x)),nextCursor:filtered.length>limit?rows.at(-1).id:null};
+      return {company:access.company,module,kind,commessaId,rows:rows.map(x=>({...row(module,x.id,x),...(x.tenantLabManaged===true?{editable:true}:{})})),nextCursor:filtered.length>limit?rows.at(-1).id:null};
     }
   }
   let query=collection.orderBy('__name__').limit(limit+1);if(after)query=query.startAfter(after);
   const snap=await tx.get(query),rows=snap.docs.slice(0,limit);
-  return {company:access.company,module,kind,commessaId,rows:rows.map(x=>row(module,x.id,x.data())),nextCursor:snap.size>limit?rows.at(-1).id:null};
+  return {company:access.company,module,kind,commessaId,rows:rows.map(x=>({...row(module,x.id,x.data()),...(x.data().tenantLabManaged===true?{editable:true}:{})})),nextCursor:snap.size>limit?rows.at(-1).id:null};
 }
 module.exports={readModule};

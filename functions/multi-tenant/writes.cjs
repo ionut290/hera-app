@@ -2,7 +2,6 @@
 // Laboratory mutations. Only explicitly allowed fields, no deletes or protected workflows.
 const {randomUUID,createHash}=require('node:crypto');
 const core=require('../../inrete-work-items-v2.js');
-const {FieldValue}=require('firebase-admin/firestore');
 const MODULES=new Set(['jobs','personnel','vehicles','prices']);
 const fields=Object.freeze({jobs:['nome','codice','parentCommessaId'],personnel:['cognome','nome'],vehicles:['nId','marca','modello'],prices:['codiceVoce','descrizione','unitaMisura','prezzoBase','percentualeRibasso']});
 function fail(code){throw Object.assign(new Error(code),{code});}
@@ -67,7 +66,7 @@ async function saveRecord({tx,access,caller,payload,id}){
   }
   if(module==='jobs'&&recordId&&(old.data().parentCommessaId??null)!==clean.parentCommessaId)fail('invalid-parent');
   let extra={},view=null,viewRows=null,viewKey=null;
-  if(module==='jobs'&&!recordId)extra={excelModelVersion:2,priceListVersion:2,workItemsModelVersion:2,percentualeRibassoGenerale:0.01,nextImpiantoNumber:1,excelModelActivatedAt:FieldValue.serverTimestamp(),excelModelActivatedBy:caller.email,creatoDa:caller.email};
+  if(module==='jobs'&&!recordId)extra={excelModelVersion:2,priceListVersion:2,workItemsModelVersion:2,percentualeRibassoGenerale:0.01,nextImpiantoNumber:1,excelModelActivatedAt:new Date(),excelModelActivatedBy:caller.email,creatoDa:caller.email};
   if(module==='personnel'&&!recordId)extra={telefono:'',email:'',mansione:'',note:'',abilitatoTutteCommesse:false,commesseAbilitate:[],corsi:{}};
   if(module==='vehicles'&&!recordId)extra={portataCarico:'',massaComplessivaKg:'',alimentazione:'',posti:0};
   if(module==='prices'){
@@ -93,12 +92,12 @@ async function saveRecord({tx,access,caller,payload,id}){
       viewRows=rows.filter(x=>x?.id!==ref.id).concat([{...old.data(),...extra,...clean,id:ref.id,tenantLabManaged:true,tenantRevision:revision+1}]);
     }
   }
-  const patch={...extra,...clean,tenantLabManaged:true,tenantRevision:revision+1,updatedAt:FieldValue.serverTimestamp(),updatedBy:caller.uid};
-  if(!recordId)tx.create(ref,{...patch,createdAt:FieldValue.serverTimestamp()});else tx.update(ref,patch);
-  if(viewRows)tx.update(view,{['payload.'+viewKey]:viewRows,updatedAt:FieldValue.serverTimestamp()});
+  const patch={...extra,...clean,tenantLabManaged:true,tenantRevision:revision+1,updatedAt:new Date(),updatedBy:caller.uid};
+  if(!recordId)tx.create(ref,{...patch,createdAt:new Date()});else tx.update(ref,patch);
+  if(viewRows)tx.update(view,{['payload.'+viewKey]:viewRows,updatedAt:new Date()});
   const result={company:access.company,module,kind,commessaId,recordId:ref.id,revision:revision+1};
-  tx.create(receipt,{hash,result,createdAt:FieldValue.serverTimestamp()});
-  tx.create(access.root.collection('audit').doc(),{event:'lab-record-'+(recordId?'updated':'created'),module,kind,commessaId,recordId:ref.id,actorUid:caller.uid,at:FieldValue.serverTimestamp()});
+  tx.create(receipt,{hash,result,createdAt:new Date()});
+  tx.create(access.root.collection('audit').doc(),{event:'lab-record-'+(recordId?'updated':'created'),module,kind,commessaId,recordId:ref.id,actorUid:caller.uid,at:new Date()});
   return result;
 }
 module.exports={getRecord,saveRecord};

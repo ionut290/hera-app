@@ -47,12 +47,12 @@
   async function jobs(nextKind,append=false){
     const tenantId=active;if(!tenantId)return;
     clearModule();
-    if(!append){el("jobs").replaceChildren();jobsCursor=null;el("jobs-more").hidden=true;}
+    if(!append){kind=null;el("new-job").hidden=true;el("jobs").replaceChildren();jobsCursor=null;el("jobs-more").hidden=true;}
     await run(async request=>{
       const data=await request("listCompanyCommesse",{tenantId,kind:nextKind,limit:25,after:append?jobsCursor:null});
       if(active!==data.company.id||data.kind!==nextKind)throw Error("session");
       kind=nextKind;el("new-job").hidden=false;for(const row of data.commesse){
-        const li=document.createElement("li"),name=document.createElement("span");name.textContent=row.name+" ";li.append(name);addEdit(li,{module:"jobs",kind:nextKind,title:"Commessa"},row.id);
+        const li=document.createElement("li"),name=document.createElement("span");name.textContent=row.name+" ";li.append(name);if(row.editable===true)addEdit(li,{module:"jobs",kind:nextKind,title:"Commessa"},row.id);
         for(const [module,label] of [["accounting","Contabilità"],["prices","Prezziario"]]){
           const b=document.createElement("button");b.type="button";b.className="btn";b.textContent=label;
           b.addEventListener("click",()=>void showModule({module,kind:nextKind,commessaId:row.id,title:label+" · "+row.name}));li.append(b);
@@ -78,7 +78,7 @@
     await run(async request=>{
       const data=await request("listCompanyModule",{tenantId,module:q.module,kind:q.kind,commessaId:q.commessaId,month:q.month,limit:25,after:append?moduleCursor:null});
       if(active!==data.company.id||q.module!==data.module||q.kind!==data.kind||(q.commessaId??null)!==data.commessaId)throw Error("session");
-      moduleQuery=q;el("new-record").hidden=!editableModules.has(q.module);for(const row of data.rows){const li=document.createElement("li");li.textContent=formatRow(row);if(editableModules.has(q.module))addEdit(li,q,row.id);el("module-rows").append(li);}
+      moduleQuery=q;el("new-record").hidden=!editableModules.has(q.module);for(const row of data.rows){const li=document.createElement("li");li.textContent=formatRow(row);if(editableModules.has(q.module)&&row.editable===true)addEdit(li,q,row.id);el("module-rows").append(li);}
       moduleCursor=data.nextCursor||null;el("module-more").hidden=!moduleCursor;
       message(el("module-rows").children.length?"Dati aziendali · sola lettura.":"Nessun dato presente.");
     });
@@ -114,7 +114,7 @@
   }
   el("new-job").addEventListener("click",()=>{if(kind){cancel();editForm({module:"jobs",kind,title:"Commessa"});}});
   el("new-record").addEventListener("click",()=>{if(moduleQuery&&editableModules.has(moduleQuery.module)){cancel();editForm(moduleQuery);}});
-  el("write-cancel").addEventListener("click",clearEditor);
+  el("write-cancel").addEventListener("click",()=>{if(saving)return;cancel();clearEditor();});
   el("write-form").addEventListener("submit",e=>{
     e.preventDefault();if(!editing||saving||active!==editing.tenantId)return;
     const q={...editing},data=Object.fromEntries(new FormData(el("write-form")));

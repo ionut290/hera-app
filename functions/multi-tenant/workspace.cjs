@@ -40,7 +40,7 @@ function createWorkspaceService(db){
       let query=access.root.collection(collection).orderBy('__name__').limit(limit+1);
       if(after)query=query.startAfter(after);
       const snap=await tx.get(query),rows=snap.docs.slice(0,limit);
-      return {company:access.company,kind:payload.kind,commesse:rows.map(d=>({id:d.id,name:String(d.data().nome??d.data().name??d.data().NOME??d.id)})),nextCursor:snap.size>limit?rows.at(-1).id:null};
+      return {company:access.company,kind:payload.kind,commesse:rows.map(d=>({id:d.id,name:String(d.data().nome??d.data().name??d.data().NOME??d.id),...(d.data().tenantLabManaged===true?{editable:true}:{})})),nextCursor:snap.size>limit?rows.at(-1).id:null};
     });
   }
   async function listCompanyModule(caller,payload){

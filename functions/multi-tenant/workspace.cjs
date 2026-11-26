@@ -46,7 +46,7 @@ function createWorkspaceService(db){
     return db.runTransaction(async tx=>{
       const access=await membership(tx,caller.uid,payload.tenantId);
       if(!access||!['owner','admin'].includes(access.company.role))fail('forbidden');
-      return readModule({tx,access,payload,page,id});
+      return readModule({tx,access,caller,payload,page,id});
     });
   }
   return Object.freeze({listMyCompanies,openCompany,listCompanyCommesse,listCompanyModule});

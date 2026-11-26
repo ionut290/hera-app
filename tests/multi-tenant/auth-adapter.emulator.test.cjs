@@ -171,6 +171,59 @@ async function main(){
   assert.equal((await viaHttp(owner.token,'listCompanyModule',{tenantId:firstCompany.tenantId,kind:'ordinary',module:'personnel'})).status,403);
   await call(admin,'setCompanyStatus',{tenantId:firstCompany.tenantId,status:'active',reason:'Module reactivation test'});
   console.log('Personnel, teams, vehicles, accounting and price-list tenant module assertions passed');
+  // Support services: document ownership, personal event and notification privacy,
+  // monthly aggregate, ordinary/snow hours and fail-closed integrations.
+  const ownerId=owner.uid, otherId=second.uid;
+  for(const [module,collection,field,data] of [
+    ['documents','documents','ownerUserId',{name:'My document A',visibility:'personal',fileUrl:'https://example.invalid/SECRET',storagePath:'SECRET',sharedUserIds:['private']}],
+    ['events','calendarEvents','createdByUid',{title:'My event A',startDate:'2026-11-26',type:'altro',description:'SECRET'}],
+    ['notifications','appNotifications','createdByUid',{title:'My notification A',eventType:'test',body:'SECRET',createdByEmail:'private@example.invalid'}]
+  ]){
+    await adapter.db.doc(ar+'/'+collection+'/mine').set({...data,[field]:ownerId});
+    await adapter.db.doc(ar+'/'+collection+'/other').set({...data,name:'Other private',title:'Other private',[field]:otherId});
+    await adapter.db.doc(br+'/'+collection+'/mine').set({...data,[field]:ownerId,name:'Other tenant',title:'Other tenant'});
+    await adapter.db.doc(collection+'/mine').set({...data,[field]:ownerId,name:'Global legacy',title:'Global legacy'});
+    const payload={tenantId:firstCompany.tenantId,module,kind:'ordinary'};
+    const result=await viaHttp(owner.token,'listCompanyModule',payload);
+    assert.equal(result.status,200);assert.deepEqual(result.result.rows.map(x=>x.id),['mine']);
+    assert.ok(!JSON.stringify(result.result).includes('SECRET'));assert.ok(!JSON.stringify(result.result).includes('private@example.invalid'));
+    assert.equal((await viaHttp(second.token,'listCompanyModule',payload)).status,403);
+    assert.equal((await viaHttp(admin.token,'listCompanyModule',payload)).status,403);
+    const empty=await viaHttp(emptyOwner.token,'listCompanyModule',{...payload,tenantId:emptyCompany.tenantId});
+    assert.equal(empty.status,200);assert.deepEqual(empty.result.rows,[]);
+  }
+  for(const [kind,hours,approvals] of [['ordinary','oreReports','oreApprovalRequests'],['snow','neve_ore','neve_ore_richieste']]){
+    for(const [module,collection] of [['hours',hours],['approvals',approvals]]){
+      await adapter.db.doc(ar+'/'+collection+'/same-id').set({date:'2026-11-26',commessaName:'Hours A',entries:[{operatore:'SECRET'}],status:'approved'});
+      await adapter.db.doc(br+'/'+collection+'/same-id').set({date:'2026-11-26',commessaName:'Hours B',entries:[{}]});
+      await adapter.db.doc(collection+'/same-id').set({commessaName:'Global legacy'});
+      const payload={tenantId:firstCompany.tenantId,module,kind};
+      const response=await viaHttp(owner.token,'listCompanyModule',payload);
+      assert.equal(response.status,200);assert.deepEqual(response.result.rows.map(x=>x.name),['Hours A']);
+      assert.equal(response.result.rows[0].count,1);assert.ok(!JSON.stringify(response.result).includes('SECRET'));
+      assert.equal((await viaHttp(second.token,'listCompanyModule',payload)).status,403);
+      assert.equal((await viaHttp(owner.token,'listCompanyModule',{...payload,tenantId:secondCompany.tenantId})).status,403);
+    }
+  }
+  await adapter.db.doc(ar+'/sharedStaticViews/calendario__2026-11').set({payload:{month:'2026-11',reports:[{person:'SECRET'}],activities:[{name:'SECRET'},{name:'SECRET'}]}});
+  await adapter.db.doc(br+'/sharedStaticViews/calendario__2026-11').set({payload:{month:'2026-11',reports:[{},{},{}],activities:[]}});
+  const calendarPayload={tenantId:firstCompany.tenantId,module:'calendar',kind:'ordinary',month:'2026-11'};
+  const calendar=await viaHttp(owner.token,'listCompanyModule',calendarPayload);
+  assert.equal(calendar.status,200);assert.deepEqual(calendar.result.rows,[{id:'2026-11',name:'Riepilogo 2026-11',count:1,activitiesCount:2}]);
+  assert.equal((await viaHttp(owner.token,'listCompanyModule',{...calendarPayload,month:'2026-13'})).status,400);
+  assert.equal((await viaHttp(second.token,'listCompanyModule',calendarPayload)).status,403);
+  const emptyCalendar=await viaHttp(emptyOwner.token,'listCompanyModule',{...calendarPayload,tenantId:emptyCompany.tenantId});
+  assert.deepEqual(emptyCalendar.result.rows,[]);
+  await adapter.db.doc('appConfig/driveAdminSecret').set({token:'SECRET'});
+  await adapter.db.doc(ar+'/appConfig/driveBridge').set({token:'SECRET'});
+  const integrationPayload={tenantId:firstCompany.tenantId,module:'integrations',kind:'ordinary'};
+  const integrations=await viaHttp(owner.token,'listCompanyModule',integrationPayload);
+  assert.equal(integrations.status,200);assert.equal(integrations.result.rows.length,5);
+  assert.ok(integrations.result.rows.every(r=>r.status.startsWith('Non attiva')));
+  assert.ok(!JSON.stringify(integrations.result).includes('SECRET'));
+  assert.equal((await viaHttp(owner.token,'syncDrive',integrationPayload)).status,400);
+  assert.equal((await viaHttp(second.token,'listCompanyModule',integrationPayload)).status,403);
+  console.log('Documents, calendar, hours, notifications and fail-closed integration assertions passed');
   await adapter.auth.setCustomUserClaims(admin.uid,{});
   assert.equal((await viaHttp(admin.token,'listCompanies')).status,403);
   await rejects(()=>call(admin,'listCompanies'),'forbidden');

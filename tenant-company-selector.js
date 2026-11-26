@@ -64,8 +64,9 @@
   }
   const money=new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"});
   function formatRow(row){
-    const parts=[row.name,row.code,row.unit,row.status,row.date];
-    if(typeof row.count==="number")parts.push(row.count+" squadre");
+    const parts=[row.name,row.code,row.unit,row.category,row.status,row.date];
+    if(typeof row.count==="number")parts.push(row.count+" elementi");
+    if(typeof row.activitiesCount==="number")parts.push(row.activitiesCount+" attività");
     if(typeof row.base==="number")parts.push("Base "+money.format(row.base));
     if(typeof row.discounted==="number")parts.push("Ribassato "+money.format(row.discounted));
     if(typeof row.total==="number")parts.push("Totale "+money.format(row.total));
@@ -75,16 +76,25 @@
     const tenantId=active;if(!tenantId)return;
     if(!append){clearModule();el("module-title").textContent=q.title;}
     await run(async request=>{
-      const data=await request("listCompanyModule",{tenantId,module:q.module,kind:q.kind,commessaId:q.commessaId,limit:25,after:append?moduleCursor:null});
+      const data=await request("listCompanyModule",{tenantId,module:q.module,kind:q.kind,commessaId:q.commessaId,month:q.month,limit:25,after:append?moduleCursor:null});
       if(active!==data.company.id||q.module!==data.module||q.kind!==data.kind||(q.commessaId??null)!==data.commessaId)throw Error("session");
       moduleQuery=q;for(const row of data.rows){const li=document.createElement("li");li.textContent=formatRow(row);el("module-rows").append(li);}
       moduleCursor=data.nextCursor||null;el("module-more").hidden=!moduleCursor;
       message(el("module-rows").children.length?"Dati aziendali · sola lettura.":"Nessun dato presente.");
     });
   }
-  for(const [module,label] of [["personnel","Personale"],["teams","Squadre"],["vehicles","Mezzi"]]){
+  for(const [module,label] of [["personnel","Personale"],["teams","Squadre"],["vehicles","Mezzi"],["hours","Ore registrate"],["approvals","Richieste ore"]]){
     el(module).addEventListener("click",()=>{el("jobs").replaceChildren();jobsCursor=null;kind=null;el("jobs-more").hidden=true;void showModule({module,kind:el("module-kind").value,title:label});});
   }
+  const initialMonth=new Date();el("month").value=initialMonth.getFullYear()+"-"+String(initialMonth.getMonth()+1).padStart(2,"0");
+  for(const [module,label] of [["documents","Miei documenti"],["events","Miei eventi"],["calendar","Riepilogo calendario"],["notifications","Notifiche create da me"],["integrations","Stato integrazioni"]]){
+    el(module).addEventListener("click",()=>{
+      if(module==="calendar"&&!/^\d{4}-(0[1-9]|1[0-2])$/.test(el("month").value)){message("Seleziona un mese valido.");return;}
+      el("jobs").replaceChildren();jobsCursor=null;kind=null;el("jobs-more").hidden=true;
+      void showModule({module,kind:"ordinary",month:module==="calendar"?el("month").value:undefined,title:label});
+    });
+  }
+  el("month").addEventListener("change",()=>{cancel();clearModule();});
   el("module-kind").addEventListener("change",()=>{cancel();clearModule();});
   el("module-more").addEventListener("click",()=>{if(moduleQuery&&moduleCursor)void showModule(moduleQuery,true);});
   open.addEventListener("click",()=>{if(open.hidden||!allowed())return;clear();dialog.showModal();void list();});

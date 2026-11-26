@@ -1,5 +1,6 @@
 'use strict';
 // On-demand, tenant-only read projections. Never use global registries or legacy paths.
+const {SUPPORT,readSupport}=require('./support-modules.cjs');
 const REGISTRIES=Object.freeze({
   personnel:['personale','neve_personale'],
   vehicles:['mezzi','neve_mezzi'],
@@ -17,8 +18,9 @@ function row(module,id,data){
   if(module==='prices')return {id,name:str(data.descrizione)||str(data.codiceVoce)||id,code:str(data.codiceVoce),unit:str(data.unitaMisura),base:number(data.prezzoBase),discounted:number(data.prezzoRibassato)};
   return {id,name:str(data.denominazione)||str(data.tipologiaLavorazione)||id,code:str(data.codiceVocePrezzo),status:str(data.stato),total:number(data.totale)};
 }
-async function readModule({tx,access,payload,page,id}){
+async function readModule({tx,access,caller,payload,page,id}){
   const module=payload.module,kind=payload.kind;
+  if(SUPPORT.has(module))return readSupport({tx,access,caller,payload,page,id});
   if(!['ordinary','snow'].includes(kind))fail('invalid-kind');
   if(typeof module!=='string'||(!own(REGISTRIES,module)&&!own(ECONOMICS,module)))fail('invalid-module');
   const {limit,after}=page(payload);

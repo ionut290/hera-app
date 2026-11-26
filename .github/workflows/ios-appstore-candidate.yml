@@ -373,7 +373,7 @@ jobs:
             > "$RUNNER_TEMP/ios-appstore-candidate-upload.log" 2>&1 ||
             { tail -n 80 "$RUNNER_TEMP/ios-appstore-candidate-upload.log"; exit 1; }
           echo "Signed App Store-eligible candidate uploaded to App Store Connect only."
-          echo "NOT submitted to App Review. NOT released to customers. Process for INTERNAL testers only."
+          echo "NOT submitted to App Review. NOT released to customers. Select this candidate in App Store Connect only after readiness has been verified."
 
       - name: Remove temporary Apple signing material and Firebase configuration
         if: always()

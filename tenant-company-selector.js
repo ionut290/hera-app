@@ -4,10 +4,11 @@
   if(!allowed())return;
   const auth=firebase.auth(),el=id=>document.getElementById("varga-company-"+id);
   const open=el("open"),dialog=el("dialog");if(!open||!dialog)return;
-  let epoch=0,controller=null,active=null,kind=null,cursor=null,jobsCursor=null;
+  let epoch=0,controller=null,active=null,kind=null,cursor=null,jobsCursor=null,moduleCursor=null,moduleQuery=null;
   const message=text=>{el("status").textContent=text;};
   function cancel(){epoch++;controller?.abort();controller=null;}
-  function clearSelection(){active=null;kind=null;jobsCursor=null;el("selected").hidden=true;el("actions").hidden=true;el("name").textContent="";el("role").textContent="";el("jobs").replaceChildren();el("jobs-more").hidden=true;}
+  function clearModule(){moduleCursor=null;moduleQuery=null;el("module-title").textContent="";el("module-rows").replaceChildren();el("module-more").hidden=true;}
+  function clearSelection(){clearModule();active=null;kind=null;jobsCursor=null;el("selected").hidden=true;el("actions").hidden=true;el("name").textContent="";el("role").textContent="";el("jobs").replaceChildren();el("jobs-more").hidden=true;}
   function clear(){cancel();clearSelection();cursor=null;el("list").replaceChildren();el("more").hidden=true;message("");}
   function hide(){clear();open.hidden=true;open.classList.add("hidden");if(dialog.open)dialog.close();}
   function current(n,uid){return allowed()&&n===epoch&&auth.currentUser?.uid===uid&&dialog.open;}
@@ -45,15 +46,47 @@
   }
   async function jobs(nextKind,append=false){
     const tenantId=active;if(!tenantId)return;
+    clearModule();
     if(!append){el("jobs").replaceChildren();jobsCursor=null;el("jobs-more").hidden=true;}
     await run(async request=>{
       const data=await request("listCompanyCommesse",{tenantId,kind:nextKind,limit:25,after:append?jobsCursor:null});
       if(active!==data.company.id||data.kind!==nextKind)throw Error("session");
-      kind=nextKind;for(const row of data.commesse){const li=document.createElement("li");li.textContent=row.name;el("jobs").append(li);}
+      kind=nextKind;for(const row of data.commesse){
+        const li=document.createElement("li"),name=document.createElement("span");name.textContent=row.name+" ";li.append(name);
+        for(const [module,label] of [["accounting","Contabilità"],["prices","Prezziario"]]){
+          const b=document.createElement("button");b.type="button";b.className="btn";b.textContent=label;
+          b.addEventListener("click",()=>void showModule({module,kind:nextKind,commessaId:row.id,title:label+" · "+row.name}));li.append(b);
+        }el("jobs").append(li);
+      }
       jobsCursor=data.nextCursor||null;el("jobs-more").hidden=!jobsCursor;
       message(el("jobs").children.length?"Commesse aziendali · sola lettura.":"Nessuna commessa in questa azienda.");
     });
   }
+  const money=new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"});
+  function formatRow(row){
+    const parts=[row.name,row.code,row.unit,row.status,row.date];
+    if(typeof row.count==="number")parts.push(row.count+" squadre");
+    if(typeof row.base==="number")parts.push("Base "+money.format(row.base));
+    if(typeof row.discounted==="number")parts.push("Ribassato "+money.format(row.discounted));
+    if(typeof row.total==="number")parts.push("Totale "+money.format(row.total));
+    return parts.filter(Boolean).join(" · ");
+  }
+  async function showModule(q,append=false){
+    const tenantId=active;if(!tenantId)return;
+    if(!append){clearModule();el("module-title").textContent=q.title;}
+    await run(async request=>{
+      const data=await request("listCompanyModule",{tenantId,module:q.module,kind:q.kind,commessaId:q.commessaId,limit:25,after:append?moduleCursor:null});
+      if(active!==data.company.id||q.module!==data.module||q.kind!==data.kind||(q.commessaId??null)!==data.commessaId)throw Error("session");
+      moduleQuery=q;for(const row of data.rows){const li=document.createElement("li");li.textContent=formatRow(row);el("module-rows").append(li);}
+      moduleCursor=data.nextCursor||null;el("module-more").hidden=!moduleCursor;
+      message(el("module-rows").children.length?"Dati aziendali · sola lettura.":"Nessun dato presente.");
+    });
+  }
+  for(const [module,label] of [["personnel","Personale"],["teams","Squadre"],["vehicles","Mezzi"]]){
+    el(module).addEventListener("click",()=>{el("jobs").replaceChildren();jobsCursor=null;kind=null;el("jobs-more").hidden=true;void showModule({module,kind:el("module-kind").value,title:label});});
+  }
+  el("module-kind").addEventListener("change",()=>{cancel();clearModule();});
+  el("module-more").addEventListener("click",()=>{if(moduleQuery&&moduleCursor)void showModule(moduleQuery,true);});
   open.addEventListener("click",()=>{if(open.hidden||!allowed())return;clear();dialog.showModal();void list();});
   el("close").addEventListener("click",()=>dialog.close());dialog.addEventListener("close",clear);
   el("refresh").addEventListener("click",()=>void list());

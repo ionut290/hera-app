@@ -25,6 +25,7 @@ jobs:
           node --check tenant-admin-panel.js
           node --check tenant-company-selector.js
           node --check functions/multi-tenant/workspace.cjs
+          node --check functions/multi-tenant/modules.cjs
           node --check tests/multi-tenant/company-http.emulator.cjs
           npm run check:fatto-whazzup-immutable
           npm run check:fatto-isolation

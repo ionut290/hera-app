@@ -120,6 +120,57 @@ async function main(){
   assert.equal((await viaHttp(owner.token,'openCompany',{tenantId:secondCompany.tenantId})).status,403);
   assert.ok(!(await viaHttp(owner.token,'listMyCompanies')).result.companies.some(c=>c.id===secondCompany.tenantId));
   console.log('Company workspace and ordinary/snow isolation HTTP assertions passed');
+  // Complete registry/economic preview package, identical IDs across tenants.
+  const moduleFixtures=[
+    ['personnel','personale','neve_personale',{fullName:'Person A',email:'private@example.invalid'},'Person A'],
+    ['vehicles','mezzi','neve_mezzi',{nId:'Vehicle A',targa:'SECRET'},'Vehicle A'],
+    ['teams','squadreCommesse','neve_squadre',{commessaNome:'Team A',squadre:[{operatore:'private'}]},'Team A']
+  ];
+  for(const [module,ordinary,snowCollection,data,expected] of moduleFixtures){
+    for(const [kind,collection] of [['ordinary',ordinary],['snow',snowCollection]]){
+      await adapter.db.doc(ar+'/'+collection+'/same-id').set(data);
+      await adapter.db.doc(br+'/'+collection+'/same-id').set({fullName:'Private B',nome:'Private B',commessaNome:'Private B'});
+      await adapter.db.doc(collection+'/same-id').set({fullName:'Legacy private',nome:'Legacy private'});
+      const payload={tenantId:firstCompany.tenantId,module,kind};
+      const response=await viaHttp(owner.token,'listCompanyModule',payload);
+      assert.equal(response.status,200);assert.deepEqual(response.result.rows.map(x=>x.name),[expected]);
+      assert.ok(!JSON.stringify(response.result).includes('private@example.invalid'));
+      assert.ok(!JSON.stringify(response.result).includes('SECRET'));
+      assert.equal((await viaHttp(second.token,'listCompanyModule',payload)).status,403);
+      assert.equal((await viaHttp(admin.token,'listCompanyModule',payload)).status,403);
+      assert.equal((await viaHttp(owner.token,'listCompanyModule',{...payload,tenantId:secondCompany.tenantId,role:'owner'})).status,403);
+      const empty=await viaHttp(emptyOwner.token,'listCompanyModule',{...payload,tenantId:emptyCompany.tenantId});
+      assert.equal(empty.status,200);assert.deepEqual(empty.result.rows,[]);
+    }
+  }
+  await adapter.db.doc(ar+'/sharedStaticViews/registri__corrente').set({payload:{personale:[{id:'p1',fullName:'Aggregated A',email:'hidden@example.invalid'}],mezzi:[{id:'m1',nId:'Aggregated vehicle A'}]}});
+  const aggregate=await viaHttp(owner.token,'listCompanyModule',{tenantId:firstCompany.tenantId,module:'personnel',kind:'ordinary'});
+  assert.deepEqual(aggregate.result.rows,[{id:'p1',name:'Aggregated A'}]);
+  for(const [kind,collection,job] of [['ordinary','commesse','job-a'],['snow','neve_commesse','snow-a']]){
+    const target=ar+'/'+collection+'/'+job;
+    await adapter.db.doc(target+'/prezziario/item').set({codiceVoce:'P01',descrizione:'Price A',unitaMisura:'h',prezzoBase:30,prezzoRibassato:25});
+    await adapter.db.doc(target+'/lavorazioni/item').set({denominazione:'Work A',codiceVocePrezzo:'P01',totale:50,stato:'FATTO',operatoreNome:'private'});
+    // Same parent and item IDs in another company: no fallback.
+    await adapter.db.doc(br+'/'+collection+'/'+job).set({nome:'B duplicate ID'});
+    await adapter.db.doc(br+'/'+collection+'/'+job+'/prezziario/item').set({descrizione:'Price B',prezzoBase:999});
+    for(const [module,expected] of [['prices','Price A'],['accounting','Work A']]){
+      const payload={tenantId:firstCompany.tenantId,kind,module,commessaId:job};
+      const result=await viaHttp(owner.token,'listCompanyModule',payload);
+      assert.equal(result.status,200);assert.deepEqual(result.result.rows.map(x=>x.name),[expected]);
+      assert.equal((await viaHttp(second.token,'listCompanyModule',payload)).status,403);
+      assert.equal((await viaHttp(owner.token,'listCompanyModule',{...payload,tenantId:secondCompany.tenantId})).status,403);
+      assert.equal((await viaHttp(owner.token,'listCompanyModule',{...payload,commessaId:'missing-parent'})).status,400);
+      assert.equal((await viaHttp(owner.token,'listCompanyModule',{...payload,commessaId:'../other'})).status,400);
+    }
+    const priceB=await viaHttp(second.token,'listCompanyModule',{tenantId:secondCompany.tenantId,kind,module:'prices',commessaId:job});
+    assert.equal(priceB.result.rows[0].base,999);
+  }
+  assert.equal((await viaHttp(owner.token,'listCompanyModule',{tenantId:firstCompany.tenantId,kind:'ordinary',module:'members'})).status,400);
+  assert.equal((await viaHttp(owner.token,'listCompanyModule',{tenantId:firstCompany.tenantId,kind:'ordinary',module:'__proto__'})).status,400);
+  await call(admin,'setCompanyStatus',{tenantId:firstCompany.tenantId,status:'suspended',reason:'Module suspension test'});
+  assert.equal((await viaHttp(owner.token,'listCompanyModule',{tenantId:firstCompany.tenantId,kind:'ordinary',module:'personnel'})).status,403);
+  await call(admin,'setCompanyStatus',{tenantId:firstCompany.tenantId,status:'active',reason:'Module reactivation test'});
+  console.log('Personnel, teams, vehicles, accounting and price-list tenant module assertions passed');
   await adapter.auth.setCustomUserClaims(admin.uid,{});
   assert.equal((await viaHttp(admin.token,'listCompanies')).status,403);
   await rejects(()=>call(admin,'listCompanies'),'forbidden');

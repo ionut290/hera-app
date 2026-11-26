@@ -1,5 +1,6 @@
 'use strict';
 // Tenant-scoped workspace read service. No global collection fallback or client roles.
+const {readModule}=require('./modules.cjs');
 const ROLES=new Set(['owner','admin','manager','team_lead','worker','client']);
 function fail(code){throw Object.assign(new Error(code),{code});}
 function id(value){if(typeof value!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(value)||/^__.*__$/.test(value))fail('invalid-id');return value;}
@@ -25,7 +26,7 @@ function createWorkspaceService(db){
     return db.runTransaction(async tx=>{
       const access=await membership(tx,caller.uid,payload.tenantId);
       if(!access)fail('forbidden');
-      return {company:access.company,capabilities:{readCommesse:['owner','admin'].includes(access.company.role)}};
+      return {company:access.company,capabilities:{readCommesse:['owner','admin'].includes(access.company.role),readModules:['owner','admin'].includes(access.company.role)}};
     });
   }
   async function listCompanyCommesse(caller,payload){
@@ -41,6 +42,13 @@ function createWorkspaceService(db){
       return {company:access.company,kind:payload.kind,commesse:rows.map(d=>({id:d.id,name:String(d.data().nome??d.data().name??d.data().NOME??d.id)})),nextCursor:snap.size>limit?rows.at(-1).id:null};
     });
   }
-  return Object.freeze({listMyCompanies,openCompany,listCompanyCommesse});
+  async function listCompanyModule(caller,payload){
+    return db.runTransaction(async tx=>{
+      const access=await membership(tx,caller.uid,payload.tenantId);
+      if(!access||!['owner','admin'].includes(access.company.role))fail('forbidden');
+      return readModule({tx,access,payload,page,id});
+    });
+  }
+  return Object.freeze({listMyCompanies,openCompany,listCompanyCommesse,listCompanyModule});
 }
 module.exports={createWorkspaceService};

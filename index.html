@@ -208,9 +208,18 @@
       <div id="varga-company-actions" hidden>
         <button class="btn" type="button" id="varga-company-ordinary">Commesse</button>
         <button class="btn" type="button" id="varga-company-snow">Servizio Neve</button>
+        <label for="varga-company-module-kind">Area registri</label>
+        <select id="varga-company-module-kind"><option value="ordinary">Ordinaria</option><option value="snow">Neve</option></select>
+        <button class="btn" type="button" id="varga-company-personnel">Personale</button>
+        <button class="btn" type="button" id="varga-company-teams">Squadre</button>
+        <button class="btn" type="button" id="varga-company-vehicles">Mezzi</button>
+
       </div>
       <ul id="varga-company-jobs"></ul>
       <button class="btn" type="button" id="varga-company-jobs-more" hidden>Altre commesse</button>
+      <h4 id="varga-company-module-title"></h4>
+      <ul id="varga-company-module-rows"></ul>
+      <button class="btn" type="button" id="varga-company-module-more" hidden>Altri risultati</button>
     </section>
   </dialog>
   <dialog id="varga-tenant-admin-dialog" aria-labelledby="varga-tenant-admin-title" style="width:min(94vw,620px);max-height:85vh;overflow:auto">
@@ -913,6 +922,6 @@
     }
   </script>
   <script src="tenant-admin-panel.js?v=20261126-lab1"></script>
-  <script src="tenant-company-selector.js?v=20261126-lab1"></script>
+  <script src="tenant-company-selector.js?v=20261126-lab2"></script>
 </body>
 </html>

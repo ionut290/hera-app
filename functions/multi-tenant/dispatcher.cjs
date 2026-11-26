@@ -34,6 +34,8 @@ function createTenantDispatcher({auth,db,assertBoundary}){
       case 'openCompany':return workspace.openCompany(caller,payload);
       case 'listCompanyCommesse':return workspace.listCompanyCommesse(caller,payload);
       case 'listCompanyModule':return workspace.listCompanyModule(caller,payload);
+      case 'getCompanyRecord':return workspace.getCompanyRecord(caller,payload);
+      case 'saveCompanyRecord':return workspace.saveCompanyRecord(caller,payload);
       case 'createCompany':{
         if(!caller.platform_admin)fail('forbidden');
         if(typeof payload.ownerEmail!=='string')fail('invalid-email');

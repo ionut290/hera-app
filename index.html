@@ -197,7 +197,7 @@
 
   <dialog id="varga-company-dialog" aria-labelledby="varga-company-title" style="width:min(94vw,620px);max-height:85vh;overflow:auto">
     <h2 id="varga-company-title">Le mie aziende</h2>
-    <p>Laboratorio 2.0 — accesso in sola lettura, dati sintetici.</p>
+    <p>Laboratorio 2.0 — dati sintetici, salvataggi limitati.</p>
     <button class="btn" type="button" id="varga-company-close">Chiudi</button>
     <button class="btn" type="button" id="varga-company-refresh">Cambia azienda / aggiorna</button>
     <p id="varga-company-status" role="status" aria-live="polite"></p>
@@ -226,11 +226,23 @@
 
 
       </div>
+      <button class="btn" type="button" id="varga-company-new-job" hidden>Nuova commessa</button>
       <ul id="varga-company-jobs"></ul>
       <button class="btn" type="button" id="varga-company-jobs-more" hidden>Altre commesse</button>
       <h4 id="varga-company-module-title"></h4>
+      <button class="btn" type="button" id="varga-company-new-record" hidden>Nuovo record</button>
       <ul id="varga-company-module-rows"></ul>
       <button class="btn" type="button" id="varga-company-module-more" hidden>Altri risultati</button>
+      <section id="varga-company-write" hidden>
+        <h4 id="varga-company-write-title">Nuovo record</h4>
+        <p>Modifica consentita solo sui record creati in laboratorio.</p>
+        <form id="varga-company-write-form">
+          <div id="varga-company-write-fields"></div>
+          <button class="btn btn-primary" type="submit" id="varga-company-write-save">Salva</button>
+          <button class="btn" type="button" id="varga-company-write-cancel">Annulla</button>
+        </form>
+      </section>
+
     </section>
   </dialog>
   <dialog id="varga-tenant-admin-dialog" aria-labelledby="varga-tenant-admin-title" style="width:min(94vw,620px);max-height:85vh;overflow:auto">
@@ -933,6 +945,6 @@
     }
   </script>
   <script src="tenant-admin-panel.js?v=20261126-lab1"></script>
-  <script src="tenant-company-selector.js?v=20261126-lab3"></script>
+  <script src="tenant-company-selector.js?v=20261126-lab4"></script>
 </body>
 </html>

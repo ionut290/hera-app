@@ -7,8 +7,8 @@
   let epoch=0,controller=null,active=null,kind=null,cursor=null,jobsCursor=null,moduleCursor=null,moduleQuery=null;
   const message=text=>{el("status").textContent=text;};
   function cancel(){epoch++;controller?.abort();controller=null;}
-  function clearModule(){moduleCursor=null;moduleQuery=null;el("module-title").textContent="";el("module-rows").replaceChildren();el("module-more").hidden=true;}
-  function clearSelection(){clearModule();active=null;kind=null;jobsCursor=null;el("selected").hidden=true;el("actions").hidden=true;el("name").textContent="";el("role").textContent="";el("jobs").replaceChildren();el("jobs-more").hidden=true;}
+  function clearModule(){clearEditor();el("new-record").hidden=true;moduleCursor=null;moduleQuery=null;el("module-title").textContent="";el("module-rows").replaceChildren();el("module-more").hidden=true;}
+  function clearSelection(){clearModule();el("new-job").hidden=true;active=null;kind=null;jobsCursor=null;el("selected").hidden=true;el("actions").hidden=true;el("name").textContent="";el("role").textContent="";el("jobs").replaceChildren();el("jobs-more").hidden=true;}
   function clear(){cancel();clearSelection();cursor=null;el("list").replaceChildren();el("more").hidden=true;message("");}
   function hide(){clear();open.hidden=true;open.classList.add("hidden");if(dialog.open)dialog.close();}
   function current(n,uid){return allowed()&&n===epoch&&auth.currentUser?.uid===uid&&dialog.open;}
@@ -26,7 +26,7 @@
     const n=epoch,uid=auth.currentUser.uid,ctrl=new AbortController();controller=ctrl;
     const timer=setTimeout(()=>ctrl.abort(),12000);
     try{message("Caricamento…");await task((action,payload)=>call(action,payload,n,uid,ctrl.signal));}
-    catch(e){if(current(n,uid)){clearSelection();if(e.message==="forbidden"||e.message==="unauthenticated"){el("list").replaceChildren();cursor=null;el("more").hidden=true;}message("Accesso non disponibile. Aggiorna l’elenco.");}}
+    catch(e){if(current(n,uid)){clearSelection();if(e.message==="forbidden"||e.message==="unauthenticated"){el("list").replaceChildren();cursor=null;el("more").hidden=true;}message("Operazione non confermata. Aggiorna l’elenco prima di riprovare.");}}
     finally{clearTimeout(timer);if(controller===ctrl)controller=null;}
   }
   function showCompany(data){
@@ -51,8 +51,8 @@
     await run(async request=>{
       const data=await request("listCompanyCommesse",{tenantId,kind:nextKind,limit:25,after:append?jobsCursor:null});
       if(active!==data.company.id||data.kind!==nextKind)throw Error("session");
-      kind=nextKind;for(const row of data.commesse){
-        const li=document.createElement("li"),name=document.createElement("span");name.textContent=row.name+" ";li.append(name);
+      kind=nextKind;el("new-job").hidden=false;for(const row of data.commesse){
+        const li=document.createElement("li"),name=document.createElement("span");name.textContent=row.name+" ";li.append(name);addEdit(li,{module:"jobs",kind:nextKind,title:"Commessa"},row.id);
         for(const [module,label] of [["accounting","Contabilità"],["prices","Prezziario"]]){
           const b=document.createElement("button");b.type="button";b.className="btn";b.textContent=label;
           b.addEventListener("click",()=>void showModule({module,kind:nextKind,commessaId:row.id,title:label+" · "+row.name}));li.append(b);
@@ -78,14 +78,54 @@
     await run(async request=>{
       const data=await request("listCompanyModule",{tenantId,module:q.module,kind:q.kind,commessaId:q.commessaId,month:q.month,limit:25,after:append?moduleCursor:null});
       if(active!==data.company.id||q.module!==data.module||q.kind!==data.kind||(q.commessaId??null)!==data.commessaId)throw Error("session");
-      moduleQuery=q;for(const row of data.rows){const li=document.createElement("li");li.textContent=formatRow(row);el("module-rows").append(li);}
+      moduleQuery=q;el("new-record").hidden=!editableModules.has(q.module);for(const row of data.rows){const li=document.createElement("li");li.textContent=formatRow(row);if(editableModules.has(q.module))addEdit(li,q,row.id);el("module-rows").append(li);}
       moduleCursor=data.nextCursor||null;el("module-more").hidden=!moduleCursor;
       message(el("module-rows").children.length?"Dati aziendali · sola lettura.":"Nessun dato presente.");
     });
   }
   for(const [module,label] of [["personnel","Personale"],["teams","Squadre"],["vehicles","Mezzi"],["hours","Ore registrate"],["approvals","Richieste ore"]]){
-    el(module).addEventListener("click",()=>{el("jobs").replaceChildren();jobsCursor=null;kind=null;el("jobs-more").hidden=true;void showModule({module,kind:el("module-kind").value,title:label});});
+    el(module).addEventListener("click",()=>{el("jobs").replaceChildren();jobsCursor=null;kind=null;el("new-job").hidden=true;el("jobs-more").hidden=true;void showModule({module,kind:el("module-kind").value,title:label});});
   }
+  const editableModules=new Set(["personnel","vehicles","prices"]);
+  const definitions={
+    jobs:[["nome","Nome"],["codice","Codice"],["parentCommessaId","ID commessa padre (facoltativo)"]],
+    personnel:[["cognome","Cognome"],["nome","Nome"]],
+    vehicles:[["nId","Identificativo"],["marca","Marca"],["modello","Modello"]],
+    prices:[["codiceVoce","Codice voce"],["descrizione","Descrizione"],["unitaMisura","Unità di misura"],["prezzoBase","Prezzo base (€)"],["percentualeRibasso","Ribasso (0–1, facoltativo)"]]
+  };
+  let editing=null,saving=false;
+  function clearEditor(){editing=null;saving=false;el("write").hidden=true;el("write-fields").replaceChildren();el("write-save").disabled=false;}
+  function editForm(q,record=null){
+    if(!active)return;clearEditor();
+    editing={...q,tenantId:active,recordId:record?.recordId??null,revision:record?.revision??0,requestId:crypto.randomUUID()};
+    el("write-title").textContent=(record?"Modifica ":"Nuovo · ")+q.title;
+    for(const [field,label] of definitions[q.module]){
+      const l=document.createElement("label"),input=document.createElement("input");l.textContent=label;input.name=field;input.value=record?.data?.[field]??"";
+      if(["prezzoBase","percentualeRibasso"].includes(field)){input.type="number";input.min="0";input.step="any";if(field==="percentualeRibasso")input.max="1";}
+      input.required=["nome","cognome","nId","codiceVoce","descrizione","unitaMisura","prezzoBase"].includes(field);
+      if(field==="parentCommessaId"&&record)input.readOnly=true;
+      l.append(input);el("write-fields").append(l);
+    }
+    el("write").hidden=false;
+  }
+  function addEdit(li,q,recordId){
+    const b=document.createElement("button");b.type="button";b.className="btn";b.textContent="Modifica (lab)";
+    b.addEventListener("click",()=>{const tenantId=active;if(!tenantId)return;clearEditor();void run(async request=>{const data=await request("getCompanyRecord",{tenantId,module:q.module,kind:q.kind,commessaId:q.commessaId,recordId});if(active!==data.company.id||q.module!==data.module)throw Error("session");editForm(q,data);message("Record di laboratorio verificato.");});});li.append(b);
+  }
+  el("new-job").addEventListener("click",()=>{if(kind){cancel();editForm({module:"jobs",kind,title:"Commessa"});}});
+  el("new-record").addEventListener("click",()=>{if(moduleQuery&&editableModules.has(moduleQuery.module)){cancel();editForm(moduleQuery);}});
+  el("write-cancel").addEventListener("click",clearEditor);
+  el("write-form").addEventListener("submit",e=>{
+    e.preventDefault();if(!editing||saving||active!==editing.tenantId)return;
+    const q={...editing},data=Object.fromEntries(new FormData(el("write-form")));
+    for(const key of ["prezzoBase","percentualeRibasso"])if(key in data)data[key]=data[key]===""?null:Number(data[key]);
+    saving=true;el("write-save").disabled=true;
+    void run(async request=>{
+      const result=await request("saveCompanyRecord",{tenantId:q.tenantId,module:q.module,kind:q.kind,commessaId:q.commessaId,recordId:q.recordId,revision:q.revision,requestId:q.requestId,data});
+      if(active!==result.company.id)throw Error("session");
+      clearEditor();message("Salvataggio confermato. Aggiorna l’elenco per visualizzarlo.");
+    });
+  });
   const initialMonth=new Date();el("month").value=initialMonth.getFullYear()+"-"+String(initialMonth.getMonth()+1).padStart(2,"0");
   for(const [module,label] of [["documents","Miei documenti"],["events","Miei eventi"],["calendar","Riepilogo calendario"],["notifications","Notifiche create da me"],["integrations","Stato integrazioni"]]){
     el(module).addEventListener("click",()=>{

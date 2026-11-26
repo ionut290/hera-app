@@ -53,7 +53,7 @@ async function createOperation({tx,access,caller,payload,id}){
     const number=Math.max(0,Number(jobSnap.data().nextImpiantoNumber||1)-1,...existing.docs.map(d=>Number(d.data().numeroProgressivo)||0))+1;
     const nextPlan=increment(access.tenantData,'plants');
     if(nextPlan)tx.update(root,{starterPlan:nextPlan});
-    const metadata={commessaId:jobId,tenantLabManaged:true,tenantLabPlant:true,createdAt:now,updatedAt:now,createdBy:caller.uid};
+    const metadata={commessaId:jobId,tenantLabManaged:true,tenantLabPlant:true,tenantRevision:1,createdAt:now,updatedAt:now,createdBy:caller.uid};
     tx.create(job.collection('impiantiFisici').doc(recordId),{...metadata,denominazione:clean.denominazione,idSap:clean.idSap,comune:clean.comune,indirizzo:clean.indirizzo,latitudine:clean.gpsY,longitudine:clean.gpsX,numeroProgressivoImpianto:number,statoGenerale:'DA FARE'});
     tx.create(job.collection('impianti').doc(recordId),{...metadata,...clean,physicalPlantId:recordId,numeroProgressivo:number,sortOrder:number,stato:'DA FARE',done:false,doneAt:null,doneBy:'',codicePrezzo:''});
     tx.update(job,{nextImpiantoNumber:number+1});

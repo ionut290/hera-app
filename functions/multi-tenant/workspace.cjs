@@ -3,6 +3,7 @@
 const {readModule}=require('./modules.cjs');
 const {getRecord,saveRecord}=require('./writes.cjs');
 const {createOperation}=require('./operations.cjs');
+const {editPlant}=require('./plant-edit.cjs');
 const {policy}=require('./starter-plan.cjs');
 const {setPlantGrant,listMyPlants}=require('./worker-access.cjs');
 const {bindWorker,submitHours,listMyHours}=require('./worker-hours.cjs');
@@ -87,6 +88,6 @@ function createWorkspaceService(db){
       return handler({tx,access,caller,payload,id});
     });
   }
-  return Object.freeze({listMyCompanies,openCompany,listCompanyCommesse,listCompanyModule,listCompanyMembers,listMyPlants:assigned,bindWorkerPersonnel:(c,p)=>mutate(c,p,bindWorker),submitMyHours:(c,p)=>assigned(c,p,submitHours),listMyHours:(c,p)=>assigned(c,p,listMyHours),reviewHours:review,setPlantGrant:(c,p)=>mutate(c,p,setPlantGrant),getCompanyRecord:(c,p)=>mutate(c,p,getRecord),saveCompanyRecord:(c,p)=>mutate(c,p,saveRecord),createCompanyOperation:(c,p)=>mutate(c,p,createOperation)});
+  return Object.freeze({listMyCompanies,openCompany,listCompanyCommesse,listCompanyModule,listCompanyMembers,listMyPlants:assigned,bindWorkerPersonnel:(c,p)=>mutate(c,p,bindWorker),submitMyHours:(c,p)=>assigned(c,p,submitHours),listMyHours:(c,p)=>assigned(c,p,listMyHours),reviewHours:review,setPlantGrant:(c,p)=>mutate(c,p,setPlantGrant),getCompanyRecord:(c,p)=>mutate(c,p,getRecord),saveCompanyRecord:(c,p)=>mutate(c,p,saveRecord),editCompanyPlant:(c,p)=>mutate(c,p,editPlant),createCompanyOperation:(c,p)=>mutate(c,p,createOperation)});
 }
 module.exports={createWorkspaceService};

@@ -72,6 +72,16 @@ async function main(){
   assert.equal((await br.get()).data().starterPlan.usage.plants,0);
   assert.throws(()=>normal.scope.db.collection('platformUsers'),{code:'permission-denied'});
   normal.disconnect();assert.throws(()=>normal.scope.db.collection('commesse'),{code:'permission-denied'});
+  const first=ps.docs[0],change={tenantId:a,kind:isSnow?'snow':'ordinary',commessaId:job.id,recordId:first.id,revision:1,requestId:randomUUID(),data:{denominazione:'Parco aggiornato',idSap:'NEW-SAP',comune:'Demo',indirizzo:'Via demo',gpsY:44.5,gpsX:11.3}};
+  await denied(call(worker,'editCompanyPlant',change),'forbidden');
+  await denied(call(other,'editCompanyPlant',change),'forbidden');
+  const edited=await call(owner,'editCompanyPlant',change);assert.equal(edited.revision,2);
+  assert.deepEqual(await call(owner,'editCompanyPlant',change),edited);
+  await denied(call(owner,'editCompanyPlant',{...change,requestId:randomUUID()}),'invalid-revision');
+  const updated=await first.ref.get(),physicalUpdated=await job.ref.collection('impiantiFisici').doc(first.id).get();
+  assert.equal(updated.data().denominazione,'Parco aggiornato');assert.equal(physicalUpdated.data().latitudine,44.5);assert.equal(updated.data().done,false);
+  assert.equal((await ar.get()).data().starterPlan.usage.plants,10);
+  console.log('Plant edit: atomic pair, quota unchanged, replay and stale revision verified.');
   console.log('Original createCommessa/addManagementImpianto: atomic base-plan limits, dual ordinary/snow, tenant isolation, physical pair and forged UI role denial passed.');
  }finally{for(const s of scopes)s.close();await adapter.close();}
 }

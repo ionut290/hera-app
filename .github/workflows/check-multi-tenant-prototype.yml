@@ -51,7 +51,7 @@ jobs:
           npx firebase emulators:exec --only firestore,auth --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs && node tenant-service.emulator.test.cjs && node auth-adapter.emulator.test.cjs && node legacy-commesse-runtime.test.cjs'
   original-browser-smoke:
     if: github.ref == 'refs/heads/development/multi-azienda-v2-full-app'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

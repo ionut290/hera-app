@@ -40,11 +40,13 @@ async function main(){
     seed('tenants/browser-b/commesse/same-id',{nome:'Browser job B',createdAt:new Date()}),
     seed('tenants/browser-c/commesse/same-id',{nome:'Private C',createdAt:new Date()})
   ]);
-  let browser,context;
+  let browser,context,page,phase='setup';
+  const blocked=new Set(),errors=[],loaded=new Set();
+  const mark=p=>{phase=p;console.log('Browser phase: '+p);};
   try{
   browser=await chromium.launch({headless:true,args:['--disable-background-networking']});
   context=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:844},isMobile:true,hasTouch:true});
-  const blocked=new Set(),errors=[],loaded=new Set();
+
     await context.routeWebSocket('**/*',ws=>{ws.close();});
     await context.route('**/*',async route=>{
       const u=new URL(route.request().url());
@@ -70,7 +72,8 @@ async function main(){
       loaded.add(path.basename(f));
       return route.fulfill({status:200,contentType:types[path.extname(f)]||'application/octet-stream',body,headers:{'cache-control':'no-store'}});
     });
-    const page=await context.newPage();page.on('pageerror',e=>errors.push(String(e.message).slice(0,200)));
+    page=await context.newPage();page.on('pageerror',e=>errors.push(String(e.message).slice(0,200)));
+    mark('original boot');
     await page.goto(origin+'/index.html',{waitUntil:'domcontentloaded',timeout:45000});
     await page.waitForFunction(()=>window.firebase?.apps?.length>0&&firebase.app().options.projectId==='demo-varga-multi-tenant',null,{timeout:30000});
     await page.waitForFunction(()=>{const e=document.getElementById('auth-gate');return e&&!e.hidden&&!e.classList.contains('hidden')&&getComputedStyle(e).display!=='none'&&e.getBoundingClientRect().height>0;},null,{timeout:35000});
@@ -83,12 +86,14 @@ async function main(){
     assert.ok(await page.evaluate(()=>typeof window.VargaTenantSession?.create==='function'));
     console.log(JSON.stringify({originalBrowserBoot:'passed',blockedDestinations:[...blocked].sort(),pageErrors:errors}));
     // Real synthetic email/password login through the existing app form.
+    mark('original email login');
     await page.locator('#auth-email-input').fill(email);
     await page.locator('#auth-password-input').fill(password);
     await page.locator('#auth-email-login-btn').click();
     await page.waitForFunction(uid=>firebase.auth().currentUser?.uid===uid,user.uid,{timeout:35000});
     await page.waitForFunction(()=>{const e=document.getElementById('access-approval-screen');return document.body.classList.contains('auth-authenticated')|| (e&&e.classList.contains('hidden')&&document.getElementById('auth-gate')?.classList.contains('hidden'));},null,{timeout:35000});
     await page.waitForFunction(()=>{const b=document.getElementById('varga-company-open');return b&&!b.hidden&&!b.classList.contains('hidden');},null,{timeout:35000});
+    mark('authorized company selector');
     await page.locator('#menu-toggle-btn').click();
     await page.locator('#varga-company-open').click();
     const list=page.locator('#varga-company-list');
@@ -99,14 +104,19 @@ async function main(){
     const jobs=page.locator('#varga-company-jobs');
     await jobs.getByText('Browser job A',{exact:true}).waitFor();
     assert.ok(!(await jobs.innerText()).includes('Browser job B'));
+    mark('switch company');
     await list.getByRole('button',{name:'Browser company B · owner',exact:true}).click();
     await page.locator('#varga-company-ordinary').click();
     await jobs.getByText('Browser job B',{exact:true}).waitFor();
     assert.ok(!(await jobs.innerText()).includes('Browser job A'));
+    mark('logout');
     await page.evaluate(()=>firebase.auth().signOut());
     await page.waitForFunction(()=>document.getElementById('varga-company-open').hidden&&document.getElementById('varga-company-jobs').children.length===0);
     console.log(JSON.stringify({syntheticOriginalLoginAndSelector:'passed',pageErrors:errors}));
     // Errors remain diagnostic; full operational runtime and native login are not covered.
+  }catch(error){
+    console.error(JSON.stringify({failedPhase:phase,loadedAssets:[...loaded].sort(),blockedDestinations:[...blocked].sort(),pageErrors:errors}));
+    throw error;
   }finally{if(context)await context.close();if(browser)await browser.close();await http.close();await adapter.close();}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

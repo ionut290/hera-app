@@ -66,3 +66,6 @@ Il selettore laboratorio ora usa un contesto effimero con identità, tenant e ge
 
 ## Correzione ambiente Chromium e prova login sintetico
 Risolto il conflitto ERESOLVE tra Firebase 12 web e peer Firebase 11 Capacitor installando il browser SDK in una directory temporanea esterna al package originale, senza --force e senza alterare dipendenze applicative. Prova estesa a login email/password dal form originale, profilo approvato sintetico in emulator, selezione di due aziende via API locale autenticata, esclusione terza azienda, cambio azienda e logout. Il solo profilo sintetico proprio è leggibile tramite regola emulator; tutte le scritture client e profili altrui restano negati. Il test non dimostra l'integrazione dei moduli operativi originali, e non usa credenziali reali o servizi esterni. Nessun deploy.
+
+## Correzione runner del browser
+Il run 45850736117 ha completato la suite isolamento ma il browser non è partito: ubuntu-latest risolveva Ubuntu 26.04, non supportato da Playwright 1.58.2. Job browser fissato a Ubuntu 24.04 senza cambiare dipendenze native o applicative. Aggiunta diagnostica per fasi (boot, login, selezione, cambio, logout), destinazioni bloccate e asset caricati, senza stampare password o token. Il risultato del browser va ancora confermato; nessun deploy.

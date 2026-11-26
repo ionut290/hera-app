@@ -1,0 +1,42 @@
+name: Verify Varga Cantieri 1.1 (20033) without upload
+on:
+  push:
+    branches:
+      - release/ios-1.1-snow-20032
+    paths:
+      - ".github/workflows/check-ios-snow-candidate-20033.yml"
+      - ".github/workflows/ios-appstore-candidate.yml"
+      - "scripts/audit-app-review-full-access.cjs"
+      - "scripts/check-app-review-readiness-failclosed.cjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'ionut290/hera-app' && github.ref == 'refs/heads/release/ios-1.1-snow-20032'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Confirm no runtime changes since tested build 20032
+        run: |
+          set -euo pipefail
+          git diff --exit-code 8f9b905c924763e83f18134a1c22132b20146f03 HEAD -- . ':(exclude).github/workflows/ios-appstore-candidate.yml' ':(exclude).github/workflows/check-ios-snow-candidate-20033.yml' ':(exclude)docs/APP_REVIEW_1_1_20033_READINESS.md' ':(exclude)scripts/audit-app-review-full-access.cjs' ':(exclude)scripts/check-app-review-readiness-failclosed.cjs'
+      - name: Test snow routing and privacy controls
+        run: |
+          set -euo pipefail
+          node scripts/check-ios-snow-20032.cjs
+          node scripts/check-account-privacy-client-runtime.js
+          node scripts/check-app-review-readiness-failclosed.cjs
+      - name: Record actual App Review status without claiming approval
+        run: |
+          set -euo pipefail
+          node scripts/audit-app-review-full-access.cjs | tee "$RUNNER_TEMP/asc-readiness.json"
+          node -e 'const r=require(process.argv[1]);if(!["BLOCKED","READY"].includes(r.status))process.exit(1);console.log("App Review readiness: "+r.status)' "$RUNNER_TEMP/asc-readiness.json" >> "$GITHUB_STEP_SUMMARY"
+          echo "No credentials, signing, upload, production changes, or App Review submission." >> "$GITHUB_STEP_SUMMARY"

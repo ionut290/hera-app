@@ -1,0 +1,69 @@
+name: ASC screenshot privacy diagnostic (READ ONLY)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: ios-internal-testflight
+    env:
+      IOS_APPSTORE_KEY_ID: ${{ secrets.IOS_APPSTORE_KEY_ID }}
+      IOS_APPSTORE_ISSUER_ID: ${{ secrets.IOS_APPSTORE_ISSUER_ID }}
+      IOS_APPSTORE_PRIVATE_KEY_BASE64: ${{ secrets.IOS_APPSTORE_PRIVATE_KEY_BASE64 }}
+    steps:
+      - name: Read only VARGA CANTIERI iOS 1.0 screenshot metadata
+        shell: bash
+        run: |
+          node <<'JS'
+          const crypto = require('node:crypto');
+          const e = process.env;
+          for (const k of ['IOS_APPSTORE_KEY_ID','IOS_APPSTORE_ISSUER_ID','IOS_APPSTORE_PRIVATE_KEY_BASE64']) {
+            if (!e[k]) throw Error('Missing configured secret: '+k);
+          }
+          const enc = x => Buffer.from(JSON.stringify(x)).toString('base64url');
+          const now = Math.floor(Date.now()/1000);
+          const unsigned = enc({alg:'ES256',kid:e.IOS_APPSTORE_KEY_ID,typ:'JWT'})+'.'+enc({iss:e.IOS_APPSTORE_ISSUER_ID,iat:now,exp:now+300,aud:'appstoreconnect-v1'});
+          const key = Buffer.from(e.IOS_APPSTORE_PRIVATE_KEY_BASE64,'base64').toString('utf8');
+          const token = unsigned+'.'+crypto.sign('sha256',Buffer.from(unsigned),{key,dsaEncoding:'ieee-p1363'}).toString('base64url');
+          const origin = 'https://api.appstoreconnect.apple.com';
+          async function all(path) {
+            let next = new URL(path,origin), items=[];
+            for(let i=0;i<20 && next;i++) {
+              if(next.origin!==origin || !next.pathname.startsWith('/v1/')) throw Error('Unexpected pagination URL');
+              const r=await fetch(next,{headers:{Authorization:'Bearer '+token},redirect:'error'});
+              console.log('GET '+next.pathname.replace(/\/[a-f0-9-]{20,}/gi,'/[id]')+' HTTP '+r.status);
+              if(!r.ok) throw Error('Apple API HTTP '+r.status);
+              const j=await r.json();
+              if(!Array.isArray(j.data)) throw Error('Unexpected API response');
+              items.push(...j.data);
+              next=j.links?.next?new URL(j.links.next,origin):null;
+            }
+            if(next) throw Error('Pagination limit reached');
+            return items;
+          }
+          (async()=>{
+            const apps=await all('/v1/apps?filter%5BbundleId%5D=it.vargacantieri.hera');
+            if(apps.length!==1 || apps[0].attributes.bundleId!=='it.vargacantieri.hera') throw Error('App not uniquely identified');
+            const versions=await all('/v1/apps/'+encodeURIComponent(apps[0].id)+'/appStoreVersions?filter%5BversionString%5D=1.0&filter%5Bplatform%5D=IOS');
+            const v=versions.filter(x=>x.attributes.versionString==='1.0' && x.attributes.platform==='IOS');
+            if(v.length!==1) throw Error('Version not uniquely identified');
+            console.log('Target version 1.0 state: '+v[0].attributes.appStoreState);
+            const localizations=await all('/v1/appStoreVersions/'+encodeURIComponent(v[0].id)+'/appStoreVersionLocalizations');
+            let matches=0,total=0;
+            for(const l of localizations){
+              const sets=await all('/v1/appStoreVersionLocalizations/'+encodeURIComponent(l.id)+'/appScreenshotSets');
+              for(const s of sets){
+                const shots=await all('/v1/appScreenshotSets/'+encodeURIComponent(s.id)+'/appScreenshots');
+                total+=shots.length;
+                for(const x of shots) if(x.attributes.fileName==='02_squadre_commessa.png') {
+                  matches++;
+                  console.log('Exact target found; locale='+l.attributes.locale+' display='+s.attributes.screenshotDisplayType+' position='+ (shots.indexOf(x)+1));
+                }
+              }
+            }
+            console.log('Total screenshots: '+total+'; exact filename matches: '+matches);
+            console.log('READ ONLY: no mutation requests made.');
+          })().catch(err=>{console.error(err.message);process.exitCode=1});
+          JS

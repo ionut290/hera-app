@@ -15,11 +15,7 @@ const pairs={
  getOreApprovalRequestsCollectionName:['oreApprovalRequests','neve_ore_richieste']
 };
 const source=readFileSync(join(__dirname,'../../app.js'),'utf8');
-function extract(name){
- const start=source.indexOf('function '+name+'() {'),end=source.indexOf('\n}',start);
- assert(start>=0&&end>start,'Original selector not found: '+name);
- return source.slice(start,end+2);
-}
+const extract=require('./original-functions.cjs').originalFunctions(source);
 const scope=vm.createContext({snow:false,isSnowServiceContext:()=>scope.snow});
 vm.runInContext(Object.keys(pairs).map(extract).join('\n'),scope);
 for(const [name,names] of Object.entries(pairs))for(let i=0;i<2;i++){scope.snow=Boolean(i);assert.equal(vm.runInContext(name+'()',scope),names[i]);}

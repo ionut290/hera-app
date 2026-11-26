@@ -42,6 +42,9 @@ jobs:
           node --check tests/multi-tenant/flat-session-auth.test.cjs
           node --check tests/multi-tenant/flat-session-monitor.cjs
           node --check tests/multi-tenant/flat-session-archives.test.cjs
+          node --check tests/multi-tenant/original-functions.cjs
+          node --check tests/multi-tenant/original-write-scope.cjs
+          node --check tests/multi-tenant/original-write-quota.test.cjs
           node tests/multi-tenant/tenant-runtime-session.test.cjs
           node --check tests/multi-tenant/original-browser-smoke.cjs
           node --check tests/multi-tenant/legacy-commesse-scope.cjs
@@ -65,11 +68,11 @@ jobs:
       - name: Install isolated test dependencies
         working-directory: tests/multi-tenant
         run: |
-          npm install --no-save --package-lock=false firebase@11.10.0 @firebase/rules-unit-testing@4.0.1 firebase-tools@14 firebase-admin@13
+          npm install --no-save --package-lock=false firebase@11.10.0 @firebase/rules-unit-testing@4.0.1 firebase-tools@14 firebase-admin@13 acorn@8.15.0
       - name: Run Firestore synthetic tenant tests
         working-directory: tests/multi-tenant
         run: |
-          npx firebase emulators:exec --only firestore,auth --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs && node tenant-service.emulator.test.cjs && node auth-adapter.emulator.test.cjs && node legacy-commesse-runtime.test.cjs && node flat-path-experiment.test.cjs && node flat-session-runtime.test.cjs && node flat-session-auth.test.cjs && node flat-session-archives.test.cjs'
+          npx firebase emulators:exec --only firestore,auth --project demo-varga-multi-tenant --config firebase.emulator.json 'node isolation.test.cjs && node tenant-service.emulator.test.cjs && node auth-adapter.emulator.test.cjs && node legacy-commesse-runtime.test.cjs && node flat-path-experiment.test.cjs && node flat-session-runtime.test.cjs && node flat-session-auth.test.cjs && node flat-session-archives.test.cjs && node original-write-quota.test.cjs'
   original-browser-smoke:
     if: github.ref == 'refs/heads/development/multi-azienda-v2-full-app'
     runs-on: ubuntu-24.04

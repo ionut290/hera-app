@@ -4,7 +4,7 @@ function fixture(){
  const raw={uid:'u',email:'u@example.test',getIdTokenResult:async()=>({claims:{email_verified:true}}),auth:{secret:true}};
  const auth={app:{options:{projectId},firestore(){throw Error('raw');}},currentUser:raw,onAuthStateChanged(fn){observer=fn;return()=>{};},signOut:async()=>{active=false;}};
  const firestore={collection:n=>({path:'tenants/demo-a/'+n})};
- const prepared={projectId,auth,session:{context:{uid:'u',tenantId:'demo-a'},firestore},isActive:()=>active};
+ const prepared={projectId,auth,session:{context:{uid:'u',tenantId:'demo-a'},firestore},isActive:()=>active,approval:{verify:async()=>({allowed:true})}};
  return {prepared,raw,firestore,close(){active=false;},emit:u=>observer(u)};
 }
 test('direct global Firebase callers receive the same tenant scope, not a raw SDK app',()=>{
@@ -14,9 +14,11 @@ test('direct global Firebase callers receive the same tenant scope, not a raw SD
  for(const method of ['storage','functions','messaging','initializeApp'])assert.throws(()=>sdk[method]());
  assert.throws(()=>sdk.app('production'));assert.throws(()=>sdk.app().functions('europe-west1'));
 });
-test('namespace cannot reopen a company after switch and observers cannot reveal a new user',()=>{
+test('namespace cannot reopen a company after switch and observers cannot reveal a new user',async()=>{
  const f=fixture(),sdk=createLegacyFirebaseNamespace({prepared:f.prepared});const auth=sdk.auth(),received=[];
- auth.onAuthStateChanged(u=>received.push(u));f.emit(f.raw);assert.equal(received[0].uid,'u');f.emit({uid:'other'});assert.equal(received[1],null);
+ assert.equal(auth.__heraEmailAccessGuardInstalled,true);auth.onAuthStateChanged(u=>received.push(u));await f.emit(f.raw);assert.equal(received[0].uid,'u');await f.emit({uid:'other'});assert.equal(received[1],null);
  f.close();assert.equal(auth.currentUser,null);assert.throws(()=>sdk.firestore());assert.throws(()=>sdk.app());assert.throws(()=>sdk.auth());assert.throws(()=>auth.setPersistence());
 });
 test('production and incorrect user are rejected',()=>{const f=fixture();f.prepared.auth.app.options.projectId='hera-app-6cd2b';assert.throws(()=>createLegacyFirebaseNamespace({prepared:f.prepared}));});
+
+test('legacy auth observer refuses an unapproved membership even if the UID matches',async()=>{const f=fixture();f.prepared.approval.verify=async()=>({allowed:false});const auth=createLegacyFirebaseNamespace({prepared:f.prepared}).auth(),received=[];auth.onAuthStateChanged(u=>received.push(u));await f.emit(f.raw);assert.deepEqual(received,[null]);});

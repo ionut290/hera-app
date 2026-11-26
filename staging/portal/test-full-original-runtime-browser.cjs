@@ -16,12 +16,16 @@ const leafletPath=require.resolve('leaflet/dist/leaflet.js');
   await context.addInitScript({content:'('+((createNamespace)=>{
    const storage=()=>{const m=new Map();return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),clear:()=>m.clear()};};
    const uid='smoke-operator',projectId='varga-cantieri-v2-staging',app={name:'fixture',options:{projectId}};
-   const user={uid,email:'smoke@example.test',displayName:'Operatore demo'};
+   const user={uid,email:'smoke@example.test',displayName:'Operatore demo',emailVerified:true};
    const observers=[];
    const auth={app,currentUser:user,onAuthStateChanged(fn){window.__vargaAuthObserverReached=true;observers.push(fn);return()=>{};}};
    window.__deliverOriginalAuth=()=>{for(const fn of observers.slice())Promise.resolve().then(()=>fn(user)).catch(e=>window.__vargaAuthErrors.push(String(e.message||e)));};
    window.__vargaAuthErrors=[];
-   const firestore={collection(){throw Error('Runtime smoke: database operations blocked');}};
+   // Local read-only fixture; only the two startup index collections are
+   // empty by design. All writes and every other collection remain denied.
+   const empty=Object.freeze({exists:false,id:'fixture',data:()=>undefined});
+   const ref=Object.freeze({get:async()=>empty,onSnapshot(fn){queueMicrotask(()=>{if(typeof fn==='function')fn(empty);else fn.next?.(empty);});return()=>{};}});
+   const firestore={collection(name){if(!['appConfig','sharedStaticViews'].includes(name))throw Error('Runtime smoke: database operations blocked: '+name);return {doc:()=>ref};}};
    window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__={projectId,auth,session:{context:{uid,tenantId:'demo-smoke',role:'employee'},firestore},isActive:()=>true,localStorage:storage(),sessionStorage:storage(),approval:{verify:async()=>{window.__vargaVerifiedCompany=true;return {allowed:true,profile:{uid,role:'user',ruolo:'user',tenantId:'demo-smoke',accessApproved:true,statoAccount:'attivo'}};}}};
    window.firebase=createNamespace({prepared:window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__});
    window.__VARGA_STAGING_FIREBASE_CONFIG__={apiKey:'fixture-only'};
@@ -61,6 +65,7 @@ const leafletPath=require.resolve('leaflet/dist/leaflet.js');
   const bootstrap=await page.evaluate(()=>window.__vargaRuntimeBootstrap);
   assert.deepEqual(bootstrap,{bound:true,error:null});
   assert.equal(await page.evaluate(()=>firebase.firestore()===window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore),true);
+  assert.equal(await page.evaluate(()=>firebase.auth().__heraEmailAccessGuardInstalled),true);
   assert.equal(await page.evaluate(()=>{try{firebase.app().functions();return false;}catch{return true;}}),true);
   assert.equal(await page.evaluate(()=>window.L?.version),'1.9.4');
   await page.waitForFunction(()=>window.__vargaAuthObserverReached===true);

@@ -3,7 +3,7 @@
 // Keep native SDK references in the trusted entry controller, never in this namespace.
 export function createLegacyFirebaseNamespace({prepared,statics={}}){
  const projectId='varga-cantieri-v2-staging';
- if(prepared?.projectId!==projectId||prepared?.auth?.app?.options?.projectId!==projectId||!prepared.session?.firestore||typeof prepared.isActive!=='function')throw Error('Verified staging scope required');
+ if(prepared?.projectId!==projectId||prepared?.auth?.app?.options?.projectId!==projectId||!prepared.session?.firestore||typeof prepared.isActive!=='function'||typeof prepared.approval?.verify!=='function')throw Error('Verified staging scope required');
  const guard=()=>{if(!prepared.isActive()||prepared.auth.currentUser?.uid!==prepared.session.context.uid)throw Error('Company session closed');};
  guard();
  const deny=()=>{throw Error('Unapproved external service');};
@@ -13,10 +13,16 @@ export function createLegacyFirebaseNamespace({prepared,statics={}}){
   return Object.freeze({uid:user.uid,email:user.email||'',displayName:user.displayName||'',emailVerified:user.emailVerified===true,photoURL:user.photoURL||null,
    getIdTokenResult:async(...args)=>{guard();const value=await user.getIdTokenResult(...args);guard();return value;}});
  };
- const authFacade=Object.freeze({app,get currentUser(){return prepared.isActive()?userView(prepared.auth.currentUser):null;},
+ const authFacade=Object.freeze({app,__heraEmailAccessGuardInstalled:true,get currentUser(){return prepared.isActive()?userView(prepared.auth.currentUser):null;},
   onAuthStateChanged(next,error,complete){guard();const observer=typeof next==='function'?{next,error,complete}:next;
    if(typeof observer?.next!=='function')throw Error('Auth observer required');
-   return prepared.auth.onAuthStateChanged(user=>observer.next(prepared.isActive()?userView(user):null),err=>observer.error?.(err),()=>observer.complete?.());},
+   return prepared.auth.onAuthStateChanged(async user=>{
+    if(!prepared.isActive()||user?.uid!==prepared.session.context.uid){observer.next(null);return;}
+    try{
+     const result=await prepared.approval.verify(user);
+     observer.next(result?.allowed===true&&prepared.isActive()?userView(user):null);
+    }catch(err){observer.next(null);observer.error?.(err);}
+   },err=>observer.error?.(err),()=>observer.complete?.());},
   signOut(){guard();return prepared.auth.signOut();},
   setPersistence(){guard();return Promise.resolve();} // No change to persistence in a company runtime.
  });

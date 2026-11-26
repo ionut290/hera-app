@@ -34,3 +34,7 @@ The new integrated candidate connects the original startup gate, company role an
 ## Operational validation checkpoint
 
 The emulator integration runs original handler code in the Firebase SDK's realm to avoid cross-realm plain-object validation errors. The isolated browser smoke now delivers an authenticated fixture user to the original auth callback and requires completion of the transformed company approval gate. It does not represent a live login or successful completion of every startup subscription. External services stay blocked. Continue autonomously on staging with verified commits and explicit readiness checkpoints, not estimated progress alone.
+
+## Legacy authentication guard integration
+
+The scoped auth facade exposes the existing original module's already-installed guard marker, and its observer verifies the actual selected-company membership before delivering a user. It does not create `platformUsers` or overwrite the original module. The browser fixture returns empty read-only responses for the two startup indexes; these fixture responses are not real permissions. External services and unsupported archive access remain denied. Continue verification with the real emulator and preserve the production guards.

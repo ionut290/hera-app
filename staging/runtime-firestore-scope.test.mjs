@@ -12,3 +12,13 @@ test('existing refs, queries, and snapshots cannot access data after close',asyn
 test('listener automatically stops on close and late events are ignored',()=>{const f=fixture();let n=0;const stop=f.scope.collection('commesse').onSnapshot(()=>n++);f.emit();assert.equal(n,1);f.scope.close();f.emit();stop();assert.equal(n,1);assert.equal(f.stats().stops,1);assert(f.stats().closed);});
 test('batches reject cross-session refs and cannot commit after rejection',async()=>{const a=fixture(),b=fixture('demo-b'),batch=a.scope.batch();assert.throws(()=>batch.set(b.scope.doc('commesse/x'),{}),/Foreign/);await assert.rejects(batch.commit());assert.equal(a.stats().writes,0);});
 test('query snapshots preserve refs without leaking raw SDK',async()=>{const f=fixture(),q=await f.scope.collection('commesse').get();assert.equal(q.docs[0].ref.path,'tenants/demo-a/commesse/x');assert.equal(q.docs[0].ref.firestore,undefined);assert.equal(q.query.firestore,undefined);});
+
+test('iframe data becomes plain SDK-realm records without losing Date or sentinel instances',async()=>{
+ const {runInNewContext}=await import('node:vm');
+ let saved;class Sentinel{}const sentinel=new Sentinel();
+ const native={path:'tenants/demo-a/commesse/x',id:'x',collection(){},set:async value=>{saved=value;}};
+ const scope=createRuntimeFirestoreScope({firestore:{doc:()=>native,close(){}},routerContext:{tenantId:'demo-a'}});
+ const data=runInNewContext('({nested:{name:"x"},values:[{n:1}],when:new Date(0),sentinel})',{sentinel});
+ await scope.doc('commesse/x').set(data);
+ assert.equal(Object.getPrototypeOf(saved),Object.prototype);assert.equal(Object.getPrototypeOf(saved.nested),Object.prototype);assert.equal(Object.getPrototypeOf(saved.values),Array.prototype);assert.equal(saved.sentinel,sentinel);assert.equal(saved.when,data.when);
+});

@@ -15,7 +15,8 @@ const newCsp="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src '
 if(original.split(oldCsp).length!==2)throw Error('Quarantine marker missing');
 let html=original.replace(oldCsp,newCsp).replace(/<script\b[^>]*\bsrc=["']https:\/\/www\.gstatic\.com\/firebasejs\/[^"']+["'][^>]*><\/script>/gi,'')
  .replace('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','./vendor/leaflet.js').replace('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','./vendor/leaflet.css');
-html=html.replace('</head>','</head>'); // Insert before any existing script.
+// Strip other remote scripts and links in this local-only package. Original local modules stay intact.
+html=html.replace(/<script\b[^>]*\bsrc=["']https?:\/\/[^"']+["'][^>]*><\/script>/gi,'').replace(/<link\b[^>]*\bhref=["']https?:\/\/[^"']+["'][^>]*>/gi,'');
 html=html.replace(/<script\b/i,'<script src="runtime-bootstrap.js"></script>\n<script');
 if(!html.includes('runtime-bootstrap.js'))throw Error('Bootstrap missing');
 for(const e of readdirSync(root,{withFileTypes:true})){

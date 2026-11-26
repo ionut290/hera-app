@@ -84,7 +84,9 @@ async function main(){
   await assertFails(getDocFromServer(doc(phone,'commesse/session-legacy-global')));
   await assertFails(setDoc(doc(phone,sessionPath(uid,'phone')),session(b)));
   await assertFails(setDoc(doc(phone,sessionPath(uid,'new')),session(b)));
-  await assertFails(getDocFromServer(doc(phone,sessionPath(uid,'phone'))));
+  await assertSucceeds(getDocFromServer(doc(phone,sessionPath(uid,'phone'))));
+  await assertFails(getDocFromServer(doc(phone,sessionPath(uid,'tablet'))));
+  await assertFails(getDocsFromServer(collection(phone,'experimentSessions/'+uid+'/devices')));
   assert.throws(()=>x.scope.db.collection('platformUsers'),{code:'permission-denied'});
   assert.throws(()=>x.scope.db.collection('tenants/'+b+'/commesse'),{code:'permission-denied'});
   assert.equal(x.scope.db.collection('commesse').add,undefined);

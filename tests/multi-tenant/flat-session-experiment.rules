@@ -21,6 +21,18 @@ service cloud.firestore {
    let job=get(/databases/$(database)/documents/$(area)/$(jobId)).data;
    return job.get('flatSessionExperiment',false)==true && selected(job.tenantId);
   }
+  // A session owner may observe only the control record bound to their signed
+  // claim, including revoked/expired status. No listing or client modification.
+  match /experimentSessions/{uid}/devices/{sid} {
+   allow get: if verifiedSession() && request.auth.uid==uid && request.auth.token.vargaExperimentSession==sid;
+   allow list,create,update,delete: if false;
+  }
+  // Root archives: tenant and experimental marker must both be explicit.
+  match /{archive}/{recordId} {
+   allow get,list: if archive in ['personale','neve_personale','mezzi','neve_mezzi','squadreCommesse','neve_squadre','squadreStorico','neve_squadre_storico','oreReports','neve_ore','oreApprovalRequests','neve_ore_richieste']
+    && verifiedSession() && resource.data.flatSessionExperiment==true && selected(resource.data.tenantId);
+   allow create,update,delete: if false;
+  }
   match /{area}/{jobId} {
    allow get,list: if area in ['commesse','neve_commesse'] && verifiedSession()
     && resource.data.flatSessionExperiment==true && selected(resource.data.tenantId);

@@ -4,6 +4,7 @@ import 'firebase/compat/firestore';
 import {createOriginalRuntimeEntry} from '../original-runtime-entry.mjs';
 import {createLegacyFirebaseNamespace} from '../legacy-firebase-namespace.mjs';
 import {connectLocalFirebase,connectStagingFirebase} from '../firebase-runtime-provider.mjs';
+import {createAdminPanel} from './integrated-superadmin.js';
 async function start(){
 const $=id=>document.getElementById(id);
 const status=m=>$('status').textContent=m;
@@ -13,6 +14,7 @@ if(!isLive&&mode!=='local-emulator')throw Error('Build mode not approved');
 const apiKey=isLive?__VARGA_STAGING_WEB_KEY__:'demo-local-emulator-key';
 const {auth,db,statics}=await (isLive?connectStagingFirebase({firebase,location,apiKey}):connectLocalFirebase({firebase,location}));
 const entry=createOriginalRuntimeEntry({auth,db});
+const adminPanel=createAdminPanel({host:$('admin-panel'),auth,db,statics,readOnly:isLive});
 let prepared=null,revision=0;
 function closeRuntime(){revision++;$('runtime').removeAttribute('src');$('runtime').hidden=true;prepared=null;entry.leave();}
 function present(session){
@@ -26,13 +28,14 @@ prepared=Object.freeze({session:view,namespace,apiKey});
 // This is a local testing bridge, not a security boundary. The emulator rules are mandatory.
 Object.defineProperty(window,'__vargaLocalRuntime',{value:()=>{if(!prepared?.session.isActive())throw Error('Verified local company required');return prepared;},writable:false,configurable:false});
 $('login').addEventListener('submit',async e=>{e.preventDefault();status('Accesso in corso…');try{await auth.signInWithEmailAndPassword($('email').value,$('password').value);$('password').value='';}catch(err){status('Accesso non riuscito: '+err.code);}});
-$('logout').onclick=async()=>{closeRuntime();await auth.signOut();};
+$('logout').onclick=async()=>{closeRuntime();adminPanel.clear();await auth.signOut();};
 $('back').onclick=()=>{closeRuntime();status('Seleziona un’altra azienda.');};
 auth.onAuthStateChanged(async user=>{
- closeRuntime();const request=revision;$('companies').replaceChildren();$('login').hidden=Boolean(user);$('logout').hidden=!user;$('back').hidden=!user;
+ closeRuntime();adminPanel.clear();const request=revision;$('companies').replaceChildren();$('login').hidden=Boolean(user);$('logout').hidden=!user;$('back').hidden=!user;
  if(!user){status(isLive?'Accedi con un account staging verificato.':'Accedi con un account di prova locale.');return;}
  try{
   const claims=(await user.getIdTokenResult(true)).claims;if(claims.email_verified!==true||claims.apple_review===true)throw Error('Account non autorizzato');
+  if(claims.superAdmin===true){$('back').hidden=true;status('Area amministrativa.');await adminPanel.open(user);return;}
   const memberships=await db.collection('users').doc(user.uid).collection('memberships').get({source:'server'});
   if(request!==revision)return;
   for(const item of memberships.docs){
@@ -48,7 +51,7 @@ auth.onAuthStateChanged(async user=>{
   status(isLive?'Seleziona azienda staging (accesso in sola consultazione delle appartenenze).':'Seleziona azienda di prova.');
  }catch(err){status('Accesso non disponibile: '+(err.code||err.message));}
 });
-window.addEventListener('pagehide',()=>entry.close(),{once:true});
+window.addEventListener('pagehide',()=>{adminPanel.clear();entry.close();},{once:true});
 
 }
 start().catch(e=>{document.getElementById('status').textContent='Avvio locale non disponibile: '+e.message;});

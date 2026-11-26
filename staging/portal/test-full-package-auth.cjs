@@ -10,9 +10,12 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
  const admin=initializeApp({projectId}),db=getFirestore(admin),auth=getAuth(admin);
  const uid='local-admin',email='local-admin@example.test',password='Local-Test-Only-42';
  await auth.createUser({uid,email,password,emailVerified:true,displayName:'Local test admin'});
+ const superUid='local-super',superEmail='local-super@example.test';
+ await auth.createUser({uid:superUid,email:superEmail,password,emailVerified:true,displayName:'Local Super Admin'});
+ await auth.setCustomUserClaims(superUid,{superAdmin:true});
  for(const id of ['demo-a','demo-b']){
   await db.doc('tenants/'+id).set({demo:true,status:'active',name:id,originalCreateEnabled:true,originalManualEnabled:true,originalArchivesEnabled:true,priceListEnabled:true,priceListWriteEnabled:true,snowCreateEnabled:true});
-  await db.doc('tenants/'+id+'/members/'+uid).set({role:'admin',status:'active'});
+  await db.doc('tenants/'+id+'/members/'+uid).set({role:'admin',status:'active',demo:true,historicalId:'preserved-local-admin'});
   await db.doc('users/'+uid+'/memberships/'+id).set({tenantId:id,role:'admin',status:'active'});
   await db.doc('tenants/'+id+'/commesse/same-id').set({nome:id+' original',createdAt:new Date(),excelModelVersion:2});
  }
@@ -49,7 +52,27 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   assert.equal((await db.collection('tenants/demo-b/commesse').get()).size,1);
   await page.locator('#logout').click();await page.locator('#login').waitFor({state:'visible'});
   assert.equal(await page.locator('#runtime').isHidden(),true);
+  assert.equal(await page.locator('#admin-panel').isHidden(),true);
+  await page.locator('#email').fill(superEmail);await page.locator('#password').fill(password);await page.locator('#login button').click();
+  const arow=page.locator('[data-admin-tenant="demo-a"]');
+  await arow.waitFor({state:'visible'});
+  await arow.getByRole('button',{name:'Utenti',exact:true}).click();
+  const member=page.locator('[data-member="local-admin"]');
+  await member.getByRole('combobox').selectOption('supervisor');
+  await member.getByRole('button',{name:'Salva ruolo'}).click();
+  await page.waitForFunction(()=>document.getElementById('admin-status')?.textContent==='Modifica salvata.');
+  assert.equal((await db.doc('tenants/demo-a/members/'+uid).get()).data().role,'supervisor');
+  assert.equal((await db.doc('users/'+uid+'/memberships/demo-a').get()).data().role,'supervisor');
+  assert.equal((await db.doc('tenants/demo-b/members/'+uid).get()).data().role,'admin');
+  assert.equal((await db.doc('tenants/demo-a/members/'+uid).get()).data().historicalId,'preserved-local-admin');
+  await page.locator('#admin-new-company-name').fill('Nuova azienda collaudo');
+  await page.getByRole('button',{name:'Nuova azienda',exact:true}).click();
+  await page.locator('[data-admin-tenant]').filter({hasText:'Nuova azienda collaudo'}).waitFor();
+  assert.equal((await db.collection('tenants').where('name','==','Nuova azienda collaudo').get()).size,1);
+  await page.locator('#logout').click();await page.locator('#login').waitFor({state:'visible'});
+  assert.equal(await page.locator('#admin-panel').isHidden(),true);
   assert.equal(external.length,0,'Unexpected external requests: '+external.join(','));
+  console.log('INTEGRATED SUPER ADMIN UI: real Auth claim, tenant creation, mirrored role change, other company unchanged, historical ID preserved, logout.');
   console.log('FULL PACKAGE REAL AUTH E2E: login, verified membership, original UI, frame write, tenant switch, old scope closed, logout.');
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));await deleteApp(admin);}
 })().catch(e=>{console.error(e);process.exitCode=1;});

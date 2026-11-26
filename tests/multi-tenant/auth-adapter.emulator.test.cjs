@@ -362,6 +362,29 @@ async function main(){
   assert.equal((await viaHttp(admin.token,'listPendingPlanUpgrades',{})).result.requests.some(r=>r.tenantId===st),false);
   assert.equal((await viaHttp(starterOwner.token,'getCompanyPlan',{tenantId:st})).result.plan.lastDecision.decision,'reject');
   console.log('Starter self-registration, transactional quotas, manual defaults, custom approvals and super-admin inbox passed');
+  // A verified account without a historical platformUsers profile can register
+  // or accept a tenant invitation through the isolated service without Super Admin.
+  const freshOwner=await account('autonomous-no-profile'),freshWorker=await account('autonomous-invitee'),otherWorker=await account('autonomous-wrong-recipient');
+  assert.equal((await adapter.db.doc('platformUsers/'+freshOwner.uid).get()).exists,false);
+  const autonomous=await viaHttp(freshOwner.token,'registerCompany',{name:'Autonomous company'});
+  assert.equal(autonomous.status,200);const autonomousId=autonomous.result.tenantId;
+  assert.equal((await adapter.db.doc('platformUsers/'+freshOwner.uid).get()).exists,false);
+  assert.equal((await viaHttp(freshOwner.token,'openCompany',{tenantId:autonomousId})).result.company.role,'owner');
+  const generated=await viaHttp(freshOwner.token,'invite',{tenantId:autonomousId,recipientEmail:freshWorker.email,role:'worker'});
+  assert.equal(generated.status,200);
+  assert.equal((await viaHttp(otherWorker.token,'accept',{tenantId:autonomousId,inviteToken:generated.result.token})).code,'invalid-invite');
+  assert.equal((await viaHttp(freshWorker.token,'accept',{tenantId:autonomousId,inviteToken:generated.result.token})).status,200);
+  assert.equal((await viaHttp(freshWorker.token,'accept',{tenantId:autonomousId,inviteToken:generated.result.token})).code,'invalid-invite');
+  assert.equal((await adapter.db.doc('platformUsers/'+freshWorker.uid).get()).exists,false);
+  assert.equal((await viaHttp(freshWorker.token,'openCompany',{tenantId:autonomousId})).result.company.role,'worker');
+  const people=await viaHttp(freshOwner.token,'listCompanyMembers',{tenantId:autonomousId,limit:25});
+  assert.equal(people.status,200);assert.deepEqual(people.result.members.map(m=>m.role).sort(),['owner','worker']);
+  assert.ok(!JSON.stringify(people.result).includes(generated.result.token));
+  assert.equal((await viaHttp(freshWorker.token,'listCompanyMembers',{tenantId:autonomousId})).status,403);
+  assert.equal((await viaHttp(otherWorker.token,'listCompanyMembers',{tenantId:autonomousId})).status,403);
+  assert.equal((await viaHttp(admin.token,'listCompanyMembers',{tenantId:autonomousId})).status,403);
+  assert.equal((await viaHttp(freshOwner.token,'getCompanyPlan',{tenantId:autonomousId})).result.plan.usage.operators,1);
+  console.log('Verified-account self-service and invitation HTTP workflow passed without legacy profile');
   await adapter.auth.setCustomUserClaims(admin.uid,{});
   assert.equal((await viaHttp(admin.token,'listCompanies')).status,403);
   await rejects(()=>call(admin,'listCompanies'),'forbidden');

@@ -52,6 +52,17 @@ function createWorkspaceService(db){
       return readModule({tx,access,caller,payload,page,id});
     });
   }
+  async function listCompanyMembers(caller,payload){
+    const {limit,after}=page(payload);
+    return db.runTransaction(async tx=>{
+      const access=await membership(tx,caller.uid,payload.tenantId);
+      if(!access||!['owner','admin'].includes(access.company.role))fail('forbidden');
+      let query=access.root.collection('members').orderBy('__name__').limit(limit+1);
+      if(after)query=query.startAfter(after);
+      const snap=await tx.get(query),rows=snap.docs.slice(0,limit);
+      return {company:access.company,members:rows.map(d=>({id:d.id,email:String(d.data().email||''),role:String(d.data().role||''),status:String(d.data().status||'')})),nextCursor:snap.size>limit?rows.at(-1).id:null};
+    });
+  }
   async function mutate(caller,payload,handler){
     return db.runTransaction(async tx=>{
       const access=await membership(tx,caller.uid,payload.tenantId);
@@ -59,6 +70,6 @@ function createWorkspaceService(db){
       return handler({tx,access,caller,payload,id});
     });
   }
-  return Object.freeze({listMyCompanies,openCompany,listCompanyCommesse,listCompanyModule,getCompanyRecord:(c,p)=>mutate(c,p,getRecord),saveCompanyRecord:(c,p)=>mutate(c,p,saveRecord),createCompanyOperation:(c,p)=>mutate(c,p,createOperation)});
+  return Object.freeze({listMyCompanies,openCompany,listCompanyCommesse,listCompanyModule,listCompanyMembers,getCompanyRecord:(c,p)=>mutate(c,p,getRecord),saveCompanyRecord:(c,p)=>mutate(c,p,saveRecord),createCompanyOperation:(c,p)=>mutate(c,p,createOperation)});
 }
 module.exports={createWorkspaceService};

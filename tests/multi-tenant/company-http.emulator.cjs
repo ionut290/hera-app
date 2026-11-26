@@ -1,7 +1,7 @@
 'use strict';
 // Local-only transport for synthetic emulator tests. Never export from live Functions.
 const {createServer}=require('node:http');
-const ACTIONS=new Set(['listCompanies','createCompany','setCompanyStatus','listMyCompanies','openCompany','listCompanyCommesse','listCompanyModule','getCompanyRecord','saveCompanyRecord','createCompanyOperation','registerCompany','getCompanyPlan','requestPlanUpgrade','getPlanForAdmin','reviewPlanUpgrade','listPendingPlanUpgrades']);
+const ACTIONS=new Set(['listCompanies','createCompany','setCompanyStatus','listMyCompanies','openCompany','listCompanyCommesse','listCompanyModule','getCompanyRecord','saveCompanyRecord','createCompanyOperation','registerCompany','getCompanyPlan','requestPlanUpgrade','getPlanForAdmin','reviewPlanUpgrade','listPendingPlanUpgrades','invite','accept','listCompanyMembers']);
 function localBoundary(){
   if(process.env.FIRESTORE_EMULATOR_HOST!=='127.0.0.1:8180'||process.env.FIREBASE_AUTH_EMULATOR_HOST!=='127.0.0.1:9199')throw Error('emulator-only');
 }
@@ -27,7 +27,7 @@ async function startLocalCompanyHttp(dispatch){
       const code=error?.code;
       if(code==='unauthenticated')return send(401,{ok:false,code});
       if(code==='forbidden')return send(403,{ok:false,code});
-      if(typeof code==='string'&&/^(invalid-[a-z-]+|not-found|unknown-action|already-exists)$/.test(code))return send(400,{ok:false,code});
+      if(typeof code==='string'&&/^(invalid-[a-z-]+|not-found|unknown-action|already-exists|membership-exists)$/.test(code))return send(400,{ok:false,code});
       return send(500,{ok:false,code:'request-failed'});
     }
   });

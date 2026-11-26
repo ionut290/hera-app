@@ -202,6 +202,13 @@
     <button class="btn" type="button" id="varga-company-refresh">Cambia azienda / aggiorna</button>
     <p id="varga-company-status" role="status" aria-live="polite"></p>
     <form id="varga-company-register"><label for="varga-company-register-name">Crea la tua azienda (piano base)</label><input id="varga-company-register-name" required maxlength="100"><button type="submit" class="btn">Crea azienda</button></form>
+    <details id="varga-company-join"><summary>Ho ricevuto un invito</summary>
+      <form id="varga-company-join-form">
+        <label for="varga-company-join-code">Codice invito aziendale</label>
+        <input id="varga-company-join-code" required maxlength="200" autocomplete="off" spellcheck="false">
+        <button class="btn" type="submit">Entra nell'azienda</button>
+      </form>
+    </details>
     <ul id="varga-company-list"></ul>
     <button class="btn" type="button" id="varga-company-more" hidden>Altre aziende</button>
     <section id="varga-company-selected" hidden>
@@ -214,6 +221,25 @@
         <label>Motivazione <input id="varga-company-upgrade-reason" minlength="3" maxlength="250" required></label>
         <button class="btn" type="submit">Richiedi ampliamento</button>
       </form></section>
+      <section id="varga-company-membership" hidden>
+        <h4>Accessi aziendali</h4>
+        <button class="btn" type="button" id="varga-company-members-refresh">Mostra utenti</button>
+        <ul id="varga-company-members-list"></ul>
+        <button class="btn" type="button" id="varga-company-members-more" hidden>Altri utenti</button>
+        <form id="varga-company-invite-form">
+          <label for="varga-company-invite-email">Email dell'operatore</label>
+          <input id="varga-company-invite-email" type="email" required maxlength="254" autocomplete="off">
+          <label for="varga-company-invite-role">Ruolo</label>
+          <select id="varga-company-invite-role"><option value="worker">Operatore</option><option value="admin">Amministratore</option></select>
+          <button type="submit" class="btn">Genera invito</button>
+        </form>
+        <section id="varga-company-invite-result" hidden>
+          <p>Condividi il codice solo con il destinatario. Vale 7 giorni ed è utilizzabile una sola volta.</p>
+          <input id="varga-company-invite-code" readonly autocomplete="off" spellcheck="false">
+          <button type="button" class="btn" id="varga-company-invite-copy">Copia codice</button>
+          <button type="button" class="btn" id="varga-company-invite-hide">Nascondi codice</button>
+        </section>
+      </section>
       <div id="varga-company-actions" hidden>
         <button class="btn" type="button" id="varga-company-ordinary">Commesse</button>
         <button class="btn" type="button" id="varga-company-snow">Servizio Neve</button>
@@ -973,6 +999,6 @@
   </script>
   <script src="tenant-admin-panel.js?v=20261126-lab1"></script>
   <script src="tenant-runtime-session.js?v=20261126-1"></script>
-  <script src="tenant-company-selector.js?v=20261126-lab7"></script>
+  <script src="tenant-company-selector.js?v=20261126-lab8"></script>
 </body>
 </html>

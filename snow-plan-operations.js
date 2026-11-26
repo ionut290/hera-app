@@ -78,7 +78,7 @@
         if(element)infoContent.appendChild(element);
       });
       section.appendChild(info);
-      const mapCard=page.querySelector("#commessa-operational-card");
+      const mapCard=page.querySelector(".commessa-dashboard-card");
       if(mapCard&&mapCard.parentElement===page)mapCard.insertAdjacentElement("afterend",section);else page.prepend(section);
       id("snow-plan-group").innerHTML=C.groups.map((g,i)=>'<option value="'+i+'">'+esc(g.name)+'</option>').join("");
       id("snow-plan-group").disabled=true;
@@ -588,6 +588,6 @@
     },900);
     show();
   }
-  window.VargaSnowPlanUI={show,refresh:draw,catalog:C,aggregate,resolveCommessa};
+  window.VargaSnowPlanUI={show,refresh:draw,catalog:C,aggregate,resolveCommessa,currentRouteIndex:activeGroup};
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();

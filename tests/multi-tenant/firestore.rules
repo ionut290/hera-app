@@ -38,6 +38,12 @@ service cloud.firestore {
       allow get, list: if eligible() && request.auth.uid == uid;
       allow create, update, delete: if false;
     }
+    // Browser test fixture only: own explicitly synthetic approved legacy profile.
+    // No list, write, role escalation or access to other profiles.
+    match /platformUsers/{uid} {
+      allow get: if eligible() && request.auth.uid == uid && resource.data.get('tenantLabSynthetic', false) == true;
+      allow list, create, update, delete: if false;
+    }
     match /{document=**} {
       allow read, write: if false;
     }

@@ -65,9 +65,14 @@ jobs:
       - name: Install original browser SDK and Chromium
         working-directory: tests/multi-tenant
         run: |
-          npm install --no-save --package-lock=false firebase@12.18.0 firebase-tools@14 playwright@1.58.2 leaflet@1.9.4
-          npx playwright install --with-deps chromium
+          mkdir -p "$RUNNER_TEMP/varga-browser-deps"
+          cd "$RUNNER_TEMP/varga-browser-deps"
+          printf '{"name":"varga-browser-lab","version":"1.0.0","private":true}\n' > package.json
+          npm install --no-save --package-lock=false firebase@12.18.0 firebase-tools@14 firebase-admin@13 playwright@1.58.2 leaflet@1.9.4
+          ./node_modules/.bin/playwright install --with-deps chromium
       - name: Boot original app against local emulators only
         working-directory: tests/multi-tenant
         run: |
-          npx firebase emulators:exec --only firestore,auth --project demo-varga-multi-tenant --config firebase.emulator.json 'node original-browser-smoke.cjs'
+          export VARGA_BROWSER_DEPS="$RUNNER_TEMP/varga-browser-deps/node_modules"
+          export NODE_PATH="$VARGA_BROWSER_DEPS"
+          "$VARGA_BROWSER_DEPS/.bin/firebase" emulators:exec --only firestore,auth --project demo-varga-multi-tenant --config firebase.emulator.json 'node original-browser-smoke.cjs'

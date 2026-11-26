@@ -22,10 +22,10 @@ const pricePreview=(()=>{
  `+'\n'+original.priceHandlers+'\n'+parsePriceCsv.toString()+'\n'+planPriceImport.toString()+String.raw`
  function clearPending(){pending=null;importControls.hidden=true;}
  function render(){renderPrices();for(const b of get('price-list-tbody').querySelectorAll('[data-price-action="delete"]'))b.disabled=true;get('prezziario-meta').textContent=state.commessa.nome+' • '+state.prices.length+' voci';}
- async function open(){state.commessa=commesseById.get(managementCommessaId);if(!state.commessa)return;clearPending();state.priceEditing='';get('price-search').value='';notify('');await load();openPrices();render();}
+ async function open(){state.commessa=commesseById.get(managementCommessaId);if(!state.commessa)return;clearPending();state.priceEditing='';get('price-search').value='';notify('');await load();openPrices();get('impianti-management-screen').setAttribute('aria-hidden','true');get('prezziario-management-screen').setAttribute('aria-hidden','false');render();}
  async function act(fn){if(busy)return;clearPending();busy=true;notify('');try{await fn();render();}catch(e){notify(e.message||'Operazione non riuscita.');}finally{busy=false;}}
  get('open-prezziario-btn').addEventListener('click',()=>act(open));
- get('close-prezziario-btn').addEventListener('click',()=>{if(busy)return;clearPending();state.priceEditing='';get('prezziario-management-screen').classList.add('hidden');get('impianti-management-screen').classList.remove('hidden');});
+ get('close-prezziario-btn').addEventListener('click',()=>{if(busy)return;clearPending();state.priceEditing='';get('prezziario-management-screen').classList.add('hidden');get('prezziario-management-screen').setAttribute('aria-hidden','true');get('impianti-management-screen').classList.remove('hidden');get('impianti-management-screen').setAttribute('aria-hidden','false');});
  get('add-price-item-btn').addEventListener('click',()=>act(()=>addPrice()));
  get('price-search').addEventListener('input',()=>{if(!busy)render();});
  get('save-general-discount-btn').addEventListener('click',()=>act(async()=>{const d=num(get('general-discount').value);if(d==null||d<0||d>100)return notify('Percentuale ribasso non valida.');await commRef().set({percentualeRibassoGenerale:d/100,...actor()},{merge:true});state.commessa.percentualeRibassoGenerale=d/100;notify('Ribasso generale salvato.');}));

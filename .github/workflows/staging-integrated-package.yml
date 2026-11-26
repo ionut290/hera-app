@@ -1,0 +1,44 @@
+name: Staging integrated original package
+on:
+  push:
+    branches: [varga-cantieri-v2-staging]
+    paths: ['staging/**', '.github/workflows/staging-integrated-package.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  full-package:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: staging/portal
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund leaflet@1.9.4
+      - run: node build-full-runtime.mjs
+      - run: |
+          test -s full-runtime-dist/launcher.js
+          test -s full-runtime-dist/original.html
+          test -s full-runtime-dist/app.js
+          test -s full-runtime-dist/app-snow.js
+          test -s full-runtime-dist/accounting-v2.js
+          test -s full-runtime-dist/LOCAL_TEST_ONLY.txt
+          node --check full-runtime-dist/app.js
+          node --check full-runtime-dist/launcher.js
+          node --check full-runtime-dist/runtime-bootstrap.js
+          test ! -e full-runtime-dist/sw.js
+          test ! -e full-runtime-dist/GoogleService-Info.plist
+          test ! -e full-runtime-dist/firebase.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: local-emulator-integrated-original
+          path: staging/portal/full-runtime-dist
+          retention-days: 1

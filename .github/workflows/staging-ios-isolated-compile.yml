@@ -1,0 +1,38 @@
+name: Varga Cantieri 2.0 isolated iOS compile
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  simulator:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+        working-directory: staging/portal
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund leaflet@1.9.4
+        working-directory: staging/portal
+      - run: node build-full-runtime.mjs
+        working-directory: staging/portal
+      - name: Compile separate native shell, no production credentials
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/varga-staging-ios"
+          cp -R staging/portal/full-runtime-dist "$RUNNER_TEMP/varga-staging-ios/www"
+          cd "$RUNNER_TEMP/varga-staging-ios"
+          printf '%s' '{"name":"varga-staging-ios","version":"2.0.0","private":true}' > package.json
+          npm install --no-audit --no-fund @capacitor/cli@7.6.10 @capacitor/core@7.6.10 @capacitor/ios@7.6.10
+          printf '%s' '{"appId":"it.vargacantieri.staging","appName":"Varga Cantieri 2.0 Collaudo","webDir":"www"}' > capacitor.config.json
+          npx cap add ios
+          npx cap sync ios
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/varga-staging-derived" CODE_SIGNING_ALLOWED=NO build
+          test -d "$RUNNER_TEMP/varga-staging-derived/Build/Products/Debug-iphonesimulator/App.app"
+          test ! -e "$RUNNER_TEMP/varga-staging-derived/Build/Products/Debug-iphonesimulator/App.app/GoogleService-Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$RUNNER_TEMP/varga-staging-derived/Build/Products/Debug-iphonesimulator/App.app/Info.plist" | grep -Fx 'it.vargacantieri.staging'

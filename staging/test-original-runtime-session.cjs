@@ -60,8 +60,11 @@ const {doc,setDoc,serverTimestamp}=require('firebase/firestore');
   const prepared=await entry.enter(id),approval=await prepared.approval.verify(client.auth.currentUser);assert(approval.allowed);
   const user=client.auth.currentUser,alerts=[];
   const ui={commessaName:{value:'Commessa integrata '+id},commessaCode:{value:'V2'},commessaType:{value:'main'},commessaParent:{value:''},commessaForm:{reset(){}},commessaTargetSelect:{value:''},manualImpiantoDenominazione:{value:'Parco integrato'},manualImpiantoComune:{value:'Bologna'},manualImpiantoIndirizzo:{value:'Via demo'},manualImpiantoCodice:{value:'A11'},manualImpiantoFeedback:{},manualImpiantoForm:{reset(){}}};
-  const scope=vm.createContext({window:{__VARGA_ISOLATED_RUNTIME_CANDIDATE__:prepared},db:prepared.session.firestore,auth:client.auth,currentUser:user,ui,alert:m=>alerts.push(m),driveAccessToken:null,closeNewCommessaDialog(){},updateCommessaParentField(){},getCommesseCollectionName:()=> 'commesse',commesseById:new Map(),selectedCommessaId:'',selectedCommessaName:'',firebase:{firestore:{FieldValue:{serverTimestamp}}}});
-  vm.runInContext(['canManageData','createCommessa','addManualImpianto','getTargetCommessaId','getTargetCommessaName','buildImpiantoKey','mergeMultiValue','splitCodes','hasOrdinario','hasStraordinario','classifyTipoManutenzione'].map(extract).join('\n'),scope);
+  const bindings={window:{__VARGA_ISOLATED_RUNTIME_CANDIDATE__:prepared},db:prepared.session.firestore,auth:client.auth,currentUser:user,ui,alert:m=>alerts.push(m),driveAccessToken:null,closeNewCommessaDialog(){},updateCommessaParentField(){},getCommesseCollectionName:()=> 'commesse',commesseById:new Map(),selectedCommessaId:'',selectedCommessaName:'',firebase:{firestore:{FieldValue:{serverTimestamp}}}};
+  // Compile the original functions in the SDK's own realm; compat Firestore rejects
+  // plain object literals originating in a different VM realm.
+  const names=['canManageData','createCommessa','addManualImpianto','getTargetCommessaId','getTargetCommessaName','buildImpiantoKey','mergeMultiValue','splitCodes','hasOrdinario','hasStraordinario','classifyTipoManutenzione'];
+  const scope=vm.compileFunction(names.map(extract).join('\n')+'\nreturn {canManageData,createCommessa,addManualImpianto,commesseById};',Object.keys(bindings))(...Object.values(bindings));
   return {prepared,scope,ui,alerts};
  };
  const first=await setup('demo-a');assert.equal(first.scope.canManageData(),true);

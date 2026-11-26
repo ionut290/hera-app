@@ -30,3 +30,7 @@ The new integrated candidate connects the original startup gate, company role an
 ## Shared legacy SDK namespace
 
 `legacy-firebase-namespace.mjs` gives original scripts calling `firebase.firestore()` or `firebase.app().firestore()` the same selected-company facade. The browser smoke now exercises this namespace; external Firebase services and creation of alternate apps are refused. Auth profile views are limited; the original app candidate still has its trusted entry auth reference. Do not treat this client namespace as a substitute for server-side rules, and do not enable live operation yet. Direct SDK static types and module-specific permissions must be reviewed in actual runtime tests.
+
+## Operational validation checkpoint
+
+The emulator integration runs original handler code in the Firebase SDK's realm to avoid cross-realm plain-object validation errors. The isolated browser smoke now delivers an authenticated fixture user to the original auth callback and requires completion of the transformed company approval gate. It does not represent a live login or successful completion of every startup subscription. External services stay blocked. Continue autonomously on staging with verified commits and explicit readiness checkpoints, not estimated progress alone.

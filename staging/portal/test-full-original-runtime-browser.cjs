@@ -17,9 +17,12 @@ const leafletPath=require.resolve('leaflet/dist/leaflet.js');
    const storage=()=>{const m=new Map();return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),clear:()=>m.clear()};};
    const uid='smoke-operator',projectId='varga-cantieri-v2-staging',app={name:'fixture',options:{projectId}};
    const user={uid,email:'smoke@example.test',displayName:'Operatore demo'};
-   const auth={app,currentUser:user,onAuthStateChanged(){window.__vargaAuthObserverReached=true;return()=>{};}};
+   const observers=[];
+   const auth={app,currentUser:user,onAuthStateChanged(fn){window.__vargaAuthObserverReached=true;observers.push(fn);return()=>{};}};
+   window.__deliverOriginalAuth=()=>{for(const fn of observers.slice())Promise.resolve().then(()=>fn(user)).catch(e=>window.__vargaAuthErrors.push(String(e.message||e)));};
+   window.__vargaAuthErrors=[];
    const firestore={collection(){throw Error('Runtime smoke: database operations blocked');}};
-   window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__={projectId,auth,session:{context:{uid,tenantId:'demo-smoke',role:'employee'},firestore},isActive:()=>true,localStorage:storage(),sessionStorage:storage(),approval:{verify:async()=>({allowed:true,profile:{uid,role:'user'}})}};
+   window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__={projectId,auth,session:{context:{uid,tenantId:'demo-smoke',role:'employee'},firestore},isActive:()=>true,localStorage:storage(),sessionStorage:storage(),approval:{verify:async()=>{window.__vargaVerifiedCompany=true;return {allowed:true,profile:{uid,role:'user',ruolo:'user',tenantId:'demo-smoke',accessApproved:true,statoAccount:'attivo'}};}}};
    window.firebase=createNamespace({prepared:window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__});
    window.__VARGA_STAGING_FIREBASE_CONFIG__={apiKey:'fixture-only'};
   }).toString()+')('+createLegacyFirebaseNamespace.toString()+');'});
@@ -43,7 +46,7 @@ const leafletPath=require.resolve('leaflet/dist/leaflet.js');
     // until all external library/legacy module dependencies have been adapted.
     const marker='const PERSISTED_SESSION_KEY';
     const i=candidate.indexOf(marker);assert(i>0);
-    const instrumented=candidate.slice(0,i)+'window.__vargaRuntimeBootstrap = {bound: db === window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore, error: firebaseInitError ? String(firebaseInitError.message) : null};\n'+candidate.slice(i);
+    const instrumented=candidate.slice(0,i)+'window.__vargaRuntimeBootstrap = {bound: db === window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore, error: firebaseInitError ? String(firebaseInitError.message) : null};\n'+candidate.slice(i).replace('await savePersistedSession(user, authorization.profile);','await savePersistedSession(user, authorization.profile); window.__vargaOriginalApprovalComplete = true;');
     return route.fulfill({contentType:'application/javascript',body:instrumented});
    }
    const ext=path.extname(file),types={'.js':'application/javascript','.css':'text/css','.html':'text/html','.json':'application/json','.webmanifest':'application/manifest+json','.png':'image/png','.svg':'image/svg+xml'};
@@ -60,7 +63,14 @@ const leafletPath=require.resolve('leaflet/dist/leaflet.js');
   assert.equal(await page.evaluate(()=>firebase.firestore()===window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore),true);
   assert.equal(await page.evaluate(()=>{try{firebase.app().functions();return false;}catch{return true;}}),true);
   assert.equal(await page.evaluate(()=>window.L?.version),'1.9.4');
-  console.log('Original auth observer reached: '+Boolean(await page.evaluate(()=>window.__vargaAuthObserverReached)));
+  await page.waitForFunction(()=>window.__vargaAuthObserverReached===true);
+  // The real original callback now receives the fixture user. Database side effects
+  // remain deliberately blocked in this smoke; the emulator validates actual writes.
+  await page.evaluate(()=>window.__deliverOriginalAuth());
+  await page.waitForFunction(()=>window.__vargaVerifiedCompany===true);
+  await page.waitForFunction(()=>window.__vargaOriginalApprovalComplete===true);
+  console.log('Original auth observer and verified company startup gate reached: true');
+  console.log('Remaining auth callback errors (diagnostic): '+JSON.stringify(await page.evaluate(()=>window.__vargaAuthErrors)));
   console.log('FULL ORIGINAL SHELL: original HTML, original asset scripts, candidate SDK bootstrap verified.');
   console.log('Remaining browser runtime errors (diagnostic): '+JSON.stringify([...new Set(errors)].slice(0,30)));
   console.log('Blocked external hosts: '+JSON.stringify([...new Set(external)].sort()));

@@ -18,7 +18,13 @@ const readReport = args => {
 const observation = readReport([]);
 assert.equal(observation.code, 0, "Read-only reporting must not throw");
 assert.equal(observation.data.status, "BLOCKED");
-assert.equal(observation.data.evidence.appleTestFlightBuildLastConfirmed, "1.0 (20015)");
+assert.equal(observation.data.evidence.appleTestFlightBuildLastConfirmed, "1.1 (20032)");
+assert.equal(observation.data.evidence.ownerReportedSnowOperationalTestsPassed, 8);
+assert.equal(observation.data.evidence.deletionUiEnabledInSource, true);
+assert.equal(observation.data.evidence.deletionBackendDemoOnlyInSource, false);
+assert.equal(observation.data.evidence.deletionBackendVisibleInFirebaseConsoleOn20261126, true);
+assert.equal(observation.data.evidence.deletionRequestAndStatusFunctionsVisibleOn20261126, false);
+assert.equal(observation.data.evidence.dedicatedReviewSandboxFoundOn20261126, false);
 assert.equal(observation.data.evidence.liveFirebaseAuthCheckedByThisScript, false);
 assert.equal(observation.data.evidence.realIphoneAccountDeletionPassed, false);
 assert.equal(observation.data.evidence.fullReviewerFeatureAccessPassed, false);

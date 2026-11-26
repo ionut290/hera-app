@@ -21,6 +21,8 @@ jobs:
     name: Unsigned iOS simulator build
     runs-on: macos-26-intel
     timeout-minutes: 50
+    # Reuse existing protected Firebase configuration; no signing or upload to Apple.
+    environment: ios-internal-testflight
 
     steps:
       - name: Checkout repository
@@ -98,14 +100,15 @@ jobs:
       - name: Configure registered Firebase iOS app when provided
         shell: bash
         env:
-          IOS_FIREBASE_CONFIG_BASE64: ''
+          IOS_FIREBASE_CONFIG_BASE64: ${{ secrets.IOS_FIREBASE_CONFIG_BASE64 }}
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/configure-ios-firebase.py
           ruby -c scripts/register-ios-firebase-plist.rb
           ruby -c scripts/install-ios-native-geofence.rb
           if [[ -z "${IOS_FIREBASE_CONFIG_BASE64}" ]]; then
-            echo "::warning::Firebase iOS config absent. The simulator build does not validate native Firebase sign-in."
+            echo "::error::Firebase iOS config absent; simulator launch validation cannot proceed."
+            exit 1
           else
             umask 077
             printf '%s' "${IOS_FIREBASE_CONFIG_BASE64}" | base64 --decode > ios/App/App/GoogleService-Info.plist

@@ -2,6 +2,7 @@
 // no deployment, no auth tokens. Reports runtime errors as blockers rather than hiding them.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {chromium}=require('playwright');
+const leafletPath=require.resolve('leaflet/dist/leaflet.js');
 (async()=>{
  const root=path.resolve(__dirname,'../..'),original=fs.readFileSync(path.join(root,'index.html'),'utf8');
  const {buildIntegratedRuntimeCandidate}=await import('../original-runtime-source.mjs');
@@ -15,7 +16,7 @@ const {chromium}=require('playwright');
    const storage=()=>{const m=new Map();return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),clear:()=>m.clear()};};
    const uid='smoke-operator',projectId='varga-cantieri-v2-staging',app={name:'fixture',options:{projectId}};
    const user={uid,email:'smoke@example.test',displayName:'Operatore demo'};
-   const auth={app,currentUser:user,onAuthStateChanged(){return()=>{};}};
+   const auth={app,currentUser:user,onAuthStateChanged(){window.__vargaAuthObserverReached=true;return()=>{};}};
    const firestore={collection(){throw Error('Runtime smoke: database operations blocked');}};
    window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__={projectId,auth,session:{context:{uid,tenantId:'demo-smoke',role:'employee'},firestore},isActive:()=>true,localStorage:storage(),sessionStorage:storage(),approval:{verify:async()=>({allowed:true,profile:{uid,role:'user'}})}};
    window.firebase={initializeApp(){throw Error('Unscoped Firebase blocked');},auth(){throw Error('Unscoped auth blocked');},firestore(){throw Error('Unscoped Firestore blocked');}};
@@ -25,11 +26,13 @@ const {chromium}=require('playwright');
    const url=new URL(route.request().url());
    if(url.origin!==origin){external.push(url.hostname);return route.abort();}
    if(route.request().method()!=='GET')return route.abort();
+   if(url.pathname==='/test-fixture-leaflet.js')return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(leafletPath)});
+   if(url.pathname==='/test-fixture-leaflet.css')return route.fulfill({contentType:'text/css',body:fs.readFileSync(require.resolve('leaflet/dist/leaflet.css'))});
    const rel=decodeURIComponent(url.pathname).replace(/^\/+/,'')||'index.html',file=path.resolve(root,rel);
    if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile())return route.fulfill({status:404,body:''});
    if(rel==='index.html'){
     // Only inside this test, enable local scripts/styles. Network remains intercepted.
-    const html=original.replace("default-src 'none'; base-uri 'none'; form-action 'none'","default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'");
+    const html=original.replace("default-src 'none'; base-uri 'none'; form-action 'none'","default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'").replace('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','/test-fixture-leaflet.js').replace('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','/test-fixture-leaflet.css');
     assert.notEqual(html,original,'Expected staging quarantine marker');
     return route.fulfill({contentType:'text/html',body:html});
    }
@@ -53,6 +56,8 @@ const {chromium}=require('playwright');
   assert(served.has('app.js'),'Complete candidate not loaded');
   const bootstrap=await page.evaluate(()=>window.__vargaRuntimeBootstrap);
   assert.deepEqual(bootstrap,{bound:true,error:null});
+  assert.equal(await page.evaluate(()=>window.L?.version),'1.9.4');
+  console.log('Original auth observer reached: '+Boolean(await page.evaluate(()=>window.__vargaAuthObserverReached)));
   console.log('FULL ORIGINAL SHELL: original HTML, original asset scripts, candidate SDK bootstrap verified.');
   console.log('Remaining browser runtime errors (diagnostic): '+JSON.stringify([...new Set(errors)].slice(0,30)));
   console.log('Blocked external hosts: '+JSON.stringify([...new Set(external)].sort()));

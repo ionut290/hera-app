@@ -1,5 +1,11 @@
 name: Check iOS App Store build floor (offline, no upload)
 on:
+  push:
+    branches: [release/ios-servizio-neve-20261126]
+    paths:
+      - 'scripts/check-ios-appstore-build-number.cjs'
+      - '.github/workflows/ios-appstore-candidate.yml'
+      - '.github/workflows/check-ios-appstore-release-safety.yml'
   pull_request:
     branches: [main]
     paths:
@@ -25,6 +31,14 @@ jobs:
           bash -n scripts/check-ios-appstore-build-number.sh
           node --check scripts/check-ios-appstore-build-number.cjs
           node scripts/check-ios-appstore-build-number.cjs
+      - name: Check snow, salatura and privacy regressions without deploying
+        run: |
+          set -euo pipefail
+          node scripts/check-snow-castel-maggiore.js
+          node scripts/check-salatura-strada.cjs
+          node scripts/check-salatura-unified.cjs
+          node scripts/check-account-privacy-client-runtime.js
+          node scripts/check-account-privacy-sw-cache.cjs
       - name: Verify no deployment credentials or App Store request in this check
         run: |
           set -euo pipefail

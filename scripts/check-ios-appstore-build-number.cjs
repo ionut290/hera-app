@@ -11,8 +11,19 @@ assert.match(internal, /default: "20017"/);
 assert.match(internal, /TestFlight build 1\.0 \(20016\)/);
 assert.equal((internal.match(/bash scripts\/check-ios-appstore-build-number\.sh "\$IOS_BUILD_NUMBER"/g) || []).length, 2,
   "Both stages of internal TestFlight must reject build reuse");
-assert.match(workflow, /default: "20017"/);
-assert.match(workflow, /TestFlight build 1\.0 \(20016\)/);
+assert.match(workflow, /default: "20032"/);
+assert.match(workflow, /internal build 1\.1 \(20031\)/);
+const snowGuard = 'if (( 10#$IOS_BUILD_NUMBER <= 20031 )); then';
+assert.equal(workflow.split(snowGuard).length - 1, 2,
+  "Both App Store stages must reject previously uploaded snow builds");
+const snowBlock = workflow.slice(workflow.indexOf(snowGuard), workflow.indexOf("          fi", workflow.indexOf(snowGuard)) + "          fi".length);
+for (const number of ["20029", "20030", "20031", "20032", "20033"]) {
+  const result = cp.spawnSync("bash", ["-c", snowBlock], {
+    encoding: "utf8", env: {...process.env, IOS_BUILD_NUMBER: number}
+  });
+  assert.equal(result.status, Number(number) <= 20031 ? 1 : 0,
+    "Unexpected snow build guard result: " + number);
+}
 const uses = workflow.match(/bash scripts\/check-ios-appstore-build-number\.sh "\$IOS_BUILD_NUMBER"/g) || [];
 assert.equal(uses.length, 2, "Both Linux preflight and macOS signing must enforce the same build guard");
 assert.ok(workflow.includes("node scripts/audit-app-review-full-access.cjs --require-ready"),
@@ -42,4 +53,4 @@ for (const number of ["10004", "20010", "20011", "20012", "20013", "20014",
   "20016 "]) {
   assert.notEqual(run(number).status, 0, "Old/invalid build accepted: " + JSON.stringify(number));
 }
-console.log("PASS: both App Store and TestFlight stages reject reused iOS build numbers (<=20016), preserve review gate and future iOS 27 SDK guard.");
+console.log("PASS: both App Store and TestFlight stages reject reused iOS build numbers (internal <=20016; snow public <=20031), preserve review gate and future iOS 27 SDK guard.");

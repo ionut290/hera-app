@@ -1,0 +1,68 @@
+name: ASC snow release versions and build numbers (READ ONLY)
+on:
+  push:
+    branches: [release/ios-servizio-neve-20261126]
+    paths: ['.github/workflows/asc-snow-release-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: ios-internal-testflight
+    env:
+      IOS_APPSTORE_KEY_ID: ${{ secrets.IOS_APPSTORE_KEY_ID }}
+      IOS_APPSTORE_ISSUER_ID: ${{ secrets.IOS_APPSTORE_ISSUER_ID }}
+      IOS_APPSTORE_PRIVATE_KEY_BASE64: ${{ secrets.IOS_APPSTORE_PRIVATE_KEY_BASE64 }}
+    steps:
+      - name: Read only VARGA CANTIERI versions and build metadata
+        shell: bash
+        run: |
+          node <<'JS'
+          const crypto = require('node:crypto');
+          const e = process.env;
+          for (const k of ['IOS_APPSTORE_KEY_ID','IOS_APPSTORE_ISSUER_ID','IOS_APPSTORE_PRIVATE_KEY_BASE64']) {
+            if (!e[k]) throw Error('Missing configured secret: '+k);
+          }
+          const enc = x => Buffer.from(JSON.stringify(x)).toString('base64url');
+          const now = Math.floor(Date.now()/1000);
+          const unsigned = enc({alg:'ES256',kid:e.IOS_APPSTORE_KEY_ID,typ:'JWT'})+'.'+enc({iss:e.IOS_APPSTORE_ISSUER_ID,iat:now,exp:now+300,aud:'appstoreconnect-v1'});
+          const key = Buffer.from(e.IOS_APPSTORE_PRIVATE_KEY_BASE64,'base64').toString('utf8');
+          const token = unsigned+'.'+crypto.sign('sha256',Buffer.from(unsigned),{key,dsaEncoding:'ieee-p1363'}).toString('base64url');
+          const origin = 'https://api.appstoreconnect.apple.com';
+          async function all(path) {
+            let next = new URL(path,origin), items=[];
+            for(let i=0;i<20 && next;i++) {
+              if(next.origin!==origin || !next.pathname.startsWith('/v1/')) throw Error('Unexpected pagination URL');
+              const r=await fetch(next,{headers:{Authorization:'Bearer '+token},redirect:'error'});
+              console.log('GET '+next.pathname.replace(/\/[a-f0-9-]{20,}/gi,'/[id]')+' HTTP '+r.status);
+              if(!r.ok) throw Error('Apple API HTTP '+r.status);
+              const j=await r.json();
+              if(!Array.isArray(j.data)) throw Error('Unexpected API response');
+              items.push(...j.data);
+              next=j.links?.next?new URL(j.links.next,origin):null;
+            }
+            if(next) throw Error('Pagination limit reached');
+            return items;
+          }
+          (async()=>{
+            const apps=await all('/v1/apps?filter%5BbundleId%5D=it.vargacantieri.hera');
+            if(apps.length!==1 || apps[0].attributes.bundleId!=='it.vargacantieri.hera') throw Error('App not uniquely identified');
+            const appId=encodeURIComponent(apps[0].id);
+            const versions=await all('/v1/apps/'+appId+'/appStoreVersions?filter%5Bplatform%5D=IOS');
+            for(const v of versions.filter(x=>['1.0','1.0.1','1.1'].includes(x.attributes.versionString))){
+              console.log('App Store version '+v.attributes.versionString+': '+v.attributes.appStoreState);
+            }
+            const builds=await all('/v1/builds?filter%5Bapp%5D='+appId+'&limit=100');
+            const numbers=builds.map(b=>b.attributes.version).filter(v=>/^[0-9]+$/.test(v)).map(Number);
+            if(!numbers.length) throw Error('No numeric builds found');
+            console.log('Highest numeric build: '+Math.max(...numbers));
+            for(const b of builds.filter(x=>Number(x.attributes.version)>=20029)){
+              console.log('Build '+b.attributes.version+': '+b.attributes.processingState+'; expired='+b.attributes.expired+'; audience='+String(b.attributes.buildAudienceType??'not returned'));
+            }
+            if(Math.max(...numbers)>=20032) console.log('20032 already used or surpassed; choose a greater number.');
+            else console.log('20032 is above all returned numeric builds.');
+            console.log('READ ONLY: no mutation requests made.');
+          })().catch(err=>{console.error(err.message);process.exitCode=1});
+          JS

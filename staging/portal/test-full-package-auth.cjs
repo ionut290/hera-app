@@ -5,8 +5,8 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
 (async()=>{
  assert.match(process.env.FIRESTORE_EMULATOR_HOST||'',/^127\.0\.0\.1:8080$/);
  assert.match(process.env.FIREBASE_AUTH_EMULATOR_HOST||'',/^127\.0\.0\.1:9099$/);
- const {initializeApp,deleteApp}=require('../node_modules/firebase-admin/app');
- const {getAuth}=require('../node_modules/firebase-admin/auth'),{getFirestore}=require('../node_modules/firebase-admin/firestore');
+ const {initializeApp,deleteApp}=require('firebase-admin/app');
+ const {getAuth}=require('firebase-admin/auth'),{getFirestore}=require('firebase-admin/firestore');
  const admin=initializeApp({projectId}),db=getFirestore(admin),auth=getAuth(admin);
  const uid='local-admin',email='local-admin@example.test',password='Local-Test-Only-42';
  await auth.createUser({uid,email,password,emailVerified:true,displayName:'Local test admin'});

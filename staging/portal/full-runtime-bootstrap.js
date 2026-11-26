@@ -5,7 +5,7 @@
  if(!session.isActive())throw Error('Company closed');
  Object.defineProperty(window,'__VARGA_ISOLATED_RUNTIME_CANDIDATE__',{value:session,writable:false});
  Object.defineProperty(window,'firebase',{value:namespace,writable:false});
- Object.defineProperty(window,'localStorage',{value:session.localStorage,configurable:false});
- Object.defineProperty(window,'sessionStorage',{value:session.sessionStorage,configurable:false});
+ Object.defineProperty(window,'localStorage',{value:session.localStorage,configurable:true});
+ Object.defineProperty(window,'sessionStorage',{value:session.sessionStorage,configurable:true});
  window.__VARGA_STAGING_FIREBASE_CONFIG__={apiKey:'demo-local-emulator-key'};
 })();

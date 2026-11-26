@@ -50,13 +50,13 @@ export function buildIntegratedRuntimeCandidate(source){
  if(!originalGate.includes('verifyPersistedSessionAgainstDatabase(user, savedSession)')||!originalGate.includes('window.HeraAccessApproval.verify(user)'))throw Error('Legacy approval markers changed');
  code=replaceExactly(code,originalGate,newStartup);
  code=replaceExactly(code,oldAdmin,newAdmin);
- const builtIn=code.match(/const BUILT_IN_SUPER_ADMIN_EMAILS = [^\\n]+;/g);
+ const builtIn=code.match(/^const BUILT_IN_SUPER_ADMIN_EMAILS = [^\r\n]+;$/gm);
  if(!builtIn||builtIn.length!==1)throw Error('Legacy administrator list changed');
  code=replaceExactly(code,builtIn[0],'const BUILT_IN_SUPER_ADMIN_EMAILS = [];');
  // Bind only the app's unqualified cache identifiers; other modules and window/native
  // APIs are not covered by this transform and must remain in quarantine.
- const binding='const localStorage = window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.localStorage;\\nconst sessionStorage = window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.sessionStorage;\\n';
- code=binding.replace(/\\\\n/g,'\\n')+code;
+ const binding=['const localStorage = window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.localStorage;','const sessionStorage = window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.sessionStorage;',''].join('\n');
+ code=binding+code;
  return code;
 }
 export const integratedStartupGate=newStartup;

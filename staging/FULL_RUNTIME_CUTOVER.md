@@ -22,3 +22,7 @@ No live data migration, Firebase deployment or TestFlight upload is authorized b
 Use the complete original runtime; stop adding reconstructed screens. Prefer direct integration and automated concrete checks over further independent prototypes. At each session report verified changes, CI status, remaining blockers and TestFlight readiness. Preserve original production and protected FATTO/WhatsApp behavior, no paid services. Do not report untested features as complete.
 
 The new integrated candidate connects the original startup gate, company role and in-memory cache identifiers in `app.js` itself (in-memory source transformation only). Tests execute the actual transformed startup gate, not a separately recreated login screen. Other original modules' direct Firebase, storage and native accesses remain blocked from live startup until isolation is validated. This is not a native build or a live application launch.
+
+## Original shell browser smoke
+
+`staging/portal/test-full-original-runtime-browser.cjs` serves the actual root HTML and local original scripts in a headless browser with the integrated app.js candidate. Network requests cannot reach external hosts; no Firebase token or live database is provided. It checks original shell elements and the actual candidate SDK bootstrap, and logs remaining browser exceptions as diagnostic blockers, not proof of operational readiness. The root CSP is not changed on disk. This test-only fixture cannot be deployed.

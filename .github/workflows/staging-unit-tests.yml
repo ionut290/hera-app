@@ -81,3 +81,4 @@ jobs:
       - run: npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.55.0
       - run: npx --no-install playwright install --with-deps chromium
       - run: node test-original-preview-browser.cjs
+      - run: node test-full-original-runtime-browser.cjs

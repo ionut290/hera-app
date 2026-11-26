@@ -37,7 +37,8 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   const a=await page.evaluate(async()=>{const s=window.__vargaLocalRuntime().session;window.__oldLocalScope=s;return (await s.session.firestore.collection('commesse').doc('same-id').get({source:'server'})).data().nome;});
   assert.equal(a,'demo-a original');
   // Writes from the actual iframe realm, using the selected company Firestore facade.
-  const child=page.frames().find(f=>f.url().endsWith('/original.html'));assert(child);
+  const child=await (await page.locator('#runtime').elementHandle()).contentFrame();assert(child);await child.waitForFunction(()=>Boolean(window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__?.isActive()));
+  console.log('REAL AUTH AND ORIGINAL FRAME: verified demo-a membership and isolated document read; frame URL '+new URL(child.url()).pathname);
   await child.evaluate(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;const stamp=window.firebase.firestore.FieldValue.serverTimestamp();await s.session.firestore.collection('commesse').add({nome:'Created from actual frame',codice:'',excelModelVersion:2,priceListVersion:2,workItemsModelVersion:2,percentualeRibassoGenerale:0.01,excelModelActivatedAt:stamp,excelModelActivatedBy:s.auth.currentUser.email,nextImpiantoNumber:1,parentCommessaId:null,creatoDa:s.auth.currentUser.email,createdAt:stamp});});
   assert.equal((await db.collection('tenants/demo-a/commesse').get()).size,2);
   await page.locator('[data-tenant="demo-b"]').click();

@@ -25,7 +25,10 @@ const coverage = [
   ["Squadre e assegnazioni", "squadra-current-save-sync.js"],
   ["Documenti", "documents.js"],
   ["Calendario", "administrative-calendar.js"],
-  ["Contabilità e consuntivi", "accounting-v2.js"]
+  ["Contabilità e consuntivi", "accounting-v2.js"],
+  ["Servizio Neve", "app-snow.js"],
+  ["Salatura stradale e Piano Neve", "salatura-strada-integration.js"],
+  ["Navigazione offline Piano Neve", "piano-neve/major-offline-nav.js"]
 ].map(([feature, file]) => ({
   feature, file, sourcePresent: fs.existsSync(path.join(root, file)) &&
     fs.statSync(path.join(root, file)).size > 0,
@@ -36,6 +39,8 @@ const coverage = [
 const firestore = read("firestore.rules");
 const storage = read("storage.rules");
 const privacyClient = read("account-privacy-controls.js");
+const index = read("index.html");
+const deletionUiEnabledInSource = /window\.__VARGA_ACCOUNT_DELETION_ENABLED\s*=\s*true\s*;/.test(index) && privacyClient.includes("window.__VARGA_ACCOUNT_DELETION_ENABLED === true");
 const demoUI = read("apple-review-demo-deletion-ui.js");
 const packager = read("scripts/prepare-capacitor-web.js");
 
@@ -56,7 +61,7 @@ if (/&& !isAppleReviewAccount\(\)/.test(firestore)) {
 if (/!isAppleReviewAccount\(\)/.test(storage)) {
   blockers.push("REVIEW_CLAIM_BLOCKS_STORAGE: reviewer cannot access normal document storage; demo must have synthetic separate document storage.");
 }
-if (privacyClient.includes("window.__VARGA_ACCOUNT_DELETION_ENABLED === true")) {
+if (!deletionUiEnabledInSource) {
   blockers.push("DELETION_UI_DEFAULT_OFF: ordinary iOS build hides self-service deletion pending privacy signoff.");
 }
 if (/apple-review-demo-deletion-ui\.js/.test(packager) || demoUI.includes("internal demo build")) {
@@ -69,7 +74,7 @@ blockers.push("NO_VERIFIED_FULL_FEATURE_SANDBOX: Firebase emulator fixtures are 
 // This STATIC script does not inspect either live identity or claims.
 blockers.push("NO_VERIFIED_REVIEWER_ISOLATION: ASC reviewer login was ENABLED and its profile active on 2026-11-20, but the profile lacked role/ruolo/reviewer markers; current live Auth claims, credentials and safe full-feature access are UNVERIFIED.");
 blockers.push("DELETION_CANARY_DISABLED: the separate disposable deletion-demo account was DISABLED on 2026-11-20; iPhone deletion proof is missing.");
-blockers.push("NO_CONFIRMED_GENERAL_ACCOUNT_DELETION: ordinary account-deletion UI remains gated and real privacy fulfillment has not been approved/deployed.");
+blockers.push("NO_CONFIRMED_GENERAL_ACCOUNT_DELETION: ordinary account-deletion source configuration is not proof of real backend fulfillment; live end-to-end deletion remains unverified.");
 blockers.push("NO_APPLE_SIGNIN_DELETION_DEVICE_TEST: iPhone Apple login works per user report, but Apple credential revocation and ordinary account deletion are NOT verified.");
 
 const report = {
@@ -77,6 +82,9 @@ const report = {
   status: blockers.length ? "BLOCKED" : "READY",
   evidence: {
     appleTestFlightBuildLastConfirmed: "1.0 (20015)",
+    appleTestFlightBuildConfirmedByEmail20261125: "1.1 (20031)",
+    priorAppStoreVersionAcceptedByEmail20261125: "1.0.1",
+    deletionUiEnabledInSource,
     liveFirebaseAuthCheckedByThisScript: false,
     ascReviewerAuthObservedOn20261120: "enabled",
     ascReviewerFirestoreProfileObservedOn20261120: "active_without_reviewer_markers",

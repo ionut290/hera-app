@@ -42,7 +42,7 @@ auth.onAuthStateChanged(async user=>{
    if(request!==revision)return;
    if(!tenant.exists||tenant.data().demo!==true||tenant.data().status!=='active')continue;
    const button=document.createElement('button');button.textContent=tenant.data().name||item.id;button.dataset.tenant=item.id;
-   button.onclick=async()=>{if(isLive){status('Accesso azienda verificato. Moduli operativi non ancora abilitati su Firebase reale.');return;}closeRuntime();const attempt=revision;status('Verifica azienda…');try{const session=await entry.enter(item.id);if(attempt!==revision)return;const approval=await session.approval.verify(auth.currentUser);if(!approval.allowed||attempt!==revision)throw Error('Accesso non autorizzato');present(session);status('Azienda locale: '+session.session.company.name);}catch(err){if(attempt===revision){closeRuntime();status('Accesso aziendale non disponibile.');}}};
+   button.onclick=async()=>{closeRuntime();const attempt=revision;status('Verifica azienda…');try{const session=await entry.enter(item.id);if(attempt!==revision)return;const approval=await session.approval.verify(auth.currentUser);if(!approval.allowed||attempt!==revision)throw Error('Accesso non autorizzato');if(isLive){const company=session.session.company;const role=session.session.context.role;entry.leave();status('Azienda verificata: '+company.name+' — '+role+'. Moduli operativi non ancora abilitati.');return;}present(session);status('Azienda locale: '+session.session.company.name);}catch(err){if(attempt===revision){closeRuntime();status('Accesso aziendale non disponibile.');}}};
    $('companies').append(button);
   }
   status(isLive?'Seleziona azienda staging (accesso in sola consultazione delle appartenenze).':'Seleziona azienda di prova.');

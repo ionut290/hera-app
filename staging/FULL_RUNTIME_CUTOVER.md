@@ -66,3 +66,7 @@ Literal callback substitution fixes JavaScript's special `$'` replacement syntax
 ## Separate build modes (no release activation)
 
 The build now explicitly accepts `local-emulator` (default, existing acceptance test) or `private-staging` (separate output directory, requires validated staging web config). The latter can authenticate and inspect the user's own demo memberships but cannot open the operational original frame; it is not ready for TestFlight. Compile-only CI uses a synthetic key and never connects to Firebase. The local frame receives a scoped auth facade rather than raw auth; compatibility must be retested. Production sources, Firebase rules and native plugins remain untouched. Before any live operational beta, require verified rules, staging test identities, protected FATTO/WhatsApp regression, review of persisted/native data isolation, and Apple signing.
+
+## Native device compile gate
+
+The separate native workflow now chooses private-staging login-only mode if the staging-specific public client config is supplied, otherwise stays local. It checks both simulator and unsigned physical-device builds, with the independent bundle ID and no production native Firebase config. The private staging launcher verifies the selected membership fresh through the same company entry service, then closes it without opening operational UI. No signing or publication. The new rules are not deployed.

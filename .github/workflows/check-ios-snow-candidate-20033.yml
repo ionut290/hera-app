@@ -33,6 +33,7 @@ jobs:
           set -euo pipefail
           node scripts/check-ios-snow-20032.cjs
           node scripts/check-account-privacy-client-runtime.js
+          node scripts/check-account-privacy-runtime.js
           node scripts/check-app-review-readiness-failclosed.cjs
       - name: Record actual App Review status without claiming approval
         run: |
@@ -40,3 +41,42 @@ jobs:
           node scripts/audit-app-review-full-access.cjs | tee "$RUNNER_TEMP/asc-readiness.json"
           node -e 'const r=require(process.argv[1]);if(!["BLOCKED","READY"].includes(r.status))process.exit(1);console.log("App Review readiness: "+r.status)' "$RUNNER_TEMP/asc-readiness.json" >> "$GITHUB_STEP_SUMMARY"
           echo "No credentials, signing, upload, production changes, or App Review submission." >> "$GITHUB_STEP_SUMMARY"
+
+  sandbox-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CI: "true"
+      GOOGLE_CLOUD_PROJECT: demo-apple-functional-sandbox
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install local testing dependencies only
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --no-audit --no-fund @firebase/rules-unit-testing@4.0.1
+      - name: Ensure script cannot use production credentials or remote endpoints
+        run: |
+          set -euo pipefail
+          node --check scripts/test-app-review-functional-sandbox.cjs
+          grep -Fq 'FIRESTORE_EMULATOR_HOST' scripts/test-app-review-functional-sandbox.cjs
+          grep -Fq 'demo-apple-functional-sandbox' scripts/test-app-review-functional-sandbox.cjs
+          if grep -E 'hera-app-6cd2b|GOOGLE_APPLICATION_CREDENTIALS|firebase-admin|https?://' scripts/test-app-review-functional-sandbox.cjs; then
+            echo "::error::Production access forbidden in local-only test"
+            exit 1
+          fi
+      - name: Test actual Firestore rules using only fake documents
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14.23.0 emulators:exec --only firestore \
+            --project demo-apple-functional-sandbox \
+            'node scripts/test-app-review-functional-sandbox.cjs'

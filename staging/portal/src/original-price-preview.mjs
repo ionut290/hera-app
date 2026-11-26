@@ -2,6 +2,7 @@ import {parsePriceCsv,planPriceImport} from './price-import.mjs';
 import {inspectXlsxZip,verifyXlsxInflation,readPriceXlsx} from './price-xlsx.mjs';
 import {projectPreviewWork,summarizePreviewWork} from './work-price-projection.mjs';
 import {planMatrixImport} from './matrix-import.mjs';
+import {createEstimateWorkbook} from './estimate-workbook.mjs';
 // Local-only adapter for the original accounting-v2 price screen and handlers.
 export function pricePreviewScript(original){
  return String.raw`
@@ -18,11 +19,11 @@ const pricePreview=(()=>{
  collection(name){if(name!=='prezziario')throw Error('Archive denied');return {doc(key='price-'+(++seq)){return {id:key,async set(data,options){const map=rows(id);if(options?.merge&&!map.has(key))throw Error('Missing price');const row={...(options?.merge?map.get(key):{}),...data,id:key};if(row.commessaId!==id)throw Error('Scope denied');valid(row);map.set(key,row);}};}};},
  async set(data,options){if(options?.merge!==true||Object.keys(data).some(k=>!['percentualeRibassoGenerale','updatedAt','updatedBy','updatedByName'].includes(k))||!Number.isFinite(data.percentualeRibassoGenerale)||data.percentualeRibassoGenerale<0||data.percentualeRibassoGenerale>1)throw Error('Ribasso non valido');Object.assign(commesseById.get(id),data);}
  };}};},batch(){const writes=[];return {set(ref,data,options){writes.push(()=>ref.set(data,options));},async commit(){for(const write of writes)await write();}};}};
- async function load(){state.prices=Array.from(rows(state.commessa.id).values(),p=>({...p}));}
+ async function load(){state.prices=Array.from(rows(state.commessa.id).values(),p=>({...p,prezzoRibassato:discounted(p)}));}
  const notify=message=>{get('price-feedback').textContent=message;};
  const alert=notify;
  const confirm=()=>false;
- `+'\n'+original.priceHandlers+'\n'+parsePriceCsv.toString()+'\n'+planPriceImport.toString()+'\n'+inspectXlsxZip.toString()+'\n'+verifyXlsxInflation.toString()+'\n'+readPriceXlsx.toString()+'\n'+projectPreviewWork.toString()+'\n'+summarizePreviewWork.toString()+'\n'+planMatrixImport.toString()+'\n'+(original.excelHandlers||'')+String.raw`
+ `+'\n'+original.priceHandlers+'\n'+parsePriceCsv.toString()+'\n'+planPriceImport.toString()+'\n'+inspectXlsxZip.toString()+'\n'+verifyXlsxInflation.toString()+'\n'+readPriceXlsx.toString()+'\n'+projectPreviewWork.toString()+'\n'+summarizePreviewWork.toString()+'\n'+planMatrixImport.toString()+'\n'+createEstimateWorkbook.toString()+'\n'+(original.excelHandlers||'')+String.raw`
  function clearPending(){pending=null;importControls.hidden=true;}
  const workPanel=document.createElement('details');workPanel.className='import-mode-card';workPanel.id='preview-work-panel';
  const heading=document.createElement('summary');heading.textContent='Lavorazioni e importi stimati';workPanel.append(heading);
@@ -37,6 +38,8 @@ const pricePreview=(()=>{
   const note=document.createElement('p');note.id='preview-work-summary';
   note.textContent='Importo stimato: '+money.format(report.estimated)+' • '+report.verified+'/'+report.rows+' lavorazioni valorizzate • '+report.missing+' da verificare. Non è un consuntivo.';
   workBody.append(note);
+  const exportButton=document.createElement('button');exportButton.type='button';exportButton.className='btn';exportButton.textContent='Esporta stima Excel';exportButton.disabled=!globalThis.ExcelJS?.Workbook||!items.length;workBody.append(exportButton);
+  exportButton.addEventListener('click',async()=>{if(managementCommessaId!==id||exportButton.disabled)return;exportButton.disabled=true;try{const wb=createEstimateWorkbook(globalThis.ExcelJS,contract,items,columns,summarizePreviewWork);const name=String(contract.nome||'COMMESSA').replace(/[^a-z0-9]+/gi,'_').slice(0,80);await download(await wb.xlsx.writeBuffer(),'STIMA_DEMO_'+name+'.xlsx');}catch(e){note.textContent=e.message||'Esportazione non riuscita.';}finally{exportButton.disabled=false;}});
   const wrap=document.createElement('div');wrap.className='impianti-sheet-wrap';const table=document.createElement('table');table.className='impianti-sheet';table.id='preview-work-table';wrap.append(table);workBody.append(wrap);
   const header=table.createTHead().insertRow();
   for(const label of ['Impianto','Codice voce','Quantità','u.m.','Prezzo ribassato','Importo stimato','Verifica','Azioni']){const th=document.createElement('th');th.textContent=label;header.append(th);}
@@ -66,7 +69,7 @@ const pricePreview=(()=>{
  get('close-prezziario-btn').addEventListener('click',()=>{if(busy)return;clearPending();state.priceEditing='';get('prezziario-management-screen').classList.add('hidden');get('prezziario-management-screen').setAttribute('aria-hidden','true');get('impianti-management-screen').classList.remove('hidden');get('impianti-management-screen').setAttribute('aria-hidden','false');renderWork();});
  get('add-price-item-btn').addEventListener('click',()=>act(()=>addPrice()));
  get('price-search').addEventListener('input',()=>{if(!busy)render();});
- get('save-general-discount-btn').addEventListener('click',()=>act(async()=>{const d=num(get('general-discount').value);if(d==null||d<0||d>100)return notify('Percentuale ribasso non valida.');await commRef().set({percentualeRibassoGenerale:d/100,...actor()},{merge:true});state.commessa.percentualeRibassoGenerale=d/100;notify('Ribasso generale salvato.');}));
+ get('save-general-discount-btn').addEventListener('click',()=>act(async()=>{const d=num(get('general-discount').value);if(d==null||d<0||d>100)return notify('Percentuale ribasso non valida.');await commRef().set({percentualeRibassoGenerale:d/100,...actor()},{merge:true});state.commessa.percentualeRibassoGenerale=d/100;await load();notify('Ribasso generale salvato.');}));
  const excelReady=Boolean(globalThis.ExcelJS?.Workbook);
  for(const [id,template] of [['download-price-template-btn',true],['export-price-list-btn',false]]){
   const button=get(id);button.disabled=!excelReady;

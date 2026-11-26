@@ -125,7 +125,7 @@ function TenantPortal({ user, companies }) {
             {selected.role === 'admin' && selected.demo === true && selected.fattoMode === 'configurable-demo' && (
               <FattoSettings key={selected.id} tenant={selected} context={{uid:user.uid,tenantId:selected.id,role:selected.role}} initialPolicy={{version:0,actions:['saveCompletion']}} preview />
             )}
-            {originalOpen && selected.role==='admin' && <section aria-label="Gestione commesse originale demo"><button onClick={()=>setOriginalOpen(false)}>Chiudi anteprima</button><p>Le commesse di prova scompaiono chiudendo l'anteprima. Nessun dato reale.</p><iframe key={selected.id} title="Gestione commesse originale demo" sandbox="allow-scripts allow-forms" srcDoc={buildOriginalPreviewFrame(originalPreview,selected.role)} style={{width:'100%',height:'75vh',border:'1px solid #ccd5ce',borderRadius:8,background:'white'}}/></section>}
+            {originalOpen && selected.role==='admin' && <section aria-label="Gestione commesse originale demo"><button onClick={()=>setOriginalOpen(false)}>Chiudi anteprima</button><p>Le commesse di prova scompaiono chiudendo l'anteprima. Nessun dato reale.</p><iframe key={selected.id} title="Gestione commesse originale demo" sandbox="allow-scripts allow-forms allow-downloads" srcDoc={buildOriginalPreviewFrame(originalPreview,selected.role)} style={{width:'100%',height:'75vh',border:'1px solid #ccd5ce',borderRadius:8,background:'white'}}/></section>}
             {verdeError && <p role="alert">{verdeError}</p>}
             {verdeOpen && (
               <section aria-label="Anteprima Verde Levato">

@@ -1,4 +1,5 @@
 import {parsePriceCsv,planPriceImport} from './price-import.mjs';
+import {inspectXlsxZip,readPriceXlsx} from './price-xlsx.mjs';
 // Local-only adapter for the original accounting-v2 price screen and handlers.
 export function pricePreviewScript(original){
  return String.raw`
@@ -19,7 +20,7 @@ const pricePreview=(()=>{
  const notify=message=>{get('price-feedback').textContent=message;};
  const alert=notify;
  const confirm=()=>false;
- `+'\n'+original.priceHandlers+'\n'+parsePriceCsv.toString()+'\n'+planPriceImport.toString()+String.raw`
+ `+'\n'+original.priceHandlers+'\n'+parsePriceCsv.toString()+'\n'+planPriceImport.toString()+'\n'+inspectXlsxZip.toString()+'\n'+readPriceXlsx.toString()+'\n'+(original.excelHandlers||'')+String.raw`
  function clearPending(){pending=null;importControls.hidden=true;}
  function render(){renderPrices();for(const b of get('price-list-tbody').querySelectorAll('[data-price-action="delete"]'))b.disabled=true;get('prezziario-meta').textContent=state.commessa.nome+' • '+state.prices.length+' voci';}
  async function open(){state.commessa=commesseById.get(managementCommessaId);if(!state.commessa)return;clearPending();state.priceEditing='';get('price-search').value='';notify('');await load();openPrices();get('impianti-management-screen').setAttribute('aria-hidden','true');get('prezziario-management-screen').setAttribute('aria-hidden','false');render();}
@@ -29,8 +30,12 @@ const pricePreview=(()=>{
  get('add-price-item-btn').addEventListener('click',()=>act(()=>addPrice()));
  get('price-search').addEventListener('input',()=>{if(!busy)render();});
  get('save-general-discount-btn').addEventListener('click',()=>act(async()=>{const d=num(get('general-discount').value);if(d==null||d<0||d>100)return notify('Percentuale ribasso non valida.');await commRef().set({percentualeRibassoGenerale:d/100,...actor()},{merge:true});state.commessa.percentualeRibassoGenerale=d/100;notify('Ribasso generale salvato.');}));
- for(const id of ['download-price-template-btn','export-price-list-btn'])get(id).disabled=true;
- const fileInput=get('price-file');fileInput.accept='.csv,text/csv';fileInput.title='Anteprima locale: solo CSV';
+ const excelReady=Boolean(globalThis.ExcelJS?.Workbook);
+ for(const [id,template] of [['download-price-template-btn',true],['export-price-list-btn',false]]){
+  const button=get(id);button.disabled=!excelReady;
+  button.addEventListener('click',()=>act(async()=>{if(!excelReady||state.priceEditing)throw Error('Concludi la modifica prima di esportare.');await exportWorkbook(true,template);notify('File Excel preparato.');}));
+ }
+ const fileInput=get('price-file');fileInput.accept=excelReady?'.xlsx,.csv':'.csv,text/csv';fileInput.title=excelReady?'Anteprima locale: XLSX e CSV':'Anteprima locale: solo CSV';
  const importControls=document.createElement('div');importControls.hidden=true;
  const apply=document.createElement('button');apply.type='button';apply.className='btn btn-primary';apply.textContent='Conferma importazione CSV';
  const cancel=document.createElement('button');cancel.type='button';cancel.className='btn';cancel.textContent='Annulla importazione CSV';
@@ -40,12 +45,15 @@ const pricePreview=(()=>{
   clearPending();notify('');busy=true;
   try{
    if(state.priceEditing)throw Error('Concludi la modifica della voce prima di importare.');
-   if(!/\.csv$/i.test(file.name)||file.size>1000000)throw Error('Seleziona un CSV di massimo 1 MB.');
+   const isExcel=/\.xlsx$/i.test(file.name),format=isExcel?'XLSX':'CSV';
+   if(isExcel?(!excelReady||file.size>5000000):(!/\.csv$/i.test(file.name)||file.size>1000000))throw Error('Seleziona un CSV (max 1 MB) o XLSX (max 5 MB, se disponibile).');
    const commessaId=state.commessa.id;
-   const plan=planPriceImport(parsePriceCsv(await file.text()),state.prices,{mapped,num,norm,discounted});
+   const data=isExcel?await readPriceXlsx(await file.arrayBuffer(),globalThis.ExcelJS,aliases,key):parsePriceCsv(await file.text());
+   const plan=planPriceImport(data,state.prices,{mapped,num,norm,discounted});
    if(commessaId!==state.commessa?.id||commessaId!==managementCommessaId)throw Error('Commessa cambiata.');
    pending={commessaId,plan};const updates=plan.filter(p=>p.id!==null).length;
-   notify('Anteprima CSV: '+(plan.length-updates)+' nuove voci, '+updates+' aggiornamenti. Confermare?');importControls.hidden=false;
+   apply.textContent='Conferma importazione '+format;cancel.textContent='Annulla importazione '+format;
+   notify('Anteprima '+format+': '+(plan.length-updates)+' nuove voci, '+updates+' aggiornamenti. Confermare?');importControls.hidden=false;
   }catch(e){notify(e.message||'Importazione non riuscita.');}finally{busy=false;}
  });
  cancel.addEventListener('click',()=>{clearPending();notify('Importazione annullata.');});

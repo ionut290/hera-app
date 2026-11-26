@@ -1,0 +1,60 @@
+name: Varga V2 original operational package - unsigned iOS compile
+on:
+  push:
+    branches: [varga-cantieri-v2-staging]
+    paths: ['.github/workflows/staging-ios-operational-compile.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compile:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: macos-26
+    timeout-minutes: 35
+    concurrency:
+      group: varga-v2-operational-compile
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+        working-directory: staging/portal
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund leaflet@1.9.4
+        working-directory: staging/portal
+      - name: Package the original operational runtime, emulator only
+        working-directory: staging/portal
+        run: |
+          set -euo pipefail
+          node build-full-runtime.mjs local-emulator
+          test -s full-runtime-dist/LOCAL_TEST_ONLY.txt
+          test ! -e full-runtime-dist/PRIVATE_STAGING_NOT_RELEASED.txt
+          test -s full-runtime-dist/original.html
+          test -s full-runtime-dist/app.js
+          test -s full-runtime-dist/app-snow.js
+          test -s full-runtime-dist/runtime-bootstrap.js
+          grep -F 'projectId: "varga-cantieri-v2-staging"' full-runtime-dist/firebase-config.js
+          test ! -e full-runtime-dist/GoogleService-Info.plist
+      - name: Compile the complete package for iOS Simulator without signing
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/varga-v2-operational"
+          cp -R staging/portal/full-runtime-dist "$RUNNER_TEMP/varga-v2-operational/www"
+          cd "$RUNNER_TEMP/varga-v2-operational"
+          printf '%s' '{"name":"varga-v2-operational-compile","version":"2.0.0","private":true}' > package.json
+          npm install --no-audit --no-fund @capacitor/cli@7.6.10 @capacitor/core@7.6.10 @capacitor/ios@7.6.10
+          printf '%s' '{"appId":"it.vargacantieri.staging","appName":"Varga Cantieri 2.0 Collaudo","webDir":"www"}' > capacitor.config.json
+          npx cap add ios
+          npx cap sync ios
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/varga-v2-operational-derived" CODE_SIGNING_ALLOWED=NO build
+          APP="$RUNNER_TEMP/varga-v2-operational-derived/Build/Products/Debug-iphonesimulator/App.app"
+          test -s "$APP/App"
+          test -s "$APP/public/LOCAL_TEST_ONLY.txt"
+          test -s "$APP/public/original.html"
+          test -s "$APP/public/app.js"
+          test ! -e "$APP/GoogleService-Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx it.vargacantieri.staging
+          echo 'Original operational emulator package compiled for simulator. No signing, upload, screenshots, live data or native runtime validation.' >> "$GITHUB_STEP_SUMMARY"

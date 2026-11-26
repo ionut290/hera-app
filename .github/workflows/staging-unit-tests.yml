@@ -63,6 +63,16 @@ jobs:
       - name: Test tenant isolation
         working-directory: staging
         run: npx --no-install firebase emulators:exec --config emulator-ci.json --only firestore --project demo-varga-verde-isolation 'node test-shared-isolation.cjs candidate.rules && node test-fatto-policy.cjs candidate.rules && node test-cobo-write.cjs candidate.rules && node test-commesse-write.cjs candidate.rules && node test-original-create.cjs candidate.rules && node test-original-native.cjs candidate.rules && node test-original-archives.cjs candidate.rules && node test-original-manual-plant.cjs candidate.rules && node test-original-price-list.cjs candidate.rules && node test-original-runtime-session.cjs candidate.rules && node test-superadmin.cjs candidate.rules'
+      - name: Package exact tested rules for review
+        working-directory: staging
+        run: |
+          node prepare-rules-review.mjs
+          cmp candidate.rules rules-review-dist/candidate.rules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staging-rules-reviewed-candidate
+          path: staging/rules-review-dist
+          retention-days: 3
   original-preview-browser:
     if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
     runs-on: ubuntu-24.04

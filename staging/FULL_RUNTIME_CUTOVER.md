@@ -70,3 +70,7 @@ The build now explicitly accepts `local-emulator` (default, existing acceptance 
 ## Native device compile gate
 
 The separate native workflow now chooses private-staging login-only mode if the staging-specific public client config is supplied, otherwise stays local. It checks both simulator and unsigned physical-device builds, with the independent bundle ID and no production native Firebase config. The private staging launcher verifies the selected membership fresh through the same company entry service, then closes it without opening operational UI. No signing or publication. The new rules are not deployed.
+
+## Release review artifact
+
+After the entire Firestore emulator suite succeeds, CI now exports the exact byte-for-byte tested candidate rules, source revision and SHA-256 manifest. The bundle is review-only; it intentionally contains no deployment config or automatic publish command. It preserves the distinction between an historical selected rules version and current active rules. Do not overwrite an unpublished console draft. Protected FATTO/WhatsApp execution and full live operational activation remain gated by the project instructions. Native build may succeed independently; it is not TestFlight readiness.

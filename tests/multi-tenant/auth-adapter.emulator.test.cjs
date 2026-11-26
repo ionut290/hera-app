@@ -385,6 +385,29 @@ async function main(){
   assert.equal((await viaHttp(admin.token,'listCompanyMembers',{tenantId:autonomousId})).status,403);
   assert.equal((await viaHttp(freshOwner.token,'getCompanyPlan',{tenantId:autonomousId})).result.plan.usage.operators,1);
   console.log('Verified-account self-service and invitation HTTP workflow passed without legacy profile');
+  // Explicit per-plant grants: no access to unassigned plants, price lists,
+  // other tenants, direct mutation, or other workers' grants.
+  const workerJob=await save(freshOwner,{tenantId:autonomousId,module:'jobs',kind:'ordinary',requestId:randomUUID(),data:{nome:'Worker test job'}});
+  assert.equal(workerJob.status,200);const workerJobId=workerJob.result.recordId;
+  async function plantFor(name){const r=await viaHttp(freshOwner.token,'createCompanyOperation',{tenantId:autonomousId,kind:'ordinary',commessaId:workerJobId,operation:'plant',requestId:randomUUID(),data:{denominazione:name,comune:'Demo',indirizzo:'Demo 1',gpsY:44.5,gpsX:11.3}});assert.equal(r.status,200);return r.result.recordId;}
+  const allowedPlant=await plantFor('Assigned plant'),privatePlant=await plantFor('Unassigned plant');
+  const grantPayload={tenantId:autonomousId,kind:'ordinary',commessaId:workerJobId,plantId:allowedPlant,memberUid:freshWorker.uid,enabled:true};
+  const getAssigned=u=>viaHttp(u.token,'listMyPlants',{tenantId:autonomousId});
+  assert.equal((await getAssigned(freshWorker)).result.plants.length,0);
+  assert.equal((await viaHttp(freshWorker.token,'setPlantGrant',grantPayload)).status,403);
+  assert.equal((await viaHttp(freshOwner.token,'setPlantGrant',{...grantPayload,memberUid:otherWorker.uid})).code,'invalid-member');
+  assert.equal((await viaHttp(freshOwner.token,'setPlantGrant',{...grantPayload,plantId:'invalid-plant'})).code,'invalid-reference');
+  assert.equal((await viaHttp(freshOwner.token,'setPlantGrant',grantPayload)).status,200);
+  const assignedPlants=await getAssigned(freshWorker);assert.equal(assignedPlants.status,200);
+  assert.deepEqual(assignedPlants.result.plants.map(p=>p.id),[allowedPlant]);
+  assert.ok(!JSON.stringify(assignedPlants.result).includes(privatePlant));
+  assert.equal((await getAssigned(otherWorker)).status,403);
+  assert.equal((await viaHttp(freshWorker.token,'listCompanyModule',{tenantId:autonomousId,kind:'ordinary',module:'prices',commessaId:workerJobId})).status,403);
+  assert.equal((await viaHttp(freshWorker.token,'listCompanyModule',{tenantId:autonomousId,kind:'ordinary',module:'plants',commessaId:workerJobId})).status,403);
+  assert.equal((await viaHttp(freshWorker.token,'createCompanyOperation',{tenantId:autonomousId,kind:'ordinary',commessaId:workerJobId,operation:'plant',requestId:randomUUID(),data:{denominazione:'Forbidden'}})).status,403);
+  assert.equal((await viaHttp(freshOwner.token,'setPlantGrant',{...grantPayload,enabled:false})).status,200);
+  assert.equal((await getAssigned(freshWorker)).result.plants.length,0);
+  console.log('Worker explicit plant access, isolation and revocation passed');
   // Entry authorization must not create/approve legacy profiles.
   assert.equal((await viaHttp(freshOwner.token,'checkTenantEntry')).result.eligible,true);
   assert.equal((await viaHttp(unverified.token,'checkTenantEntry')).status,401);

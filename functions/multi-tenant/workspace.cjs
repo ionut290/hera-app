@@ -4,6 +4,7 @@ const {readModule}=require('./modules.cjs');
 const {getRecord,saveRecord}=require('./writes.cjs');
 const {createOperation}=require('./operations.cjs');
 const {policy}=require('./starter-plan.cjs');
+const {setPlantGrant,listMyPlants}=require('./worker-access.cjs');
 const ROLES=new Set(['owner','admin','manager','team_lead','worker','client']);
 function fail(code){throw Object.assign(new Error(code),{code});}
 function id(value){if(typeof value!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(value)||/^__.*__$/.test(value))fail('invalid-id');return value;}
@@ -29,7 +30,7 @@ function createWorkspaceService(db){
     return db.runTransaction(async tx=>{
       const access=await membership(tx,caller.uid,payload.tenantId);
       if(!access)fail('forbidden');
-      return {company:access.company,plan:['owner','admin'].includes(access.company.role)?policy(access.tenantData):null,capabilities:{readCommesse:['owner','admin'].includes(access.company.role),readModules:['owner','admin'].includes(access.company.role)}};
+      return {company:access.company,plan:['owner','admin'].includes(access.company.role)?policy(access.tenantData):null,capabilities:{readCommesse:['owner','admin'].includes(access.company.role),readModules:['owner','admin'].includes(access.company.role),readAssignedPlants:access.company.role==='worker'}};
     });
   }
   async function listCompanyCommesse(caller,payload){
@@ -63,6 +64,13 @@ function createWorkspaceService(db){
       return {company:access.company,members:rows.map(d=>({id:d.id,email:String(d.data().email||''),role:String(d.data().role||''),status:String(d.data().status||'')})),nextCursor:snap.size>limit?rows.at(-1).id:null};
     });
   }
+  async function assigned(caller,payload){
+    return db.runTransaction(async tx=>{
+      const access=await membership(tx,caller.uid,payload.tenantId);
+      if(!access||access.company.role!=='worker')fail('forbidden');
+      return listMyPlants({tx,access,caller,payload,page,id});
+    });
+  }
   async function mutate(caller,payload,handler){
     return db.runTransaction(async tx=>{
       const access=await membership(tx,caller.uid,payload.tenantId);
@@ -70,6 +78,6 @@ function createWorkspaceService(db){
       return handler({tx,access,caller,payload,id});
     });
   }
-  return Object.freeze({listMyCompanies,openCompany,listCompanyCommesse,listCompanyModule,listCompanyMembers,getCompanyRecord:(c,p)=>mutate(c,p,getRecord),saveCompanyRecord:(c,p)=>mutate(c,p,saveRecord),createCompanyOperation:(c,p)=>mutate(c,p,createOperation)});
+  return Object.freeze({listMyCompanies,openCompany,listCompanyCommesse,listCompanyModule,listCompanyMembers,listMyPlants:assigned,setPlantGrant:(c,p)=>mutate(c,p,setPlantGrant),getCompanyRecord:(c,p)=>mutate(c,p,getRecord),saveCompanyRecord:(c,p)=>mutate(c,p,saveRecord),createCompanyOperation:(c,p)=>mutate(c,p,createOperation)});
 }
 module.exports={createWorkspaceService};

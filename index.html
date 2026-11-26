@@ -246,6 +246,24 @@
           <button type="button" class="btn" id="varga-company-invite-hide">Nascondi codice</button>
         </section>
       </section>
+      <section id="varga-company-worker-area" hidden>
+        <h4>I miei cantieri assegnati</h4>
+        <button class="btn" type="button" id="varga-company-worker-refresh">Aggiorna cantieri</button>
+        <ul id="varga-company-worker-list"></ul>
+        <button class="btn" type="button" id="varga-company-worker-more" hidden>Altri cantieri</button>
+      </section>
+      <section id="varga-company-grant-area" hidden>
+        <h4>Autorizza un operatore a un impianto</h4>
+        <p>Usa gli identificativi dell'utente e dell'impianto mostrati negli elenchi. Solo dati di laboratorio.</p>
+        <form id="varga-company-grant-form">
+          <label>UID operatore <input id="varga-company-grant-user" required maxlength="128"></label>
+          <label>Area <select id="varga-company-grant-kind"><option value="ordinary">Ordinaria</option><option value="snow">Neve</option></select></label>
+          <label>ID commessa <input id="varga-company-grant-job" required maxlength="128"></label>
+          <label>ID impianto <input id="varga-company-grant-plant" required maxlength="128"></label>
+          <button type="submit" class="btn" value="grant">Autorizza</button>
+          <button type="submit" class="btn" value="revoke">Revoca accesso</button>
+        </form>
+      </section>
       <div id="varga-company-actions" hidden>
         <button class="btn" type="button" id="varga-company-ordinary">Commesse</button>
         <button class="btn" type="button" id="varga-company-snow">Servizio Neve</button>
@@ -1020,7 +1038,7 @@
   </script>
   <script src="tenant-admin-panel.js?v=20261126-lab1"></script>
   <script src="tenant-runtime-session.js?v=20261126-1"></script>
-  <script src="tenant-company-selector.js?v=20261126-lab9"></script>
+  <script src="tenant-company-selector.js?v=20261126-lab10"></script>
   <script src="tenant-signup.js?v=20261126-lab1"></script>
 </body>
 </html>

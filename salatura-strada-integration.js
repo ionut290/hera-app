@@ -13,15 +13,25 @@ const ready=()=>typeof db!=="undefined"&&!!db;
 const url=i=>APP+"?vargaMajorRoute="+i;
 const number=n=>Number(n).toLocaleString("it-IT");
 let last=-1,started=false,busy=false;
+const normalize=value=>String(value??"").trim().toLowerCase().replace(/[\s_-]+/g," ");
+function resolveCommessa(c,id){
+  if(!c)return -1;
+  const code=normalize(c.codice),name=normalize(c.nome),doc=String(id??c.id??"");
+  const matches=routes.filter(r=>code===normalize(r.code)||name===normalize(r.name)||doc==="normal-salatura-strada-"+(r.index+1));
+  if(c.pianoNeveService==="salatura-viabilita-maggiore"){
+    const marker=c.pianoNeveMajorRouteIndex;
+    if(Number.isInteger(marker)&&routes.some(r=>r.index===marker)){
+      if(matches.some(r=>r.index!==marker))return -1;
+      return routes.findIndex(r=>r.index===marker);
+    }
+  }
+  return matches.length===1?routes.indexOf(matches[0]):-1;
+}
 function selected(){
   const page=$("impianti-page");
-  if(!page||page.hidden||page.classList.contains("hidden")||document.body.classList.contains("snow-management-context"))return -1;
+  if(!page||page.hidden||page.classList.contains("hidden"))return -1;
   if(typeof selectedCommessaId==="undefined"||typeof commesseById==="undefined")return -1;
-  const c=commesseById.get(selectedCommessaId);
-  if(!c)return -1;
-  const code=String(c.codice||"").trim().toUpperCase();
-  const name=String(c.nome||"").trim().toLowerCase();
-  return routes.findIndex(r=>r.code===code||r.name.toLowerCase()===name);
+  return resolveCommessa(commesseById.get(selectedCommessaId),selectedCommessaId);
 }
 function status(s){
   for(const k of ["salatura-import-status","salatura-panel-status"]){
@@ -105,8 +115,9 @@ function ensure(){
  '<p class="muted">Piano Neve è integrato in Varga Cantieri e usa il tuo accesso attuale, senza secondo login. I giri e i registri di salatura rimangono separati.</p>'+
  '<p id="salatura-panel-status" role="status"></p>'+
  '<details><summary id="salatura-street-count">Strade del percorso</summary><ol id="salatura-street-list"></ol></details>';
- const anchor=$("commessa-operational-card");
- if(anchor)anchor.insertAdjacentElement("afterend",panel);else page.appendChild(panel);
+ const dashboard=page.querySelector(".commessa-dashboard-card");
+ if(dashboard&&dashboard.parentElement===page)dashboard.insertAdjacentElement("afterend",panel);else page.prepend(panel);
+ last=-1;
  $("salatura-inline").addEventListener("click",()=>{
    const i=selected();if(i<0)return;
    const box=fullScreen();
@@ -118,7 +129,8 @@ function ensure(){
  return panel;
 }
 function render(){
- adminButton();const panel=ensure();if(!panel)return;
+ const panel=ensure();if(!panel)return;
+ try{adminButton();}catch(error){console.warn('Salatura: strumenti admin non disponibili',error);}
  const i=selected();panel.classList.toggle("hidden",i<0);panel.setAttribute("aria-hidden",String(i<0));
  if(i===last)return;last=i;
  if(i<0)return;
@@ -143,6 +155,6 @@ function init(){
  },1000);
  render();
 }
-window.VargaSalaturaStrada={routes,seed,render,url};
+window.VargaSalaturaStrada={routes,seed,render,url,resolveCommessa};
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();

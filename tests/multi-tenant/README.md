@@ -69,3 +69,6 @@ Risolto il conflitto ERESOLVE tra Firebase 12 web e peer Firebase 11 Capacitor i
 
 ## Correzione runner del browser
 Il run 45850736117 ha completato la suite isolamento ma il browser non è partito: ubuntu-latest risolveva Ubuntu 26.04, non supportato da Playwright 1.58.2. Job browser fissato a Ubuntu 24.04 senza cambiare dipendenze native o applicative. Aggiunta diagnostica per fasi (boot, login, selezione, cambio, logout), destinazioni bloccate e asset caricati, senza stampare password o token. Il risultato del browser va ancora confermato; nessun deploy.
+
+## Diagnostica login browser
+Run 45852517627: isolamento superato; Chromium installato e avvio dell'index/app originali superato senza page errors. Timeout nel login email/password prima dell'identità Firebase. Il nuovo test verifica preventivamente le credenziali sintetiche via REST dell'emulatore e usa un trasporto Auth same-origin confinato alla route di test, inoltrando richieste e risposte reali a 127.0.0.1:9199 senza iniettare token, profili o risultati di successo nel browser. Verifica submit del form originale, risposta effettiva signInWithPassword, identità e fase di approvazione. Registra categorie di errori e status, non credenziali o token. Correzione del solo laboratorio; esito del login ancora da confermare. Nessun deploy.

@@ -40,8 +40,13 @@ async function main(){
     seed('tenants/browser-b/commesse/same-id',{nome:'Browser job B',createdAt:new Date()}),
     seed('tenants/browser-c/commesse/same-id',{nome:'Private C',createdAt:new Date()})
   ]);
+  // Independent check of the actual emulator account. Do not copy the resulting
+  // token into the browser: the existing form must authenticate for itself.
+  const credentialCheck=await fetch('http://127.0.0.1:9199/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-key',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,password,returnSecureToken:true}),redirect:'error'});
+  const credentialResult=await credentialCheck.json();
+  assert.ok(credentialCheck.ok&&credentialResult.localId===user.uid&&credentialResult.idToken,'Synthetic Auth emulator account is not usable');
   let browser,context,page,phase='setup';
-  const blocked=new Set(),errors=[],loaded=new Set();
+  const blocked=new Set(),errors=[],loaded=new Set(),authRequests=[],authResponses=[],authConsole=[];
   const mark=p=>{phase=p;console.log('Browser phase: '+p);};
   try{
   browser=await chromium.launch({headless:true,args:['--disable-background-networking']});
@@ -50,7 +55,24 @@ async function main(){
     await context.routeWebSocket('**/*',ws=>{ws.close();});
     await context.route('**/*',async route=>{
       const u=new URL(route.request().url());
-      if(u.origin==='http://127.0.0.1:8180'||u.origin==='http://127.0.0.1:9199')return route.continue();
+      if(u.origin==='http://127.0.0.1:8180')return route.continue();
+      // Same-origin transport to the actual Auth emulator avoids cross-origin
+      // loopback restrictions. No fake responses, tokens or authentication.
+      if(u.origin===origin&&/^\/(identitytoolkit|securetoken)\.googleapis\.com\//.test(u.pathname)){
+        const request=route.request(),method=request.method();
+        if(!['GET','POST'].includes(method))return route.abort('blockedbyclient');
+        const target=new URL(u.pathname+u.search,'http://127.0.0.1:9199');
+        authRequests.push({path:u.pathname,method});
+        const headers={};
+        for(const name of ['content-type','authorization','x-client-version','x-firebase-gmpid'])if(request.headers()[name])headers[name]=request.headers()[name];
+        const response=await fetch(target,{method,headers,body:method==='POST'?request.postDataBuffer():undefined,redirect:'error'});
+        const raw=await response.text();
+        let code=null;
+        if(!response.ok){try{code=JSON.parse(raw)?.error?.message||null;}catch{}}
+        authResponses.push({path:u.pathname,status:response.status,code:typeof code==='string'?code.slice(0,100):null});
+        return route.fulfill({status:response.status,contentType:response.headers.get('content-type')||'application/json',body:raw,headers:{'cache-control':'no-store'}});
+      }
+      if(u.origin==='http://127.0.0.1:9199')return route.abort('blockedbyclient');
       if(u.origin===origin&&u.pathname==='/api/v2/companies'){
         const request=route.request();
         if(request.method()!=='POST'||!request.headers().authorization)return route.fulfill({status:403,body:'{}'});
@@ -66,13 +88,26 @@ async function main(){
       if(f===path.join(root,'firebase-config.js')){
         let s=body.toString('utf8');
         assert.match(s,/window\.firebaseConfig\s*=\s*\{[^\n]*\};/);
-        s=s.replace(/window\.firebaseConfig\s*=\s*\{[^\n]*\};/,`window.firebaseConfig={apiKey:"demo-key",authDomain:"demo-varga-multi-tenant.firebaseapp.com",projectId:"demo-varga-multi-tenant",appId:"demo-app"};firebase.initializeApp(window.firebaseConfig);firebase.auth().useEmulator("http://127.0.0.1:9199",{disableWarnings:true});firebase.firestore().useEmulator("127.0.0.1",8180);window.VargaTenantLabEnabled=true;`);
+        s=s.replace(/window\.firebaseConfig\s*=\s*\{[^\n]*\};/,`window.firebaseConfig={apiKey:"demo-key",authDomain:"demo-varga-multi-tenant.firebaseapp.com",projectId:"demo-varga-multi-tenant",appId:"demo-app"};firebase.initializeApp(window.firebaseConfig);firebase.auth().useEmulator("http://127.0.0.1:4173",{disableWarnings:true});firebase.firestore().useEmulator("127.0.0.1",8180);window.VargaTenantLabEnabled=true;`);
         body=Buffer.from(s);
       }
       loaded.add(path.basename(f));
       return route.fulfill({status:200,contentType:types[path.extname(f)]||'application/octet-stream',body,headers:{'cache-control':'no-store'}});
     });
     page=await context.newPage();page.on('pageerror',e=>errors.push(String(e.message).slice(0,200)));
+    page.on('console',message=>{
+      const value=message.text();
+      // Keep diagnostic categories only. No account data, console objects or tokens.
+      if(/Errore login email\/password|AUTH READY|USER LOGGED|USER NOT LOGGED|Access verification failed|Sessione salvata non valida|Persistenza Firebase LOCAL/.test(value)){
+        const category=value.match(/Errore login email\/password|AUTH READY|USER LOGGED|USER NOT LOGGED|Access verification failed|Sessione salvata non valida|Persistenza Firebase LOCAL/)?.[0];
+        const code=value.match(/\bauth\/[a-z-]+\b/)?.[0]||null;
+        authConsole.push({category,code});
+      }
+    });
+    await page.addInitScript(()=>{
+      window.__vargaBrowserLabFormSubmits=0;
+      document.addEventListener('submit',e=>{if(e.target?.id==='auth-email-form')window.__vargaBrowserLabFormSubmits++;},true);
+    });
     mark('original boot');
     await page.goto(origin+'/index.html',{waitUntil:'domcontentloaded',timeout:45000});
     await page.waitForFunction(()=>window.firebase?.apps?.length>0&&firebase.app().options.projectId==='demo-varga-multi-tenant',null,{timeout:30000});
@@ -89,8 +124,13 @@ async function main(){
     mark('original email login');
     await page.locator('#auth-email-input').fill(email);
     await page.locator('#auth-password-input').fill(password);
+    assert.equal(await page.locator('#auth-email-form').evaluate(f=>f.checkValidity()),true,'Original form did not accept synthetic credentials');
     await page.locator('#auth-email-login-btn').click();
+    await page.waitForFunction(()=>window.__vargaBrowserLabFormSubmits>0,null,{timeout:10000});
+    mark('waiting for authenticated Firebase identity');
     await page.waitForFunction(uid=>firebase.auth().currentUser?.uid===uid,user.uid,{timeout:35000});
+    assert.ok(authResponses.some(x=>x.path.includes('signInWithPassword')&&x.status===200),'No real emulator sign-in response observed');
+    mark('waiting for original account approval');
     await page.waitForFunction(()=>{const e=document.getElementById('access-approval-screen');return document.body.classList.contains('auth-authenticated')|| (e&&e.classList.contains('hidden')&&document.getElementById('auth-gate')?.classList.contains('hidden'));},null,{timeout:35000});
     await page.waitForFunction(()=>{const b=document.getElementById('varga-company-open');return b&&!b.hidden&&!b.classList.contains('hidden');},null,{timeout:35000});
     mark('authorized company selector');
@@ -115,7 +155,13 @@ async function main(){
     console.log(JSON.stringify({syntheticOriginalLoginAndSelector:'passed',pageErrors:errors}));
     // Errors remain diagnostic; full operational runtime and native login are not covered.
   }catch(error){
-    console.error(JSON.stringify({failedPhase:phase,loadedAssets:[...loaded].sort(),blockedDestinations:[...blocked].sort(),pageErrors:errors}));
+    let loginState=null;
+    if(page&&!page.isClosed())try{loginState=await page.evaluate(()=>{
+      const feedback=document.getElementById('auth-email-feedback')?.textContent||'';
+      const category=/Login completato/i.test(feedback)?'success':/Accesso in corso/i.test(feedback)?'pending':/Email o password non corretta/i.test(feedback)?'invalid-credential':/Connessione non disponibile/i.test(feedback)?'network':/Accesso non riuscito/i.test(feedback)?'failed':/Inserisci email/i.test(feedback)?'missing-input':feedback?'other':'empty';
+      return {formSubmits:window.__vargaBrowserLabFormSubmits||0,feedbackCategory:category,buttonDisabled:document.getElementById('auth-email-login-btn')?.disabled,authPresent:!!window.firebase?.auth?.().currentUser,authVerified:window.firebase?.auth?.().currentUser?.emailVerified===true,gateHidden:document.getElementById('auth-gate')?.classList.contains('hidden'),approvalHidden:document.getElementById('access-approval-screen')?.classList.contains('hidden')};
+    });}catch{}
+    console.error(JSON.stringify({failedPhase:phase,loginState,authRequests,authResponses,authConsole,loadedAssets:[...loaded].sort(),blockedDestinations:[...blocked].sort(),pageErrors:errors}));
     throw error;
   }finally{if(context)await context.close();if(browser)await browser.close();await http.close();await adapter.close();}
 }

@@ -17,10 +17,10 @@ on:
           - DO_NOT_UPLOAD
           - UPLOAD_INTERNAL_TESTFLIGHT_ONLY
       build_number:
-        description: "New CFBundleVersion above confirmed TestFlight build 20030; verify live ASC first"
+        description: "New CFBundleVersion above confirmed TestFlight build 20031; verify live ASC first"
         type: string
         required: true
-        default: "20031"
+        default: "20032"
       demo_ui:
         description: "Optional isolated Apple reviewer demo UI for this INTERNAL TestFlight build only"
         type: choice
@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REPOSITORY" != "ionut290/hera-app" ||
-                "$GITHUB_REF" != "refs/heads/release/ios-1.1-snow-testflight" ||
+                "$GITHUB_REF" != "refs/heads/release/ios-1.1-snow-20032" ||
                 "$GITHUB_ACTOR" != "ionut290" ||
                 "$GITHUB_TRIGGERING_ACTOR" != "ionut290" ||
                 "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
@@ -72,7 +72,7 @@ jobs:
             echo "::error::Reviewed SHA must match the exact snow release commit running this workflow."
             exit 1
           fi
-          [[ "$IOS_BUILD_NUMBER" == "20031" ]] || { echo "::error::This isolated snow release is reserved for build 20031."; exit 1; }
+          [[ "$IOS_BUILD_NUMBER" == "20032" ]] || { echo "::error::This isolated snow release is reserved for build 20032."; exit 1; }
           bash scripts/check-ios-appstore-build-number.sh "$IOS_BUILD_NUMBER"
           echo "Preflight OK: workflow parsed, Linux job started and manual inputs validated."
           echo "No App Store Connect upload or iPhone app modification performed."
@@ -81,6 +81,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Verify snow commission routing and required assets (no credentials)
+        run: node scripts/check-ios-snow-20032.cjs
       - name: Record read-only Apple review blockers without submitting for review
         shell: bash
         run: |
@@ -131,7 +133,7 @@ jobs:
           # Re-check inside upload job: GitHub can rerun individual jobs
           # without rerunning the first preflight. Never reuse approval.
           if [[ "$GITHUB_REPOSITORY" != "ionut290/hera-app" ||
-                "$GITHUB_REF" != "refs/heads/release/ios-1.1-snow-testflight" ||
+                "$GITHUB_REF" != "refs/heads/release/ios-1.1-snow-20032" ||
                 "$GITHUB_ACTOR" != "ionut290" ||
                 "$GITHUB_TRIGGERING_ACTOR" != "ionut290" ||
                 "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
@@ -161,7 +163,7 @@ jobs:
             echo "::error::Starting April 2027, Apple requires the iOS 27 SDK or newer. Upgrade the macOS/Xcode runner before uploading."
             exit 1
           fi
-          [[ "$IOS_BUILD_NUMBER" == "20031" ]] || { echo "::error::This isolated snow release is reserved for build 20031."; exit 1; }
+          [[ "$IOS_BUILD_NUMBER" == "20032" ]] || { echo "::error::This isolated snow release is reserved for build 20032."; exit 1; }
           bash scripts/check-ios-appstore-build-number.sh "$IOS_BUILD_NUMBER"
           echo "Reviewed commit, requested build number and supported Xcode verified; no upload yet."
 
@@ -191,6 +193,7 @@ jobs:
           ruby -c scripts/install-ios-google-signin.rb
           ruby -c scripts/configure-ios-distribution-signing.rb
           npm run android:aab:prepare
+          node scripts/check-ios-snow-20032.cjs www
           test -s www/index.html
           test -s www/icons/varga-cantieri-512.png
 
@@ -376,6 +379,7 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/Info.plist" |
             grep -Fx 'it.vargacantieri.hera'
           test -s "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/GoogleService-Info.plist"
+          node scripts/check-ios-snow-20032.cjs "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app/public"
           codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/VargaCantieri.xcarchive/Products/Applications/App.app"
           echo "iOS Release archive signed and verified; no artifact exposed publicly."
 

@@ -158,6 +158,7 @@
         <button id="open-panel-personale" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">👤</span>Personale</button>
         <button id="open-panel-mezzi" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🚜</span>Mezzi</button>
         <button id="open-panel-utenti" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🔐</span>User management <span id="pending-users-menu-badge" class="pending-users-badge hidden">0</span></button>
+        <button id="varga-company-open" class="btn menu-title-btn hidden" type="button" hidden>Le mie aziende</button>
         <button id="varga-tenant-admin-open" class="btn menu-title-btn hidden" type="button" hidden>Gestione aziende · Super Admin</button>
         <button id="open-personal-services-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">📍</span>Servizi personali</button>
       </section>
@@ -194,6 +195,24 @@
     </div>
   </aside>
 
+  <dialog id="varga-company-dialog" aria-labelledby="varga-company-title" style="width:min(94vw,620px);max-height:85vh;overflow:auto">
+    <h2 id="varga-company-title">Le mie aziende</h2>
+    <p>Laboratorio 2.0 — accesso in sola lettura, dati sintetici.</p>
+    <button class="btn" type="button" id="varga-company-close">Chiudi</button>
+    <button class="btn" type="button" id="varga-company-refresh">Cambia azienda / aggiorna</button>
+    <p id="varga-company-status" role="status" aria-live="polite"></p>
+    <ul id="varga-company-list"></ul>
+    <button class="btn" type="button" id="varga-company-more" hidden>Altre aziende</button>
+    <section id="varga-company-selected" hidden>
+      <h3 id="varga-company-name"></h3><p id="varga-company-role"></p>
+      <div id="varga-company-actions" hidden>
+        <button class="btn" type="button" id="varga-company-ordinary">Commesse</button>
+        <button class="btn" type="button" id="varga-company-snow">Servizio Neve</button>
+      </div>
+      <ul id="varga-company-jobs"></ul>
+      <button class="btn" type="button" id="varga-company-jobs-more" hidden>Altre commesse</button>
+    </section>
+  </dialog>
   <dialog id="varga-tenant-admin-dialog" aria-labelledby="varga-tenant-admin-title" style="width:min(94vw,620px);max-height:85vh;overflow:auto">
     <h2 id="varga-tenant-admin-title">Gestione aziende</h2>
     <p>Laboratorio 2.0 — solo dati sintetici.</p>
@@ -894,5 +913,6 @@
     }
   </script>
   <script src="tenant-admin-panel.js?v=20261126-lab1"></script>
+  <script src="tenant-company-selector.js?v=20261126-lab1"></script>
 </body>
 </html>

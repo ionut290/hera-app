@@ -1,7 +1,7 @@
 'use strict';
 // Local-only transport for synthetic emulator tests. Never export from live Functions.
 const {createServer}=require('node:http');
-const ACTIONS=new Set(['listCompanies','createCompany','setCompanyStatus']);
+const ACTIONS=new Set(['listCompanies','createCompany','setCompanyStatus','listMyCompanies','openCompany','listCompanyCommesse']);
 function localBoundary(){
   if(process.env.FIRESTORE_EMULATOR_HOST!=='127.0.0.1:8180'||process.env.FIREBASE_AUTH_EMULATOR_HOST!=='127.0.0.1:9199')throw Error('emulator-only');
 }

@@ -2,6 +2,7 @@
 // Shared server-side tenant dispatcher. Never imported by browser or native bundle.
 const {makeTenantService}=require('./tenant-service.cjs');
 const {makePlatformAdminService}=require('./platform-admin.cjs');
+const {createWorkspaceService}=require('./workspace.cjs');
 function fail(code){throw Object.assign(new Error(code),{code});}
 function createTenantDispatcher({auth,db,assertBoundary}){
   if(!auth||!db||typeof assertBoundary!=='function')fail('invalid-adapter');
@@ -14,7 +15,7 @@ function createTenantDispatcher({auth,db,assertBoundary}){
     })),
     listTenants:async({limit,after})=>{let q=db.collection('tenants').orderBy('__name__').limit(limit+1);if(after)q=q.startAfter(after);return(await q.get()).docs.map(d=>({id:d.id,data:d.data()}));}
   };
-  const tenant=makeTenantService(store),platform=makePlatformAdminService(store);
+  const tenant=makeTenantService(store),platform=makePlatformAdminService(store),workspace=createWorkspaceService(db);
   async function dispatch(token,action,payload={}){
     assertBoundary();
     if(typeof token!=='string'||!token||token.length>16000)fail('unauthenticated');
@@ -29,6 +30,9 @@ function createTenantDispatcher({auth,db,assertBoundary}){
       platform_admin:decoded.platform_admin===true&&user.customClaims?.platform_admin===true};
     if(!payload||typeof payload!=='object'||Array.isArray(payload))fail('invalid-payload');
     switch(action){
+      case 'listMyCompanies':return workspace.listMyCompanies(caller,payload);
+      case 'openCompany':return workspace.openCompany(caller,payload);
+      case 'listCompanyCommesse':return workspace.listCompanyCommesse(caller,payload);
       case 'createCompany':{
         if(!caller.platform_admin)fail('forbidden');
         if(typeof payload.ownerEmail!=='string')fail('invalid-email');

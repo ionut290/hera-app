@@ -232,7 +232,7 @@
     finally{if(generation===entryGeneration)entryOpen.disabled=false;}
   });
   open.addEventListener("click",()=>{if(open.hidden||!allowed())return;clear();dialog.showModal();void list();});
-  el("close").addEventListener("click",()=>dialog.close());dialog.addEventListener("close",clear);
+  el("close").addEventListener("click",()=>dialog.close());dialog.addEventListener("close",()=>{entryAllowed=false;clear();});
   el("refresh").addEventListener("click",()=>void list());
   el("more").addEventListener("click",()=>{if(cursor)void list(true);});
   el("ordinary").addEventListener("click",()=>void jobs("ordinary"));

@@ -24,6 +24,7 @@ jobs:
           node --check tests/multi-tenant/staging-client.mjs
           node --check tenant-admin-panel.js
           node --check tenant-company-selector.js
+          node --check tenant-signup.js
           node --check functions/multi-tenant/workspace.cjs
           node --check functions/multi-tenant/modules.cjs
           node --check functions/multi-tenant/support-modules.cjs

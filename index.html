@@ -604,6 +604,7 @@
         <input id="auth-password-input" type="password" autocomplete="current-password" placeholder="Password o codice REC-" required>
         <button id="auth-email-login-btn" class="btn btn-primary" type="submit">Entra</button>
         <button id="auth-create-account-btn" class="btn" type="button">CREA NUOVO ACCOUNT</button>
+        <button id="varga-signup-open" class="btn" type="button" hidden>Registrati per la tua azienda</button>
         <button id="auth-request-password-btn" class="btn" type="button">PASSWORD DIMENTICATA?</button>
         <p id="auth-email-feedback" class="muted auth-email-feedback" role="status" aria-live="polite"></p>
       </form>
@@ -625,6 +626,20 @@
         <button id="auth-password-reset-close" type="button" class="btn">Torna al login</button>
         <button id="auth-password-reset-submit" type="submit" class="btn btn-primary">Invia link di recupero</button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="varga-signup-dialog" class="biometric-dialog" aria-labelledby="varga-signup-title">
+    <h2 id="varga-signup-title">Registrazione aziendale · Piano base</h2>
+    <p>1 commessa, 10 impianti, 1 admin e 3 operatori. Conferma la tua email prima di creare l’azienda. Laboratorio 2.0.</p>
+    <form id="varga-signup-form">
+      <label for="varga-signup-email">Email</label><input id="varga-signup-email" type="email" required maxlength="254" autocomplete="username">
+      <label for="varga-signup-password">Password</label><input id="varga-signup-password" type="password" required minlength="10" autocomplete="new-password">
+      <label for="varga-signup-confirm">Conferma password (nuovo account)</label><input id="varga-signup-confirm" type="password" autocomplete="new-password">
+      <p id="varga-signup-status" role="status" aria-live="polite"></p>
+      <button class="btn btn-primary" type="submit" value="register">Crea account aziendale</button>
+      <button class="btn" type="submit" value="resend">Invia di nuovo la verifica</button>
+      <button class="btn" type="button" id="varga-signup-cancel">Torna al login</button>
     </form>
   </dialog>
 
@@ -1006,5 +1021,6 @@
   <script src="tenant-admin-panel.js?v=20261126-lab1"></script>
   <script src="tenant-runtime-session.js?v=20261126-1"></script>
   <script src="tenant-company-selector.js?v=20261126-lab9"></script>
+  <script src="tenant-signup.js?v=20261126-lab1"></script>
 </body>
 </html>

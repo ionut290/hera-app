@@ -23,7 +23,7 @@ assert.equal(
 );
 assert.equal(
   sha256(contract),
-  "2b55656bf55a39b6738fc46276f498e08121f45b82e249cb74da551c13aa2a67",
+  "cec77d15a2dd4b2141ad37719e266521c6e1997f5781837173107a813cfa3886",
   "Il contratto di stabilità login è cambiato senza aggiornare la sua impronta autorizzata."
 );
 

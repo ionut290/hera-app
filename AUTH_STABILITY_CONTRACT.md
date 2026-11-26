@@ -58,3 +58,9 @@ Modifiche ad altre sezioni dell'app non possono cambiare indirettamente il compo
 - Email verificata e token Firebase non revocato sono obbligatori; il server verifica anche che un eventuale profilo storico non sia bloccato o rifiutato. Nessun accesso alle raccolte globali o alle aziende altrui.
 - Nessuna nuova lettura Firestore all'avvio del login originale. La verifica aggiuntiva è confinata alle richieste esplicite dell'API tenant.
 - Verificare in browser il primo accesso senza profilo storico, la permanenza del blocco storico, il logout e le regressioni precedenti. Native iOS, Android e PWA live rimangono da verificare prima del rilascio.
+
+### Registrazione aziendale separata (laboratorio)
+
+- Il nuovo pulsante di registrazione aziendale usa esclusivamente Firebase Auth nel laboratorio loopback. Non usa la registrazione storica, non scrive profili platformUsers e non attiva la Home storica.
+- Dopo creazione account è obbligatorio il codice di verifica email emesso da Firebase. L'account viene disconnesso; in caso di errore si può richiedere nuovamente la verifica, senza cancellazione automatica dell'account.
+- Test browser tramite modulo e outbox dell'emulatore, riscatto del codice reale e rifiuto delle API prima della verifica. Nessuna consegna email reale e nessuna modifica al runtime di login storico.

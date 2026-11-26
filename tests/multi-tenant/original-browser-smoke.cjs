@@ -209,9 +209,35 @@ async function main(){
     await page.waitForFunction(()=>document.getElementById('varga-company-open').hidden&&document.getElementById('varga-company-jobs').children.length===0);
     mark('first tenant access without legacy profile');
     const freshEmail='tenant-only-'+randomUUID()+'@example.invalid',freshPassword='Demo-'+randomUUID();
-    const fresh=await adapter.auth.createUser({email:freshEmail,password:freshPassword,emailVerified:true});
-    assert.equal((await db.doc('platformUsers/'+fresh.uid).get()).exists,false);
+    // Real public account creation through the new lab registration form.
     await page.reload({waitUntil:'domcontentloaded'});
+    await page.locator('#varga-signup-open').click();
+    await page.locator('#varga-signup-email').fill(freshEmail);
+    await page.locator('#varga-signup-password').fill(freshPassword);
+    await page.locator('#varga-signup-confirm').fill(freshPassword);
+    await page.locator('#varga-signup-form button[value=register]').click();
+    await page.locator('#varga-signup-status').getByText(/Controlla l.email/).waitFor({timeout:35000});
+    const fresh=await adapter.auth.getUserByEmail(freshEmail);
+    assert.equal(fresh.emailVerified,false,'Registration must not self-verify email');
+    assert.equal((await db.doc('platformUsers/'+fresh.uid).get()).exists,false);
+    // Verify that a real unverified identity cannot enter the tenant API.
+    const unverifiedResponse=await fetch('http://127.0.0.1:9199/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-key',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:freshEmail,password:freshPassword,returnSecureToken:true}),redirect:'error'});
+    const unverified=await unverifiedResponse.json();
+    assert.ok(unverifiedResponse.ok&&unverified.idToken);
+    const denied=await fetch(http.origin+'/api/v2/companies',{method:'POST',headers:{origin:http.origin,'content-type':'application/json',authorization:'Bearer '+unverified.idToken},body:JSON.stringify({action:'registerCompany',payload:{name:'Not verified'}}),redirect:'error'});
+    assert.equal(denied.status,401);
+    // Read the actual Firebase Auth emulator outbox, then redeem the generated
+    // verification action code. No admin updateUser(emailVerified:true).
+    const outbox=await fetch('http://127.0.0.1:9199/emulator/v1/projects/'+project+'/oobCodes');
+    assert.ok(outbox.ok,'Auth emulator outbox unavailable');
+    const codes=(await outbox.json()).oobCodes||[];
+    const code=codes.filter(x=>x.email===freshEmail&&x.requestType==='VERIFY_EMAIL').at(-1)?.oobCode;
+    assert.ok(typeof code==='string'&&code.length>0,'Verification email action code not issued');
+    const redemption=await fetch('http://127.0.0.1:9199/identitytoolkit.googleapis.com/v1/accounts:update?key=demo-key',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({oobCode:code}),redirect:'error'});
+    assert.ok(redemption.ok,'Email verification action failed');
+    assert.equal((await adapter.auth.getUser(fresh.uid)).emailVerified,true);
+    await page.locator('#varga-signup-cancel').click();
+    console.log('Public signup and real emulator verification action passed; no actual email sent');
     await page.locator('#auth-email-input').fill(freshEmail);
     await page.locator('#auth-password-input').fill(freshPassword);
     await page.locator('#auth-email-login-btn').click();

@@ -4,20 +4,24 @@
   if(!allowed())return;
   const auth=firebase.auth(),el=id=>document.getElementById("varga-company-"+id);
   const open=el("open"),dialog=el("dialog");if(!open||!dialog)return;
+  if(!window.VargaTenantSession)return;
+  const session=window.VargaTenantSession.create(()=>auth.currentUser?.uid||null);
   let epoch=0,controller=null,active=null,kind=null,cursor=null,jobsCursor=null,moduleCursor=null,moduleQuery=null;
   const message=text=>{el("status").textContent=text;};
   function cancel(){epoch++;controller?.abort();controller=null;}
   function clearModule(){clearOperation();clearEditor();el("new-record").hidden=true;moduleCursor=null;moduleQuery=null;el("module-title").textContent="";el("module-rows").replaceChildren();el("module-more").hidden=true;}
-  function clearSelection(){clearModule();el("new-job").hidden=true;active=null;kind=null;jobsCursor=null;el("selected").hidden=true;el("actions").hidden=true;el("name").textContent="";el("role").textContent="";el("jobs").replaceChildren();el("jobs-more").hidden=true;}
+  function clearSelection(){session.clear();clearModule();el("new-job").hidden=true;active=null;kind=null;jobsCursor=null;el("selected").hidden=true;el("actions").hidden=true;el("name").textContent="";el("role").textContent="";el("jobs").replaceChildren();el("jobs-more").hidden=true;}
   function clear(){cancel();clearSelection();cursor=null;el("list").replaceChildren();el("more").hidden=true;message("");}
   function hide(){clear();open.hidden=true;open.classList.add("hidden");if(dialog.open)dialog.close();}
   function current(n,uid){return allowed()&&n===epoch&&auth.currentUser?.uid===uid&&dialog.open;}
   async function call(action,payload,n,uid,signal){
+    if(action!=="listMyCompanies"&&action!=="openCompany")session.requireTenant(payload.tenantId);
     const token=await auth.currentUser.getIdTokenResult();
     if(!current(n,uid)||token.claims.email_verified!==true||token.claims.apple_review===true)throw Error("session");
     const res=await fetch("/api/v2/companies",{method:"POST",headers:{"content-type":"application/json","authorization":"Bearer "+token.token},body:JSON.stringify({action,payload}),cache:"no-store",credentials:"omit",redirect:"error",signal});
     const data=await res.json();
     if(!current(n,uid))throw Error("session");
+    if(action!=="listMyCompanies"&&action!=="openCompany")session.requireTenant(payload.tenantId);
     if(!res.ok||data.ok!==true)throw Error(data.code||"request-failed");
     return data.result;
   }
@@ -34,7 +38,7 @@
     el("selected").hidden=false;el("actions").hidden=!data.capabilities.readCommesse;
     message("Azienda verificata. L’area operativa completa non è ancora collegata.");
   }
-  async function choose(id){clearSelection();await run(async request=>showCompany(await request("openCompany",{tenantId:id})));}
+  async function choose(id){clearSelection();await run(async request=>{const ticket=session.begin(id);const data=await request("openCompany",{tenantId:id});session.commit(ticket,data);showCompany(data);});}
   async function list(append=false){
     clearSelection();if(!append){el("list").replaceChildren();cursor=null;el("more").hidden=true;}
     await run(async request=>{

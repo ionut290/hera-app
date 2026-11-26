@@ -1,0 +1,17 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {create}=require('../../tenant-runtime-session.js');
+let uid='user-a';const s=create(()=>uid);
+const a=s.begin('company-a');const b=s.begin('company-b');
+const response=(id,role='owner')=>({company:{id,role}});
+assert.throws(()=>s.commit(a,response('company-a')),{code:'session'});
+assert.throws(()=>s.commit(b,response('company-a')),{code:'session'});
+assert.throws(()=>s.commit(b,response('company-b','superadmin')),{code:'session'});
+assert.equal(s.commit(b,response('company-b')).tenantId,'company-b');
+assert.throws(()=>s.requireTenant('company-a'),{code:'session'});
+assert.equal(s.requireTenant('company-b').uid,'user-a');
+uid='user-b';assert.throws(()=>s.requireTenant('company-b'),{code:'session'});
+s.clear();uid='user-a';assert.throws(()=>s.requireTenant('company-b'),{code:'session'});
+const c=s.begin('company-a');s.clear();assert.throws(()=>s.commit(c,response('company-a')),{code:'session'});
+uid=null;assert.throws(()=>s.begin('company-a'),{code:'session'});
+console.log('Tenant selection generation, identity and stale response guards passed.');

@@ -74,3 +74,7 @@ The separate native workflow now chooses private-staging login-only mode if the 
 ## Release review artifact
 
 After the entire Firestore emulator suite succeeds, CI now exports the exact byte-for-byte tested candidate rules, source revision and SHA-256 manifest. The bundle is review-only; it intentionally contains no deployment config or automatic publish command. It preserves the distinction between an historical selected rules version and current active rules. Do not overwrite an unpublished console draft. Protected FATTO/WhatsApp execution and full live operational activation remain gated by the project instructions. Native build may succeed independently; it is not TestFlight readiness.
+
+## Actual device compile checkpoint
+
+Run 45753988405 passed both iPhone simulator and unsigned iPhone device architecture builds, but its environment still lacked the staging web key and therefore compiled the local-emulator package. Run 45753988347 passed the full original emulator browser acceptance on retry. The native workflow now requires the staging-specific public client configuration, fails closed without it, and validates the private-staging marker in the native device bundle. This candidate remains login/membership only; no signing, operational enablement, Apple upload or production changes. The console audit could not conclusively recover the active rules and detected an unpublished deny-all draft; do not overwrite or publish it.

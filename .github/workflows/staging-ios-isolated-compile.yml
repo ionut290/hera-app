@@ -25,21 +25,22 @@ jobs:
         working-directory: staging/portal
       - run: npm install --no-save --package-lock=false --no-audit --no-fund leaflet@1.9.4
         working-directory: staging/portal
-      - name: Build private staging or local simulator candidate
+      - name: Build private staging login candidate (no emulator fallback)
         working-directory: staging/portal
         env:
           VARGA_STAGING_WEB_API_KEY: ${{ vars.VARGA_STAGING_WEB_API_KEY }}
         run: |
           set -euo pipefail
-          if [[ -n "$VARGA_STAGING_WEB_API_KEY" ]]; then
-            node build-full-runtime.mjs private-staging
-            echo 'VARGA_IOS_WEB_DIR=staging/portal/private-staging-dist' >> "$GITHUB_ENV"
-            echo 'PRIVATE_STAGING_LOGIN_ONLY' >> "$GITHUB_STEP_SUMMARY"
-          else
-            node build-full-runtime.mjs
-            echo 'VARGA_IOS_WEB_DIR=staging/portal/full-runtime-dist' >> "$GITHUB_ENV"
-            echo 'LOCAL_EMULATOR_ONLY: staging config not available' >> "$GITHUB_STEP_SUMMARY"
+          if [[ -z "$VARGA_STAGING_WEB_API_KEY" ]]; then
+            echo 'Missing the verified staging web configuration. Refusing to build a misleading live candidate.' >&2
+            exit 1
           fi
+          echo "::add-mask::$VARGA_STAGING_WEB_API_KEY"
+          node build-full-runtime.mjs private-staging
+          test -s private-staging-dist/PRIVATE_STAGING_NOT_RELEASED.txt
+          test ! -e private-staging-dist/LOCAL_TEST_ONLY.txt
+          echo 'VARGA_IOS_WEB_DIR=staging/portal/private-staging-dist' >> "$GITHUB_ENV"
+          echo 'PRIVATE_STAGING_LOGIN_ONLY: real staging client configuration, operational runtime blocked' >> "$GITHUB_STEP_SUMMARY"
       - name: Compile separate native shell, no production credentials
         run: |
           set -euo pipefail
@@ -65,4 +66,6 @@ jobs:
           test -s "$APP/App"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'it.vargacantieri.staging'
           test ! -e "$APP/GoogleService-Info.plist"
+          test -s "$APP/public/PRIVATE_STAGING_NOT_RELEASED.txt"
+          test ! -e "$APP/public/LOCAL_TEST_ONLY.txt"
           echo 'Unsigned device compile succeeded; not installable, no Apple upload.' >> "$GITHUB_STEP_SUMMARY"

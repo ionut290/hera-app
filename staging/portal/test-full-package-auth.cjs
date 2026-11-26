@@ -33,7 +33,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await page.locator('[data-tenant="demo-a"]').click();
   const frame=page.frameLocator('#runtime');
   await frame.locator('#side-menu').waitFor({state:'attached'});
-  await page.waitForFunction(()=>window.__vargaLocalRuntime().session.session.context.tenantId==='demo-a');
+  await page.waitForFunction(()=>{try{return window.__vargaLocalRuntime().session.session.context.tenantId==='demo-a';}catch{return false;}});
   const a=await page.evaluate(async()=>{const s=window.__vargaLocalRuntime().session;window.__oldLocalScope=s;return (await s.session.firestore.collection('commesse').doc('same-id').get({source:'server'})).data().nome;});
   assert.equal(a,'demo-a original');
   // Writes from the actual iframe realm, using the selected company Firestore facade.
@@ -41,8 +41,9 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   console.log('REAL AUTH AND ORIGINAL FRAME: verified demo-a membership and isolated document read; frame URL '+new URL(child.url()).pathname);
   await child.evaluate(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;const stamp=window.firebase.firestore.FieldValue.serverTimestamp();await s.session.firestore.collection('commesse').add({nome:'Created from actual frame',codice:'',excelModelVersion:2,priceListVersion:2,workItemsModelVersion:2,percentualeRibassoGenerale:0.01,excelModelActivatedAt:stamp,excelModelActivatedBy:s.auth.currentUser.email,nextImpiantoNumber:1,parentCommessaId:null,creatoDa:s.auth.currentUser.email,createdAt:stamp});});
   assert.equal((await db.collection('tenants/demo-a/commesse').get()).size,2);
+  console.log('REAL FRAME WRITE: company A persisted the original commessa payload through scoped Firestore.');
   await page.locator('[data-tenant="demo-b"]').click();
-  await page.waitForFunction(()=>window.__vargaLocalRuntime().session.session.context.tenantId==='demo-b');
+  await page.waitForFunction(()=>{try{return window.__vargaLocalRuntime().session.session.context.tenantId==='demo-b';}catch{return false;}});
   assert.equal(await page.evaluate(async()=>{const s=window.__vargaLocalRuntime().session;return (await s.session.firestore.collection('commesse').doc('same-id').get({source:'server'})).data().nome;}),'demo-b original');
   assert.equal(await page.evaluate(()=>{try{window.__oldLocalScope.session.firestore.collection('commesse');return false;}catch{return true;}}),true);
   assert.equal((await db.collection('tenants/demo-b/commesse').get()).size,1);

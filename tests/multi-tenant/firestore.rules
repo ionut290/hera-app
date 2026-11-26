@@ -15,6 +15,14 @@ service cloud.firestore {
     match /tenants/{tenantId} {
       allow get: if activeMember(tenantId);
       allow list, create, update, delete: if false;
+      // First operational pilot: only company owner/admin may read top-level jobs.
+      // Client writes, worker access and protected job subcollections remain denied
+      // until their exact business permissions and regressions are verified.
+      match /commesse/{commessaId} {
+        allow get, list: if activeMember(tenantId)
+          && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['owner', 'admin'];
+        allow create, update, delete: if false;
+      }
       match /members/{uid} {
         allow get: if activeMember(tenantId) && request.auth.uid == uid;
         allow list, create, update, delete: if false;

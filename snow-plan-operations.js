@@ -13,14 +13,19 @@
   const state = {group:0, dayKey:today(), map:null, paths:null, point:null, lineLayers:[], records:[], unlisten:null, subscriptionKey:null, docs:new Map(), selected:null, busy:false, lastFitGroup:null, activeCommessaId:null, geometries:{}, geometryUnlisten:null, runId:"initial", runUnlisten:null, runSubscriptionKey:null, editing:false, editParts:[], editPartIndex:0, editLayers:[], editSelectedSegment:-1, drawingLine:false, insertingPoint:false};
   const normalPageVisible = () => {
     const page=id("impianti-page");
-    return !!page && !page.hidden && !page.classList.contains("hidden") && !document.body.classList.contains("snow-management-context");
+    return !!page && !page.hidden && !page.classList.contains("hidden");
   };
+  const normalize=value=>String(value??"").trim().toLowerCase().replace(/[\s_-]+/g," ");
+  function resolveCommessa(c,docId){
+    if(!c)return -1;
+    const code=normalize(c.codice),name=normalize(c.nome),doc=String(docId??c.id??"");
+    const matches=C.groups.filter(g=>code===normalize(g.code)||name===normalize(g.name)||doc==="normal-"+g.id||
+      (c.snowPlan==="castel-maggiore-viabilita-minore"&&state.docs.get(g.id)===doc));
+    return matches.length===1?C.groups.indexOf(matches[0]):-1;
+  }
   function activeGroup(){
     if(!normalPageVisible() || typeof selectedCommessaId==="undefined" || !selectedCommessaId || typeof commesseById==="undefined") return -1;
-    const c=commesseById.get(selectedCommessaId);
-    if(!c) return -1;
-    const code=String(c.codice||"").trim().toUpperCase(),name=String(c.nome||"").trim().toLowerCase();
-    return C.groups.findIndex(g=>code===g.code || name===g.name.toLowerCase() || (c.snowPlan==="castel-maggiore-viabilita-minore" && String(c.id||selectedCommessaId)===String(state.docs.get(g.id)||"")));
+    return resolveCommessa(commesseById.get(selectedCommessaId),selectedCommessaId);
   }
   const stopByKey = (key) => C.sections.flatMap((s,i)=>s.stops.map((x)=>({...x,sectionIndex:i}))).find((s)=>s.key===key);
   function targetGroup(stop){ return C.groups.findIndex((g)=>g.indices.includes(stop.sectionIndex)); }
@@ -74,7 +79,7 @@
       });
       section.appendChild(info);
       const mapCard=page.querySelector("#commessa-operational-card");
-      if(mapCard)mapCard.insertAdjacentElement("afterend",section);else page.appendChild(section);
+      if(mapCard&&mapCard.parentElement===page)mapCard.insertAdjacentElement("afterend",section);else page.prepend(section);
       id("snow-plan-group").innerHTML=C.groups.map((g,i)=>'<option value="'+i+'">'+esc(g.name)+'</option>').join("");
       id("snow-plan-group").disabled=true;
       id("snow-plan-day").value=state.dayKey;
@@ -583,6 +588,6 @@
     },900);
     show();
   }
-  window.VargaSnowPlanUI={show,refresh:draw,catalog:C,aggregate};
+  window.VargaSnowPlanUI={show,refresh:draw,catalog:C,aggregate,resolveCommessa};
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();

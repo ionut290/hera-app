@@ -11,6 +11,13 @@ service cloud.firestore {
  // Bootstrap metadata only; never grant access to operational documents here.
  match /users/{uid}/memberships/{tenantId} {
   allow get,list: if eligible() && request.auth.uid==uid;
+  allow create: if eligible()
+    && request.auth.uid == uid
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid
+    && request.resource.data.tenantId == tenantId
+    && request.resource.data.role == 'admin'
+    && request.resource.data.status == 'active'
+    && request.resource.data.demo == true;
  }
  match /tenants/{tenantId} {
   allow get: if canReadDemoCommesse();

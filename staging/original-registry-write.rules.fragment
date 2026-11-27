@@ -1,0 +1,22 @@
+// Staging candidate: manual registry entry for the original Personale/Mezzi
+// screens. The original UI supports both manual forms and Excel import; keep
+// both paths tenant-scoped and limited to the company administrator.
+function originalRegistryArchive(name) {
+ return name in ['personale','mezzi','neve_personale','neve_mezzi'];
+}
+function originalRegistryAdmin() {
+ return canReadOriginalArchives()
+  && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role=='admin';
+}
+match /{registry}/{recordId} {
+ allow create, update: if originalRegistryAdmin() && originalRegistryArchive(registry);
+ allow delete: if originalRegistryAdmin() && originalRegistryArchive(registry);
+}
+// These tenant-scoped helper archives are written by the original management
+// screen when importing or linking records. They never grant access outside
+// the current tenant and remain administrator-only.
+match /{helper}/{recordId} {
+ allow create, update, delete: if originalRegistryAdmin() && helper in [
+  'registryImportBackups','operatorCommessaHistory','operatorUserLinkHistory','userOperatorLinks'
+ ];
+}

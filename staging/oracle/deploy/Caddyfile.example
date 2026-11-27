@@ -1,0 +1,13 @@
+# Replace example.invalid only after selecting the real dedicated domain.
+# Install Caddy on the host. Do not expose port 8080 or 5432 via OCI rules.
+api-varga.example.invalid {
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        -Server
+    }
+    request_body {
+        max_size 32KB
+    }
+    reverse_proxy 127.0.0.1:8080
+}

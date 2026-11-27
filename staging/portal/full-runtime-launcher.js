@@ -27,23 +27,41 @@ prepared=Object.freeze({session:view,namespace,apiKey});
 }
 // This is a local testing bridge, not a security boundary. The emulator rules are mandatory.
 Object.defineProperty(window,'__vargaLocalRuntime',{value:()=>{if(!prepared?.session.isActive())throw Error('Verified local company required');return prepared;},writable:false,configurable:false});
-function showLogin(){ $('login-card').hidden=false; $('register-panel').hidden=true; $('company-panel').hidden=true; }
-function showRegister(){ $('login-card').hidden=true; $('register-panel').hidden=false; $('company-panel').hidden=true; }
+function clearCompanyAdmin(){ $('company-admin-panel').hidden=true; $('company-admin-list').replaceChildren(); }
+function showLogin(){ $('login-card').hidden=false; $('register-panel').hidden=true; $('join-panel').hidden=true; $('company-panel').hidden=true; clearCompanyAdmin(); }
+function showRegister(){ $('login-card').hidden=true; $('register-panel').hidden=false; $('join-panel').hidden=true; $('company-panel').hidden=true; clearCompanyAdmin(); }
+function showJoin(){ $('login-card').hidden=true; $('register-panel').hidden=true; $('join-panel').hidden=false; $('company-panel').hidden=true; clearCompanyAdmin(); }
+function makeJoinCode(){return 'VC-'+crypto.randomUUID().replaceAll('-','').slice(0,8).toUpperCase();}
 async function createCompany(name,node){
  const user=auth.currentUser;if(!user)throw Error('LOGIN_REQUIRED');
  await user.reload();const token=await user.getIdTokenResult(true);
  if(token.claims.email_verified!==true){try{await user.sendEmailVerification();}catch{}throw Error('EMAIL_NOT_VERIFIED');}
  const clean=String(name||'').trim();if(clean.length<2||clean.length>120)throw Error('COMPANY_NAME_INVALID');
- const tenantId='demo-'+crypto.randomUUID(),now=statics.FieldValue.serverTimestamp();
- const tenant=db.doc('tenants/'+tenantId),member=db.doc('tenants/'+tenantId+'/members/'+user.uid),membership=db.doc('users/'+user.uid+'/memberships/'+tenantId);
+ const tenantId='demo-'+crypto.randomUUID(),joinCode=makeJoinCode(),now=statics.FieldValue.serverTimestamp();
+ const tenant=db.doc('tenants/'+tenantId),codeDoc=db.doc('tenantJoinCodes/'+joinCode),member=db.doc('tenants/'+tenantId+'/members/'+user.uid),membership=db.doc('users/'+user.uid+'/memberships/'+tenantId);
  const batch=db.batch();
- batch.set(tenant,{name:clean,status:'active',demo:true,ownerUid:user.uid,plan:'trial',trial:true,trialStartedAt:now,limits:{commesse:1,impianti:10,admin:1,operatori:3},usage:{commesse:0,impianti:0,admin:1,operatori:0},originalCreateEnabled:true,originalManualEnabled:true,originalArchivesEnabled:true,commesseWriteEnabled:true,snowCreateEnabled:true,fattoMode:'configurable-demo',createdAt:now,createdBy:user.uid});
+ batch.set(tenant,{name:clean,status:'active',demo:true,ownerUid:user.uid,joinCode,plan:'trial',trial:true,trialStartedAt:now,limits:{commesse:1,impianti:10,admin:1,operatori:3},usage:{commesse:0,impianti:0,admin:1,operatori:0},originalCreateEnabled:true,originalManualEnabled:true,originalArchivesEnabled:true,commesseWriteEnabled:true,snowCreateEnabled:true,fattoMode:'configurable-demo',createdAt:now,createdBy:user.uid});
+ batch.set(codeDoc,{tenantId,companyName:clean,status:'active',createdAt:now,createdBy:user.uid});
  batch.set(member,{uid:user.uid,email:user.email||'',displayName:user.displayName||user.email||'Amministratore',role:'admin',status:'active',demo:true,createdAt:now});
  batch.set(membership,{tenantId,role:'admin',status:'active',demo:true,createdAt:now});
- await batch.commit();localStorage.setItem('varga.pendingCompanyName','');node.textContent='Azienda registrata. Apertura dell’app completa…';location.reload();
+ await batch.commit();localStorage.setItem('varga.pendingCompanyName','');node.textContent='Azienda registrata. Codice azienda: '+joinCode+'. Apertura dell’app completa…';location.reload();
+}
+async function requestJoin(code,node){
+ const user=auth.currentUser;if(!user)throw Error('LOGIN_REQUIRED');
+ await user.reload();const token=await user.getIdTokenResult(true);
+ if(token.claims.email_verified!==true){try{await user.sendEmailVerification();}catch{}throw Error('EMAIL_NOT_VERIFIED');}
+ const clean=String(code||'').trim().toUpperCase().replace(/\s/g,'');if(!/^VC-[A-Z0-9]{8}$/.test(clean))throw Error('CODE_INVALID');
+ const codeSnap=await db.doc('tenantJoinCodes/'+clean).get({source:'server'});if(!codeSnap.exists||codeSnap.data().status!=='active')throw Error('CODE_NOT_FOUND');
+ const tenantId=codeSnap.data().tenantId,tenant=await db.doc('tenants/'+tenantId).get({source:'server'});if(!tenant.exists||tenant.data().status!=='active')throw Error('COMPANY_NOT_AVAILABLE');
+ const ref=db.doc('tenants/'+tenantId+'/joinRequests/'+user.uid),existing=await ref.get({source:'server'});
+ if(existing.exists&&existing.data().status==='pending')throw Error('REQUEST_PENDING');
+ await ref.set({uid:user.uid,email:user.email||'',displayName:user.displayName||user.email||'Utente',status:'pending',requestedAt:statics.FieldValue.serverTimestamp()});
+ node.textContent='Richiesta inviata a '+tenant.data().name+'. Attendi l’approvazione dell’amministratore.';
 }
 $('open-register').onclick=showRegister;
+$('open-join').onclick=showJoin;
 $('back-to-login').onclick=showLogin;
+$('back-from-join').onclick=showLogin;
 $('login').addEventListener('submit',async e=>{e.preventDefault();status('Accesso in corso…');try{await auth.signInWithEmailAndPassword($('email').value,$('password').value);$('password').value='';}catch(err){status('Accesso non riuscito: '+err.code);}});
 $('register').addEventListener('submit',async e=>{e.preventDefault();const node=$('register-status');node.textContent='Creazione account…';try{const company=$('company-name').value.trim();const credential=await auth.createUserWithEmailAndPassword($('register-email').value.trim(),$('register-password').value);localStorage.setItem('varga.pendingCompanyName',company);await credential.user.sendEmailVerification();node.textContent='Account creato. Controlla l’email, verifica l’indirizzo e poi accedi per attivare la tua azienda.';await auth.signOut();}catch(err){node.textContent=err.code==='auth/email-already-in-use'?'Questa email è già registrata. Accedi e crea l’azienda.':'Registrazione non riuscita: '+(err.code||err.message);}});
 $('company-form').addEventListener('submit',async e=>{e.preventDefault();const node=$('company-status');node.textContent='Attivazione piano prova…';try{await createCompany($('company-name-existing').value,node);}catch(err){node.textContent=err.message==='EMAIL_NOT_VERIFIED'?'Verifica prima l’email: ti abbiamo inviato un nuovo messaggio di verifica.':'Azienda non creata: '+(err.code||err.message);}});

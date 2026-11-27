@@ -1,8 +1,12 @@
-# Dedicated OCI host only. API is published to loopback; PostgreSQL has no host port.
+# Isolated Compose project on the existing RDI OCI host; preflight mandatory.
+# API loopback only; PostgreSQL has no host port.
 name: varga-v2-oracle
 services:
   db:
     image: postgres:16
+    cpus: 0.75
+    mem_limit: 1g
+    pids_limit: 150
     environment:
       POSTGRES_DB: varga_v2_oracle
       POSTGRES_PASSWORD_FILE: /run/secrets/db_owner_password
@@ -21,6 +25,9 @@ services:
       timeout: 5s
       retries: 10
   api:
+    cpus: 0.5
+    mem_limit: 512m
+    pids_limit: 100
     build:
       context: ..
       dockerfile: deploy/Dockerfile
@@ -33,7 +40,7 @@ services:
       - app_database_url
       - firebase_credentials
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${VARGA_API_PORT:-18084}:8080"
     networks: [private_db, outbound]
     depends_on:
       db:

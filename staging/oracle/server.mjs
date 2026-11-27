@@ -1,0 +1,18 @@
+import {Pool} from 'pg';
+import {initializeApp,applicationDefault} from 'firebase-admin/app';
+import {getAuth} from 'firebase-admin/auth';
+import {createApi} from './api.mjs';
+const projectId='varga-cantieri-v2-staging';
+if(process.env.FIREBASE_PROJECT_ID!==projectId || process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.FIRESTORE_EMULATOR_HOST)throw Error('Explicit V2 staging project required; no emulator or production fallback');
+const dbUrl=new URL(process.env.DATABASE_URL||'');
+if(!['postgres:','postgresql:'].includes(dbUrl.protocol)||dbUrl.pathname!=='/varga_v2_oracle'||dbUrl.username!=='varga_app')throw Error('Dedicated Oracle PostgreSQL database and limited role required');
+const pool=new Pool({connectionString:dbUrl.toString(),max:10,connectionTimeoutMillis:5000,statement_timeout:10000});
+const role=(await pool.query("SELECT current_user AS name,rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user")).rows[0];
+if(role?.name!=='varga_app'||role.rolsuper||role.rolbypassrls)throw Error('Unsafe database role');
+const app=initializeApp({credential:applicationDefault(),projectId});
+const auth=getAuth(app);
+const server=createApi({pool,verifyToken:token=>auth.verifyIdToken(token,true)});
+server.requestTimeout=15000;
+server.headersTimeout=10000;
+server.listen(8080,'127.0.0.1',()=>console.log('V2 Oracle candidate API on loopback; configure HTTPS reverse proxy separately'));
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(()=>pool.end()));

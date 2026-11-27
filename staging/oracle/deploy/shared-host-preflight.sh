@@ -19,6 +19,16 @@ if ss -H -ltn | awk -v p="$port" '$4 ~ (":" p "$"){found=1} END{exit !found}'; t
 if [[ -n "$("${d[@]}" ps -aq --filter label=com.docker.compose.project=varga-v2-oracle)" ]]; then echo "STOP: existing project containers; inspect without replacing"; exit 1; fi
 if [[ -n "$("${d[@]}" volume ls -q --filter label=com.docker.compose.project=varga-v2-oracle)" ]]; then echo "STOP: existing project volumes; inspect without replacing"; exit 1; fi
 mem="$(awk '/MemAvailable:/{print $2}' /proc/meminfo)"
+docker_root="$("${d[@]}" info --format '{{.DockerRootDir}}')"
+[[ "$docker_root" = /* && "$docker_root" != "/" ]] || { echo "STOP: Docker storage path not verified"; exit 1; }
+printf '\nDocker storage:\n'
+if df -h "$docker_root" 2>/dev/null; then
+ docker_disk="$(df -Pk "$docker_root" | awk 'NR==2{print $4}')"
+else
+ docker_disk="$(sudo -n df -Pk "$docker_root" | awk 'NR==2{print $4}')"
+fi
 disk="$(df -Pk / | awk 'NR==2{print $4}')"
+[[ "$mem" =~ ^[0-9]+$ && "$disk" =~ ^[0-9]+$ && "$docker_disk" =~ ^[0-9]+$ ]] || { echo "STOP: capacity could not be verified"; exit 1; }
+(( docker_disk >= 20971520 )) || { echo "STOP: less than 20 GiB available on Docker storage"; exit 1; }
 (( mem >= 4194304 && disk >= 20971520 )) || { echo "STOP: less than 4 GiB available RAM or 20 GiB root free space"; exit 1; }
-printf '\nPASS: basic capacity and port checks only. Check sustained radio performance, Docker disk location and proxy config before deployment.\n'
+printf '\nPASS: basic capacity and port checks only. Check sustained radio performance and proxy config before deployment.\n'

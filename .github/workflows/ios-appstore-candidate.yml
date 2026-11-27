@@ -42,6 +42,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Validate manual input before allocating a macOS runner
         shell: bash
         env:
@@ -81,9 +82,19 @@ jobs:
           node scripts/check-app-review-readiness-failclosed.cjs
           node scripts/audit-app-review-full-access.cjs | tee "$RUNNER_TEMP/asc-candidate-readiness.json"
           echo "Verification only is not App Review clearance. No signing or upload performed."
-      - name: Refuse App Store upload until all review blockers are resolved
+      - name: Owner-authorized upload-only of the tested snow candidate
         if: inputs.approval == 'UPLOAD_APP_STORE_CANDIDATE_ONLY'
-        run: node scripts/audit-app-review-full-access.cjs --require-ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          # User explicitly suspended the separate demo project; this is only
+          # binary upload, not approval of reviewer access or public release.
+          BASE=8f9b905c924763e83f18134a1c22132b20146f03
+          git merge-base --is-ancestor "$BASE" HEAD
+          git diff --exit-code "$BASE" HEAD -- . ':(exclude).github/workflows/ios-appstore-candidate.yml' ':(exclude).github/workflows/check-ios-snow-candidate-20033.yml' ':(exclude)docs/APP_REVIEW_1_1_20033_READINESS.md' ':(exclude)scripts/audit-app-review-full-access.cjs' ':(exclude)scripts/check-app-review-readiness-failclosed.cjs'
+          node scripts/check-account-privacy-runtime.js
+          echo "::warning::Upload-only of unchanged 20032 runtime. App Review remains BLOCKED until verified; do not attach for submission or release."
+          echo "Owner suspended demo work. Binary upload only. App Review readiness remains unverified." >> "$GITHUB_STEP_SUMMARY"
 
   upload-appstore-candidate:
     name: Sign and upload App Store-eligible candidate (NO submission)

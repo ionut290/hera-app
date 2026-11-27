@@ -6,6 +6,8 @@ const {doc,collection,setDoc,getDoc,getDocs,updateDoc,deleteDoc}=require('fireba
  assert(process.env.FIRESTORE_EMULATOR_HOST,'Emulator required');
  const env=await initializeTestEnvironment({projectId:'demo-varga-original-archives',firestore:{rules:fs.readFileSync(process.argv[2],'utf8')}});
  const paths=['squadreCommesse','squadreStorico','neve_squadre','neve_squadre_storico','oreReports','oreApprovalRequests','neve_ore','neve_ore_richieste','commessaResources','oreLocks','neve_commesse','neve_commesse/c1/impianti','globalCommesse','globalCommesse/c1/impianti'];
+ const registryPaths=['personale','mezzi','neve_personale','neve_mezzi'];
+ const seededPaths=[...registryPaths,...paths];
  let count=0;
  try{
  await env.clearFirestore();
@@ -18,7 +20,7 @@ const {doc,collection,setDoc,getDoc,getDocs,updateDoc,deleteDoc}=require('fireba
  await setDoc(doc(db,'tenants',tenant,'members',uid),{status:'active',role});
  await setDoc(doc(db,'users',uid,'memberships',tenant),{tenantId:tenant,status:'active',role});
  }
- for(const p of paths)await setDoc(doc(db,'tenants',tenant,...p.split('/'),'sample'),{name:tenant});
+ for(const p of seededPaths)await setDoc(doc(db,'tenants',tenant,...p.split('/'),'sample'),{name:tenant});
  }
  for(const [id,data] of Object.entries({public:{type:'ferie'},private:{type:'SCADENZA_DOCUMENTO',ownerUserId:'a'},shared:{type:'SCADENZA_DOCUMENTO',sharedToAll:true},authorized:{type:'SCADENZA_DOCUMENTO',authorizedUserIds:['worker']}}))await setDoc(doc(db,'tenants','demo-a','calendarEvents',id),data);
  await setDoc(doc(db,'tenants','demo-a','programmazioni','assigned'),{operatoriCoinvolti:['worker@example.test']});
@@ -59,7 +61,6 @@ const {doc,collection,setDoc,getDoc,getDocs,updateDoc,deleteDoc}=require('fireba
  await run(getDoc(program('worker','unassigned')),false);
  await run(getDoc(program('a','unassigned')),true);
  await run(getDoc(program('b','assigned')),false);
- const registryPaths=['personale','mezzi','neve_personale','neve_mezzi'];
  for(const p of registryPaths){
   const ref=(d,t,id='sample')=>doc(d,'tenants',t,p,id);
   await run(getDoc(ref(db('a'),'demo-a')),true);

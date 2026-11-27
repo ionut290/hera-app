@@ -1,0 +1,10 @@
+node_modules
+.git
+*.env
+.env
+deploy/secrets
+deploy/backups
+**/*credentials*.json
+**/*.pem
+**/*.key
+**/*.p12

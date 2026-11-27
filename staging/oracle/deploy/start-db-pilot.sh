@@ -28,12 +28,15 @@ printf 'postgresql://varga_app:%s@db:5432/varga_v2_oracle' "$(cat "$VARGA_SECRET
 sudo -n chown root:"$pg_gid" "$VARGA_SECRETS_DIR/db-owner-password" "$VARGA_SECRETS_DIR/app-db-password"
 sudo -n chmod 440 "$VARGA_SECRETS_DIR/db-owner-password" "$VARGA_SECRETS_DIR/app-db-password"
 # Files containing SQL must be readable in container; no secrets are stored with them.
+chmod 755 ../migrations
 chmod 644 init-db.sh ../migrations/001_initial.sql ../migrations/002_plan_management.sql
 c=(sudo -n --preserve-env=VARGA_SECRETS_DIR docker compose -p varga-v2-oracle -f compose.db-pilot.yml)
 "${c[@]}" config --quiet
 "${c[@]}" up -d --no-build --pull never --wait --wait-timeout 180 db
 tables="$("${c[@]}" exec -T db psql -U postgres -d varga_v2_oracle -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('tenants','members','join_requests','jobs','plants','plan_audit');")"
 [[ "$tables" = 6 ]] || { echo 'STOP: incomplete schema; inspect without deleting volumes'; exit 1; }
-"${c[@]}" exec -T db psql -U postgres -d varga_v2_oracle -Atc "SELECT rolname,rolsuper,rolbypassrls FROM pg_roles WHERE rolname='varga_app';"
+role="$("${c[@]}" exec -T db psql -U postgres -d varga_v2_oracle -Atc "SELECT rolname,rolsuper,rolbypassrls FROM pg_roles WHERE rolname='varga_app';")"
+[[ "$role" = 'varga_app|f|f' ]] || { echo "STOP: unsafe database role"; exit 1; }
+printf '%s\n' "$role"
 "${c[@]}" ps
 printf '\nPASS: six tables initialized, private database only. No API, DNS, firewall or radio changes.\n'

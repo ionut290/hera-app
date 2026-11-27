@@ -1,0 +1,46 @@
+name: V2 Oracle PostgreSQL prototype
+on:
+  push:
+    branches: [varga-cantieri-v2-oracle]
+    paths: ['staging/oracle/**', '.github/workflows/v2-oracle-postgres.yml']
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: varga_v2_oracle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d varga_v2_oracle"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: staging/oracle
+    env:
+      DATABASE_URL: postgresql://varga_app:local-app-only@127.0.0.1:5432/varga_v2_oracle
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Create restricted local role and apply schema
+        env:
+          PGPASSWORD: local-ci-only
+        run: |
+          set -euo pipefail
+          psql -h 127.0.0.1 -U postgres -d varga_v2_oracle -v ON_ERROR_STOP=1 -c "CREATE ROLE varga_app LOGIN PASSWORD 'local-app-only' NOSUPERUSER NOBYPASSRLS;"
+          psql -h 127.0.0.1 -U postgres -d varga_v2_oracle -v ON_ERROR_STOP=1 -f migrations/001_initial.sql
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: node --check server.mjs && node --check api.mjs
+      - run: npm test

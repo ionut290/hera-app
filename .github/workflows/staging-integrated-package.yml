@@ -21,6 +21,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: python3 -m unittest -v test_prepare_v2_native_social.py
+        working-directory: staging
       - run: node --test ../social-auth.test.mjs
       - run: npm ci --no-audit --no-fund
       - run: npm install --no-save --package-lock=false --no-audit --no-fund leaflet@1.9.4

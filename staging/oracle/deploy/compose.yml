@@ -1,0 +1,61 @@
+# Dedicated OCI host only. API is published to loopback; PostgreSQL has no host port.
+name: varga-v2-oracle
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: varga_v2_oracle
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_owner_password
+    secrets:
+      - db_owner_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [private_db]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d varga_v2_oracle"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      FIREBASE_PROJECT_ID: varga-cantieri-v2-staging
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase_credentials
+      DATABASE_URL_FILE: /run/secrets/app_database_url
+      VARGA_CONTAINER_BIND: "1"
+    secrets:
+      - app_database_url
+      - firebase_credentials
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks: [private_db, outbound]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+networks:
+  private_db:
+    internal: true
+  outbound: {}
+volumes:
+  pgdata: {}
+secrets:
+  db_owner_password:
+    file: ${VARGA_SECRETS_DIR:?set absolute VARGA_SECRETS_DIR}/db-owner-password
+  app_database_url:
+    file: ${VARGA_SECRETS_DIR:?set absolute VARGA_SECRETS_DIR}/app-database-url
+  firebase_credentials:
+    file: ${VARGA_SECRETS_DIR:?set absolute VARGA_SECRETS_DIR}/firebase-credentials.json

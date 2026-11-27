@@ -8,8 +8,11 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/db_owner_password
     secrets:
       - db_owner_password
+      - app_db_password
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/10-varga-init.sh:ro
+      - ../migrations:/opt/varga-migrations:ro
     networks: [private_db]
     restart: unless-stopped
     healthcheck:
@@ -55,6 +58,8 @@ volumes:
 secrets:
   db_owner_password:
     file: ${VARGA_SECRETS_DIR:?set absolute VARGA_SECRETS_DIR}/db-owner-password
+  app_db_password:
+    file: ${VARGA_SECRETS_DIR:?set absolute VARGA_SECRETS_DIR}/app-db-password
   app_database_url:
     file: ${VARGA_SECRETS_DIR:?set absolute VARGA_SECRETS_DIR}/app-database-url
   firebase_credentials:

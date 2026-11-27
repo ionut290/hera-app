@@ -41,6 +41,7 @@ jobs:
           set -euo pipefail
           psql -h 127.0.0.1 -U postgres -d varga_v2_oracle -v ON_ERROR_STOP=1 -c "CREATE ROLE varga_app LOGIN PASSWORD 'local-app-only' NOSUPERUSER NOBYPASSRLS;"
           psql -h 127.0.0.1 -U postgres -d varga_v2_oracle -v ON_ERROR_STOP=1 -f migrations/001_initial.sql
+          psql -h 127.0.0.1 -U postgres -d varga_v2_oracle -v ON_ERROR_STOP=1 -f migrations/002_plan_management.sql
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: node --check server.mjs && node --check api.mjs
       - run: npm test

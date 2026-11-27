@@ -37,10 +37,15 @@ match /joinRequests/{uid} {
   && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active'
   && request.resource.data.uid == request.auth.uid
   && request.resource.data.status == 'pending'
-  && request.resource.data.email is string;
+  && request.resource.data.email == request.auth.token.email
+  && request.resource.data.joinCode is string
+  && request.resource.data.joinCode.matches('VC-[A-Z0-9]{8}')
+  && get(/databases/$(database)/documents/tenantJoinCodes/$(request.resource.data.joinCode)).data.tenantId == tenantId
+  && get(/databases/$(database)/documents/tenantJoinCodes/$(request.resource.data.joinCode)).data.status == 'active';
  allow get: if eligible() && (uid == request.auth.uid || companyAdmin(tenantId));
  allow list: if companyAdmin(tenantId);
  allow update: if companyAdmin(tenantId)
+  && resource.data.status == 'pending'
   && request.resource.data.uid == resource.data.uid
   && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewedAt','reviewedBy'])
   && request.resource.data.status in ['accepted','rejected']

@@ -1,14 +1,14 @@
 name: Staging integrated original package
 on:
   push:
-    branches: [varga-cantieri-v2-staging, v2/fix-registration-session]
+    branches: [varga-cantieri-v2-staging, v2/fix-registration-session, v2/social-auth-onboarding]
     paths: ['staging/**', '.github/workflows/staging-integrated-package.yml']
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   full-package:
-    if: github.ref == 'refs/heads/varga-cantieri-v2-staging' || github.ref == 'refs/heads/v2/fix-registration-session'
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging' || github.ref == 'refs/heads/v2/fix-registration-session' || github.ref == 'refs/heads/v2/social-auth-onboarding'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
@@ -21,6 +21,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: node --test ../social-auth.test.mjs
       - run: npm ci --no-audit --no-fund
       - run: npm install --no-save --package-lock=false --no-audit --no-fund leaflet@1.9.4
       - run: node build-full-runtime.mjs

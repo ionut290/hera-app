@@ -1,0 +1,94 @@
+name: Prepare Varga Cantieri 1.1 draft with build 20033 (no review)
+on:
+  push:
+    branches: [release/ios-1.1-snow-20032]
+    paths:
+      - .github/workflows/prepare-ios-1-1-draft-20033.yml
+permissions:
+  contents: read
+concurrency:
+  group: varga-ios-1-1-draft-20033
+  cancel-in-progress: false
+jobs:
+  prepare-draft:
+    if: github.actor == 'ionut290' && github.triggering_actor == 'ionut290' && github.run_attempt == 1 && github.repository == 'ionut290/hera-app' && github.ref == 'refs/heads/release/ios-1.1-snow-20032'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: ios-internal-testflight
+    steps:
+      - name: Associate only valid build 20033 with original app draft
+        shell: bash
+        env:
+          IOS_APPSTORE_KEY_ID: ${{ secrets.IOS_APPSTORE_KEY_ID }}
+          IOS_APPSTORE_ISSUER_ID: ${{ secrets.IOS_APPSTORE_ISSUER_ID }}
+          IOS_APPSTORE_PRIVATE_KEY_BASE64: ${{ secrets.IOS_APPSTORE_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          node <<'JS'
+          const crypto = require("node:crypto");
+          const assert = require("node:assert/strict");
+          const env = process.env;
+          const appId = "6833571061";
+          const api = "https://api.appstoreconnect.apple.com";
+          const now = Math.floor(Date.now()/1000);
+          const enc = x => Buffer.from(JSON.stringify(x)).toString("base64url");
+          const data = enc({alg:"ES256",kid:env.IOS_APPSTORE_KEY_ID,typ:"JWT"})+"."+enc({iss:env.IOS_APPSTORE_ISSUER_ID,aud:"appstoreconnect-v1",iat:now,exp:now+300});
+          const jwt=data+"."+crypto.sign("sha256",Buffer.from(data),{key:Buffer.from(env.IOS_APPSTORE_PRIVATE_KEY_BASE64,"base64"),dsaEncoding:"ieee-p1363"}).toString("base64url");
+          async function request(method,path,body) {
+            const url = new URL(path,api);
+            assert.equal(url.origin,api);
+            const response = await fetch(url,{method,headers:{Authorization:"Bearer "+jwt,Accept:"application/json","Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{}),redirect:"error",signal:AbortSignal.timeout(20000)});
+            if(!response.ok) {
+              const e=await response.json().catch(()=>({}));
+              const code=String(e.errors?.[0]?.code||"UNKNOWN").replace(/[^A-Z0-9_.-]/gi,"");
+              throw Error("ASC "+method+" HTTP "+response.status+" "+code);
+            }
+            return response.status===204?{}:response.json();
+          }
+          function query(path,params) {
+            const u=new URL(path,api);
+            for(const [k,v] of Object.entries(params))u.searchParams.set(k,v);
+            return u.pathname+u.search;
+          }
+          (async()=>{
+            const a=(await request("GET","/v1/apps/"+appId)).data;
+            assert.equal(a.id,appId);
+            assert.equal(a.attributes.bundleId,"it.vargacantieri.hera");
+            const versions=(await request("GET",query("/v1/apps/"+appId+"/appStoreVersions",{"filter[platform]":"IOS","filter[versionString]":"1.1",limit:"20"}))).data;
+            assert.equal(versions.length,1,"Expected one version 1.1");
+            const v=versions[0];
+            assert.equal(v.attributes.versionString,"1.1");
+            assert.equal(v.attributes.platform,"IOS");
+            assert.equal(v.attributes.appStoreState,"PREPARE_FOR_SUBMISSION","Draft state required");
+            const builds=(await request("GET",query("/v1/builds",{"filter[app]":appId,"filter[version]":"20033",include:"preReleaseVersion",limit:"20"})));
+            assert.equal(builds.data.length,1,"Expected exactly one build 20033");
+            const b=builds.data[0];
+            assert.equal(b.attributes.version,"20033");
+            assert.equal(b.attributes.processingState,"VALID");
+            assert.equal(b.attributes.expired,false);
+            const pre=builds.included?.find(x=>x.type==="preReleaseVersions"&&x.id===b.relationships?.preReleaseVersion?.data?.id);
+            assert.equal(pre?.attributes?.version,"1.1");
+            assert.equal(pre?.attributes?.platform,"IOS");
+            const relationship="/v1/appStoreVersions/"+v.id+"/relationships/build";
+            const attached=(await request("GET",relationship)).data;
+            if(attached && attached.id!==b.id)throw Error("Different build already attached; refusing replacement");
+            if(!attached)await request("PATCH",relationship,{data:{type:"builds",id:b.id}});
+            assert.equal((await request("GET",relationship)).data?.id,b.id);
+            console.log("PASS: original app version 1.1 draft now associated with valid build 20033.");
+            const reviewRelationship=(await request("GET","/v1/appStoreVersions/"+v.id+"/relationships/appStoreReviewDetail")).data;
+            if(reviewRelationship?.id){
+              const path="/v1/appStoreReviewDetails/"+reviewRelationship.id;
+              const info=(await request("GET",path)).data;
+              const notes=info.attributes.notes||"";
+              const updated=notes.replace("New for version 1.1, build 20032:","New for version 1.1, build 20033 (same application runtime as TestFlight build 20032):");
+              if(updated!==notes){
+                await request("PATCH",path,{data:{type:"appStoreReviewDetails",id:info.id,attributes:{notes:updated}}});
+                assert.equal((await request("GET",path)).data.attributes.notes,updated);
+                console.log("PASS: review notes build reference updated. Existing instructions and credentials unchanged.");
+              }else console.log("No exact old build reference found; existing review notes preserved.");
+            }
+            const final=(await request("GET","/v1/appStoreVersions/"+v.id)).data;
+            assert.equal(final.attributes.appStoreState,"PREPARE_FOR_SUBMISSION");
+            console.log("Draft only. No submission, release, screenshot or credential changes.");
+          })().catch(e=>{console.error("Draft preparation stopped:",e.message);process.exitCode=1;});
+          JS

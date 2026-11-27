@@ -26,8 +26,34 @@ export function createApi({pool,verifyToken}){
    const match=/^Bearer ([^\s]+)$/.exec(req.headers.authorization||'');if(!match)fail(401,'LOGIN_REQUIRED');
    let user;try{user=await verifyToken(match[1])}catch{fail(401,'INVALID_TOKEN')}
    if(!user?.uid||typeof user.uid!=='string'||user.uid.length>128||user.email_verified!==true||typeof user.email!=='string')fail(403,'VERIFIED_EMAIL_REQUIRED');
+   if(user.apple_review===true)fail(403,'ACCOUNT_NOT_ALLOWED');
    const uid=user.uid;
    if(p[0]!=='v1')fail(404,'NOT_FOUND');
+   if(p[1]==='admin'){
+    if(user.superAdmin!==true)fail(403,'SUPER_ADMIN_REQUIRED');
+    if(p.length===3&&p[2]==='companies'&&method==='GET'){
+     const q=await pool.query('SELECT id,name,status,plan,max_jobs,max_plants,max_admins,max_operators,created_at FROM tenants ORDER BY created_at DESC LIMIT 100');
+     return reply(200,q.rows.map(t=>publicTenant({...t,role:'superadmin'})));
+    }
+    if(p.length===5&&p[2]==='companies'&&p[4]==='plan'&&method==='POST'){
+     const tenant=uuid(p[3]),b=await body(req);
+     const integer=(v,min,max)=>{if(!Number.isSafeInteger(v)||v<min||v>max)fail(400,'INVALID_LIMIT');return v};
+     if(!['trial','full'].includes(b.plan))fail(400,'INVALID_PLAN');
+     const limits=b.plan==='trial'?{commesse:1,impianti:10,operatori:3}:{commesse:integer(b.commesse,1,100000),impianti:integer(b.impianti,1,1000000),operatori:integer(b.operatori,0,10000)};
+     const out=await transaction(pool,async db=>{
+      const t=(await db.query("SELECT * FROM tenants WHERE id=$1 AND status='active' FOR UPDATE",[tenant])).rows[0];if(!t)fail(404,'COMPANY_NOT_FOUND');
+      await db.query("SELECT set_config('varga.tenant_id',$1,true)",[tenant]);
+      if(await count(db,'SELECT count(*) n FROM jobs WHERE tenant_id=$1',[tenant])>limits.commesse||
+         await count(db,'SELECT count(*) n FROM plants WHERE tenant_id=$1',[tenant])>limits.impianti||
+         await count(db,"SELECT count(*) n FROM members WHERE tenant_id=$1 AND status='active' AND role='employee'",[tenant])>limits.operatori)fail(409,'LIMIT_BELOW_USAGE');
+      const updated=(await db.query('UPDATE tenants SET plan=$2,max_jobs=$3,max_plants=$4,max_operators=$5 WHERE id=$1 RETURNING *',[tenant,b.plan,limits.commesse,limits.impianti,limits.operatori])).rows[0];
+      const snapshot=x=>({plan:x.plan,commesse:x.max_jobs,impianti:x.max_plants,admin:x.max_admins,operatori:x.max_operators});
+      await db.query('INSERT INTO plan_audit(tenant_id,actor_uid,old_plan,new_plan) VALUES($1,$2,$3::jsonb,$4::jsonb)',[tenant,uid,JSON.stringify(snapshot(t)),JSON.stringify(snapshot(updated))]);
+      return publicTenant({...updated,role:'superadmin'});
+     });return reply(200,out);
+    }
+    fail(404,'NOT_FOUND');
+   }
    if(p.length===2&&p[1]==='companies'&&method==='GET'){
     const q=await pool.query("SELECT t.*,m.role FROM tenants t JOIN members m ON t.id=m.tenant_id WHERE m.uid=$1 AND m.status='active' AND t.status='active' ORDER BY t.created_at",[uid]);return reply(200,q.rows.map(publicTenant));
    }

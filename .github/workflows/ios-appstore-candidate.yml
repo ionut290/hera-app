@@ -172,6 +172,38 @@ jobs:
           node-version: "22"
           cache: npm
 
+      - name: Confirm exact original Apple app and build number using read-only API
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'JS'
+          const crypto = require("node:crypto");
+          const env = process.env;
+          const now = Math.floor(Date.now()/1000);
+          const enc = x => Buffer.from(JSON.stringify(x)).toString("base64url");
+          const data = enc({alg:"ES256",kid:env.IOS_APPSTORE_KEY_ID,typ:"JWT"})+"."+enc({iss:env.IOS_APPSTORE_ISSUER_ID,aud:"appstoreconnect-v1",iat:now,exp:now+300});
+          const jwt=data+"."+crypto.sign("sha256",Buffer.from(data),{key:Buffer.from(env.IOS_APPSTORE_PRIVATE_KEY_BASE64,"base64"),dsaEncoding:"ieee-p1363"}).toString("base64url");
+          const api="https://api.appstoreconnect.apple.com";
+          async function get(url) {
+            const u=new URL(url,api);
+            if(u.origin!==api) throw Error("Unexpected API origin");
+            const r=await fetch(u,{headers:{Authorization:"Bearer "+jwt,Accept:"application/json"},signal:AbortSignal.timeout(20000),redirect:"error"});
+            if(!r.ok) throw Error("Read-only Apple API returned HTTP "+r.status);
+            return r.json();
+          }
+          (async()=>{
+            const app=await get("/v1/apps/6833571061");
+            if(app.data?.id!=="6833571061" || app.data?.attributes?.bundleId!=="it.vargacantieri.hera") throw Error("Unexpected Apple app");
+            const u=new URL("/v1/builds",api);
+            u.searchParams.set("filter[app]","6833571061");
+            u.searchParams.set("filter[version]","20033");
+            u.searchParams.set("limit","1");
+            const builds=await get(u);
+            if(!Array.isArray(builds.data)||builds.data.length) throw Error("Build 20033 already present or response invalid");
+            console.log("PASS: original Apple app verified, no existing build 20033 returned.");
+          })().catch(e=>{console.error(e.message);process.exitCode=1;});
+          JS
+
       - name: Install and verify protected application flows
         shell: bash
         run: |

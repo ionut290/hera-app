@@ -45,3 +45,49 @@ jobs:
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: node --check server.mjs && node --check api.mjs
       - run: npm test
+
+  deployment-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: staging/oracle/deploy
+    env:
+      VARGA_SECRETS_DIR: ${{ runner.temp }}/varga-ci-secrets
+      VARGA_BACKUP_DIR: ${{ runner.temp }}/varga-ci-backups
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare temporary synthetic secrets (no real Firebase connection)
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$VARGA_SECRETS_DIR"
+          owner="$(openssl rand -hex 32)"
+          app="$(openssl rand -hex 32)"
+          echo "::add-mask::$owner"
+          echo "::add-mask::$app"
+          printf '%s' "$owner" > "$VARGA_SECRETS_DIR/db-owner-password"
+          printf '%s' "$app" > "$VARGA_SECRETS_DIR/app-db-password"
+          printf 'postgresql://varga_app:%s@db:5432/varga_v2_oracle' "$app" > "$VARGA_SECRETS_DIR/app-database-url"
+          printf '{"type":"test-only","project_id":"varga-cantieri-v2-staging"}' > "$VARGA_SECRETS_DIR/firebase-credentials.json"
+          # Synthetic CI files only; real secrets need restricted ownership.
+          chmod 644 "$VARGA_SECRETS_DIR/"*
+          bash -n init-db.sh backup.sh
+          docker compose -f compose.yml config --quiet
+      - name: Build API image and initialize private database
+        run: |
+          set -euo pipefail
+          docker compose -f compose.yml build api
+          docker compose -f compose.yml up -d --wait --wait-timeout 120 db
+          docker compose -f compose.yml exec -T db sh -ec 'export PGPASSWORD="$(cat /run/secrets/app_db_password)"; psql -h 127.0.0.1 -U varga_app -d varga_v2_oracle -v ON_ERROR_STOP=1 -c "SELECT current_user, count(*) FROM tenants;"'
+          test "$(docker compose -f compose.yml exec -T db psql -U postgres -d varga_v2_oracle -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('tenants','members','join_requests','jobs','plants','plan_audit');")" = 6
+      - name: Verify local archive backup
+        run: |
+          bash backup.sh
+          test "$(find "$VARGA_BACKUP_DIR" -name '*.dump' -type f | wc -l)" -eq 1
+      - name: Remove disposable CI containers and synthetic credentials
+        if: always()
+        run: |
+          docker compose -f compose.yml down -v || true
+          rm -rf "$VARGA_SECRETS_DIR" "$VARGA_BACKUP_DIR"

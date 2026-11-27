@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: python3 -m unittest -v test_validate_ios_profile.py test_prepare_v2_export.py test_prepare_v2_internal_upload.py
+      - run: python3 -m unittest -v test_validate_ios_profile.py test_prepare_v2_export.py test_prepare_v2_internal_upload.py test_prepare_v2_native_social.py
         working-directory: staging
       - run: node --test staging/apple-staging-preflight.test.mjs staging/fetch-v2-appstore-profile.test.cjs
   sign:
@@ -26,6 +26,8 @@ jobs:
     environment: ios-internal-testflight
     runs-on: macos-26
     timeout-minutes: 45
+    env:
+      VARGA_V2_SOCIAL_AUTH_READY: ${{ vars.VARGA_V2_SOCIAL_AUTH_READY }}
     concurrency:
       group: varga-v2-signing
       cancel-in-progress: false
@@ -52,6 +54,8 @@ jobs:
           test -s private-staging-dist/PRIVATE_STAGING_NOT_RELEASED.txt
           test ! -e private-staging-dist/LOCAL_TEST_ONLY.txt
       - name: Generate independent native app
+        env:
+          VARGA_V2_IOS_FIREBASE_PLIST_BASE64: ${{ secrets.VARGA_V2_IOS_FIREBASE_PLIST_BASE64 }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/varga-v2-signed"
@@ -60,7 +64,19 @@ jobs:
           printf '%s' '{"name":"varga-v2-staging","version":"1.0.0","private":true}' > package.json
           npm install --no-audit --no-fund @capacitor/cli@7.6.10 @capacitor/core@7.6.10 @capacitor/ios@7.6.10
           printf '%s' '{"appId":"it.vargacantieri.staging","appName":"Varga Cantieri 2.0","webDir":"www"}' > capacitor.config.json
+          if [[ "$VARGA_V2_SOCIAL_AUTH_READY" == true ]]; then
+            test -n "$VARGA_V2_IOS_FIREBASE_PLIST_BASE64"
+            npm install --save-exact --no-audit --no-fund @capacitor-firebase/authentication@7.5.0 firebase@11.10.0
+          fi
           npx cap add ios
+          if [[ "$VARGA_V2_SOCIAL_AUTH_READY" == true ]]; then
+            umask 077
+            CLIENT="$RUNNER_TEMP/varga-v2-firebase.plist"
+            printf '%s' "$VARGA_V2_IOS_FIREBASE_PLIST_BASE64" | base64 --decode > "$CLIENT"
+            python3 "$GITHUB_WORKSPACE/staging/prepare_v2_native_social.py" "$PWD" "$CLIENT"
+            rm -f "$CLIENT"
+            ruby -r xcodeproj -e 'p=Xcodeproj::Project.open("ios/App/App.xcodeproj"); t=p.targets.find{|x|x.name=="App"}; abort "No App target" unless t; g=p.main_group.find_subpath("App",false); abort "No App group" unless g; r=g.files.find{|x|x.path=="GoogleService-Info.plist"} || g.new_file("GoogleService-Info.plist"); t.add_resources([r]) unless t.resources_build_phase.files_references.include?(r); t.build_configurations.each{|c| c.build_settings["CODE_SIGN_ENTITLEMENTS"]="App/App.entitlements"}; p.save'
+          fi
           npx cap sync ios
           swift "$GITHUB_WORKSPACE/scripts/prepare-ios-app-icon.swift" "$GITHUB_WORKSPACE/icons/varga-cantieri-512.png" ios/App/App/Assets.xcassets/AppIcon.appiconset
       - name: Import team distribution certificate and fetch only exact V2 profile privately
@@ -85,6 +101,9 @@ jobs:
           openssl x509 -in "$P/leaf.pem" -noout -subject | grep -F 'Apple Distribution:' >/dev/null
           openssl x509 -in "$P/leaf.pem" -outform DER -out "$P/leaf.der"
           python3 staging/validate_ios_profile.py "$P/profile.plist" "$P/leaf.der"
+          if [[ "$VARGA_V2_SOCIAL_AUTH_READY" == true ]]; then
+            /usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.applesignin:0' "$P/profile.plist" | grep -Fx Default
+          fi
           KEYCHAIN="$P/signing.keychain-db"
           KPASS="$(openssl rand -hex 24)"
           echo "::add-mask::$KPASS"
@@ -109,7 +128,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx it.vargacantieri.staging
           test -s "$APP/public/PRIVATE_STAGING_NOT_RELEASED.txt"
           test ! -e "$APP/public/LOCAL_TEST_ONLY.txt"
-          test ! -e "$APP/GoogleService-Info.plist"
+          if [[ "$VARGA_V2_SOCIAL_AUTH_READY" == true ]]; then
+            test -s "$APP/GoogleService-Info.plist"
+            /usr/libexec/PlistBuddy -c 'Print :PROJECT_ID' "$APP/GoogleService-Info.plist" | grep -Fx varga-cantieri-v2-staging
+            /usr/libexec/PlistBuddy -c 'Print :BUNDLE_ID' "$APP/GoogleService-Info.plist" | grep -Fx it.vargacantieri.staging
+            codesign -d --entitlements :- "$APP" > "$RUNNER_TEMP/v2-entitlements.plist" 2>/dev/null
+            /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.applesignin:0' "$RUNNER_TEMP/v2-entitlements.plist" | grep -Fx Default
+          else
+            test ! -e "$APP/GoogleService-Info.plist"
+          fi
           codesign --verify --deep --strict "$APP"
           security cms -D -i "$APP/embedded.mobileprovision" > "$RUNNER_TEMP/varga-v2-signing/embedded.plist"
           python3 "$GITHUB_WORKSPACE/staging/validate_ios_profile.py" "$RUNNER_TEMP/varga-v2-signing/embedded.plist" "$RUNNER_TEMP/varga-v2-signing/leaf.der"
@@ -132,7 +159,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx "$GITHUB_RUN_NUMBER"
           test -s "$APP/public/PRIVATE_STAGING_NOT_RELEASED.txt"
           test ! -e "$APP/public/LOCAL_TEST_ONLY.txt"
-          test ! -e "$APP/GoogleService-Info.plist"
+          if [[ "$VARGA_V2_SOCIAL_AUTH_READY" == true ]]; then
+            test -s "$APP/GoogleService-Info.plist"
+            /usr/libexec/PlistBuddy -c 'Print :PROJECT_ID' "$APP/GoogleService-Info.plist" | grep -Fx varga-cantieri-v2-staging
+            /usr/libexec/PlistBuddy -c 'Print :BUNDLE_ID' "$APP/GoogleService-Info.plist" | grep -Fx it.vargacantieri.staging
+            codesign -d --entitlements :- "$APP" > "$RUNNER_TEMP/v2-entitlements.plist" 2>/dev/null
+            /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.applesignin:0' "$RUNNER_TEMP/v2-entitlements.plist" | grep -Fx Default
+          else
+            test ! -e "$APP/GoogleService-Info.plist"
+          fi
           codesign --verify --deep --strict "$APP"
           security cms -D -i "$APP/embedded.mobileprovision" > "$RUNNER_TEMP/varga-v2-signing/exported.plist"
           python3 staging/validate_ios_profile.py "$RUNNER_TEMP/varga-v2-signing/exported.plist" "$RUNNER_TEMP/varga-v2-signing/leaf.der"
@@ -152,7 +187,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx it.vargacantieri.staging
           test -s "$APP/public/PRIVATE_STAGING_NOT_RELEASED.txt"
           test ! -e "$APP/public/LOCAL_TEST_ONLY.txt"
-          test ! -e "$APP/GoogleService-Info.plist"
+          if [[ "$VARGA_V2_SOCIAL_AUTH_READY" == true ]]; then
+            test -s "$APP/GoogleService-Info.plist"
+            /usr/libexec/PlistBuddy -c 'Print :PROJECT_ID' "$APP/GoogleService-Info.plist" | grep -Fx varga-cantieri-v2-staging
+            /usr/libexec/PlistBuddy -c 'Print :BUNDLE_ID' "$APP/GoogleService-Info.plist" | grep -Fx it.vargacantieri.staging
+            codesign -d --entitlements :- "$APP" > "$RUNNER_TEMP/v2-entitlements.plist" 2>/dev/null
+            /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.applesignin:0' "$RUNNER_TEMP/v2-entitlements.plist" | grep -Fx Default
+          else
+            test ! -e "$APP/GoogleService-Info.plist"
+          fi
           codesign --verify --deep --strict "$APP"
           python3 staging/prepare_v2_internal_upload.py "$RUNNER_TEMP/VargaV2InternalUploadOptions.plist"
           KEY_DIR="$RUNNER_TEMP/varga-v2-signing/api-key"

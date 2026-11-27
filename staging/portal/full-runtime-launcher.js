@@ -58,6 +58,26 @@ async function requestJoin(code,node){
  await ref.set({uid:user.uid,email:user.email||'',displayName:user.displayName||user.email||'Utente',status:'pending',requestedAt:statics.FieldValue.serverTimestamp()});
  node.textContent='Richiesta inviata a '+tenant.data().name+'. Attendi l’approvazione dell’amministratore.';
 }
+async function showCompanyAdmin(tenantId,tenantData){
+ clearCompanyAdmin();const panel=$('company-admin-panel'),list=$('company-admin-list'),feedback=$('company-admin-status');panel.hidden=false;
+ const code=tenantData.joinCode||'non disponibile';feedback.textContent='Codice azienda: '+code+' — caricamento richieste…';
+ try{
+  const rows=await db.collection('tenants').doc(tenantId).collection('joinRequests').where('status','==','pending').get({source:'server'});list.replaceChildren();
+  if(!rows.size){feedback.textContent='Codice azienda: '+code+' — nessuna richiesta in attesa.';return;}
+  feedback.textContent='Codice azienda: '+code+' — richieste in attesa: '+rows.size;
+  for(const item of rows.docs){
+   const data=item.data(),card=document.createElement('article');card.className='request-card';
+   const title=document.createElement('strong');title.textContent=data.displayName||data.email||item.id;
+   const mail=document.createElement('span');mail.textContent=data.email||'';
+   const actions=document.createElement('div');actions.className='request-actions';
+   const accept=document.createElement('button');accept.textContent='Accetta';
+   const reject=document.createElement('button');reject.textContent='Rifiuta';
+   accept.onclick=async()=>{accept.disabled=reject.disabled=true;try{const now=statics.FieldValue.serverTimestamp(),batch=db.batch();batch.set(db.doc('tenants/'+tenantId+'/members/'+item.id),{uid:item.id,email:data.email||'',displayName:data.displayName||data.email||'Utente',role:'employee',status:'active',demo:true,createdAt:now});batch.set(db.doc('users/'+item.id+'/memberships/'+tenantId),{tenantId,role:'employee',status:'active',demo:true,createdAt:now});batch.update(item.ref,{status:'accepted',reviewedAt:now,reviewedBy:auth.currentUser.uid});await batch.commit();await showCompanyAdmin(tenantId,tenantData);}catch(err){feedback.textContent='Accettazione non riuscita: '+(err.code||err.message);accept.disabled=reject.disabled=false;}};
+   reject.onclick=async()=>{reject.disabled=accept.disabled=true;try{await item.ref.update({status:'rejected',reviewedAt:statics.FieldValue.serverTimestamp(),reviewedBy:auth.currentUser.uid});await showCompanyAdmin(tenantId,tenantData);}catch(err){feedback.textContent='Rifiuto non riuscito: '+(err.code||err.message);accept.disabled=reject.disabled=false;}};
+   actions.append(accept,reject);card.append(title,mail,actions);list.append(card);
+  }
+ }catch(err){feedback.textContent='Richieste non disponibili: '+(err.code||err.message);}
+}
 $('open-register').onclick=showRegister;
 $('open-join').onclick=showJoin;
 $('back-to-login').onclick=showLogin;

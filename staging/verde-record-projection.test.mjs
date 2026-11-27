@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {projectVerdeRecords} from './verde-record-projection.mjs';
+const snap=(data,id='a')=>({docs:[{id,data:()=>data}]});
+test('empty company remains empty',()=>assert.deepEqual(projectVerdeRecords({docs:[]}),[]));
+test('original display fields retained',()=>assert.deepEqual(projectVerdeRecords(snap({tipoRecord:'albero',specieAlbero:'Acero',diametroCm:20})),[{id:'a',tipoRecord:'albero',specieAlbero:'Acero',diametroCm:20}]));
+test('private and unapproved fields excluded',()=>assert.deepEqual(projectVerdeRecords(snap({tipoRecord:'siepe',createdByEmail:'demo@example.test',token:'fake',tenantId:'other',id:'wrong'})),[{id:'a',tipoRecord:'siepe'}]));
+test('non scalar values excluded',()=>assert.deepEqual(projectVerdeRecords(snap({tipoRecord:'cantiere',note:{x:1},superficieMq:Infinity})),[{id:'a',tipoRecord:'cantiere'}]));
+test('invalid category rejected',()=>assert.throws(()=>projectVerdeRecords(snap({tipoRecord:'unknown'}))));
+test('invalid ID rejected',()=>assert.throws(()=>projectVerdeRecords(snap({tipoRecord:'albero'},'a/b'))));
+test('invalid snapshot rejected',()=>assert.throws(()=>projectVerdeRecords(null)));
+
+test('preserve GPS and original commessa fields',()=>assert.deepEqual(projectVerdeRecords(snap({tipoRecord:'cantiere',gpsX:11.34,gpsY:44.49,commessaId:'demo-commessa',cap:'40100'})),[{id:'a',tipoRecord:'cantiere',gpsX:11.34,gpsY:44.49,commessaId:'demo-commessa',cap:'40100'}]));
+test('serialize Firestore timestamps',()=>assert.deepEqual(projectVerdeRecords(snap({tipoRecord:'siepe',createdAt:{toMillis:()=>1234},updatedAt:new Date(5678)})),[{id:'a',tipoRecord:'siepe',createdAt:1234,updatedAt:5678}]));
+test('reject invalid timestamp values',()=>assert.deepEqual(projectVerdeRecords(snap({tipoRecord:'siepe',createdAt:{toMillis:()=>Infinity},updatedAt:new Date(NaN)})),[{id:'a',tipoRecord:'siepe'}]));

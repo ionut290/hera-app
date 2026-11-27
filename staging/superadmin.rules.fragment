@@ -1,0 +1,44 @@
+// Emulator-only Super Admin management. Claims are issued server-side.
+// No operational access bypass, no user creation/deletion, no reassignment of identities.
+function verifiedSuperAdmin() {
+ return eligible() && request.auth.token.get('superAdmin',false)==true;
+}
+function validTenantStatus(d) {
+ return d.status in ['active','suspended'] && d.name is string && d.name.size()>=2 && d.name.size()<=120;
+}
+function demoTenant(tid) {
+ return exists(/databases/$(database)/documents/tenants/$(tid))
+ && get(/databases/$(database)/documents/tenants/$(tid)).data.demo==true;
+}
+function validMemberChange(uid,tid) {
+ return verifiedSuperAdmin() && request.auth.uid!=uid && demoTenant(tid)
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role','status'])
+ && request.resource.data.role in ['admin','supervisor','employee']
+ && request.resource.data.status in ['active','suspended'];
+}
+function sameMembership(a,b) {
+ return a.role==b.role && a.status==b.status;
+}
+match /tenants/{tid} {
+ allow get,list: if verifiedSuperAdmin();
+ allow create: if verifiedSuperAdmin() && tid.matches('demo-[a-z0-9-]{3,59}')
+ && request.resource.data.keys().hasAll(['name','status','demo','createdAt'])
+ && request.resource.data.keys().hasOnly(['name','status','demo','createdAt'])
+ && request.resource.data.demo==true && request.resource.data.status=='active'
+ && validTenantStatus(request.resource.data) && request.resource.data.createdAt==request.time;
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','status'])
+ && validTenantStatus(request.resource.data);
+ match /members/{uid} {
+  allow get,list: if verifiedSuperAdmin();
+  allow update: if validMemberChange(uid,tid) && resource.data.demo==true
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.tenantId==tid
+  && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data);
+ }
+}
+match /users/{uid}/memberships/{tid} {
+ allow get,list: if verifiedSuperAdmin();
+ allow update: if validMemberChange(uid,tid) && resource.data.tenantId==tid
+ && get(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data.demo==true
+ && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data);
+}

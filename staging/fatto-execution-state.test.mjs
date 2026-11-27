@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {startExecution,transitionExecution as step} from './fatto-execution-state.mjs';
+const plan={steps:[{key:'a',action:'saveCompletion'},{key:'b',action:'openWhatsApp'}]};
+const start=()=>startExecution(plan);
+const saved=()=>step(step(start(),'a','start'),'a','success');
+test('initial pending',()=>assert.equal(start().steps[0].status,'pending'));
+test('ordered execution',()=>assert.throws(()=>step(start(),'b','start')));
+test('successful first step unlocks second',()=>assert.equal(step(saved(),'b','start').steps[1].status,'running'));
+test('completed cannot repeat',()=>assert.throws(()=>step(saved(),'a','start')));
+test('failure allows retry',()=>assert.equal(step(step(step(start(),'a','start'),'a','failure'),'a','retry').steps[0].status,'pending'));
+test('uncertain cannot retry blindly',()=>{const s=step(step(saved(),'b','start'),'b','uncertain');assert.throws(()=>step(s,'b','retry'));assert.equal(step(s,'b','confirmed').steps[1].status,'done');assert.equal(step(s,'b','notExecuted').steps[1].status,'pending');});
+test('unknown key denied',()=>assert.throws(()=>step(start(),'x','start')));
+test('state immutable',()=>{const s=start();step(s,'a','start');assert.equal(s.steps[0].status,'pending');assert.ok(Object.isFrozen(s.steps));});

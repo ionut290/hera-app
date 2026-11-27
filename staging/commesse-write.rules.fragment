@@ -1,0 +1,52 @@
+// Generic company-owned commesse. Sfalcio COBO keeps its dedicated constrained rules.
+function canManageCommesse() {
+ return canReadDemoCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin';
+}
+function canManagePrototypeCommesse() {
+ return canManageCommesse() && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('commesseWriteEnabled',false)==true;
+}
+function canManageCantieri() {
+ return canManagePrototypeCommesse();
+}
+function commessaKeys() {
+ return ['nome','codice','descrizione','cliente','committente','comune','indirizzo','attiva','tipo','createdAt','updatedAt','createdBy','updatedBy'];
+}
+function cantiereKeys() {
+ return ['id','commessaId','nome','denominazione','comune','indirizzo','descrizione','coordinate','latitudine','longitudine','gpsX','gpsY','tipologia','note','stato','createdAt','updatedAt','createdBy','updatedBy'];
+}
+match /commesse/{commessaId} {
+ allow create: if commessaId != 'sfalcio-cobo' && canManagePrototypeCommesse()
+ && request.resource.data.keys().hasOnly(commessaKeys())
+ && request.resource.data.keys().hasAll(['nome','createdAt','createdBy'])
+ && request.resource.data.nome is string && request.resource.data.nome.size()>0
+ && request.resource.data.createdBy==request.auth.uid
+ && request.resource.data.createdAt==request.time;
+ allow update: if commessaId != 'sfalcio-cobo' && canManagePrototypeCommesse()
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(commessaKeys().toSet().difference(['createdAt','createdBy'].toSet()))
+ && request.resource.data.createdBy==resource.data.createdBy
+ && request.resource.data.createdAt==resource.data.createdAt
+ && request.resource.data.updatedBy==request.auth.uid
+ && request.resource.data.updatedAt==request.time;
+ allow get,list: if canReadDemoCommesse();
+ allow delete: if false;
+ match /impianti/{impiantoId} {
+  allow create: if commessaId != 'sfalcio-cobo' && canManageCantieri()
+  && request.resource.data.keys().hasOnly(cantiereKeys())
+  && request.resource.data.keys().hasAll(['id','commessaId','createdAt','createdBy'])
+  && request.resource.data.id==impiantoId
+  && request.resource.data.commessaId==commessaId
+  && request.resource.data.createdBy==request.auth.uid
+  && request.resource.data.createdAt==request.time
+  && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId))
+  && (!('stato' in request.resource.data) || request.resource.data.stato in ['da_fare','in_lavorazione']);
+  allow update: if commessaId != 'sfalcio-cobo' && canManageCantieri()
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(cantiereKeys().toSet().difference(['id','commessaId','createdAt','createdBy','stato'].toSet()))
+  && request.resource.data.id==resource.data.id
+  && request.resource.data.commessaId==resource.data.commessaId
+  && request.resource.data.createdAt==resource.data.createdAt
+  && request.resource.data.createdBy==resource.data.createdBy;
+  allow get,list: if canReadDemoCommesse();
+  allow delete: if false;
+ }
+}

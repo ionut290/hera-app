@@ -1,0 +1,28 @@
+name: Varga Cantieri 2.0 Apple metadata preflight
+on:
+  push:
+    branches: [varga-cantieri-v2-staging]
+    paths: ['.github/workflows/staging-apple-preflight.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging' && vars.VARGA_V2_APPLE_PREFLIGHT_READY == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: ios-varga-v2-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test staging/apple-staging-preflight.test.mjs
+      - name: Check Apple registrations in read-only mode
+        env:
+          IOS_APPSTORE_KEY_ID: ${{ secrets.V2_IOS_APPSTORE_KEY_ID }}
+          IOS_APPSTORE_ISSUER_ID: ${{ secrets.V2_IOS_APPSTORE_ISSUER_ID }}
+          IOS_APPSTORE_PRIVATE_KEY_BASE64: ${{ secrets.V2_IOS_APPSTORE_PRIVATE_KEY_BASE64 }}
+        run: node staging/apple-staging-preflight.mjs

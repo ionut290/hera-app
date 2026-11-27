@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {planMatrixImport} from './portal/src/matrix-import.mjs';
+const h={mapped:(r,k)=>r[k]??'',norm:v=>String(v??'').trim().toLowerCase(),num:v=>Number(String(v).replace(',','.')),normalizeCode:v=>String(v).trim().toUpperCase()};
+const row=(code='A11',extra={})=>({denominazione:'Parco',comune:'Bologna',codiceVocePrezzo:code,quantita:'10,5',...extra});
+test('matrix groups different work codes into one plant and preserves quantities',()=>{const p=planMatrixImport([row(),row('B21')],[],h);assert.equal(p.groups.length,1);assert.equal(p.workCount,2);assert.equal(p.groups[0].work[0].quantity,10.5);});
+test('matrix refuses duplicates, existing sites, historical states, and negative quantities',()=>{for(const rows of [[row(),row('a11')],[row('A11',{stato:'FATTO'})],[row('A11',{quantita:'-1'})]])assert.throws(()=>planMatrixImport(rows,[],h));assert.throws(()=>planMatrixImport([row()],[{denominazione:'PARCO',comune:'Bologna'}],h));});
+test('matrix does not transfer a previous contract identity into a new contract',()=>{assert.equal(planMatrixImport([row()],[],h).workCount,1);assert.throws(()=>planMatrixImport([row()],[{denominazione:'Parco',comune:'Bologna'}],h));});

@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {commessePath,commessaDocumentPath} from './commesse-paths.mjs';
+const a={uid:'u',tenantId:'demo-a',role:'employee'};
+const b={...a,tenantId:'demo-b'};
+test('tenant commesse collection',()=>assert.deepEqual(commessePath(a),['tenants','demo-a','commesse']));
+test('commessa document',()=>assert.deepEqual(commessaDocumentPath(a,'c1'),['tenants','demo-a','commesse','c1']));
+test('impianti collection',()=>assert.deepEqual(commessePath(a,'c1'),['tenants','demo-a','commesse','c1','impianti']));
+test('impianto document',()=>assert.deepEqual(commessePath(a,'c1','p1'),['tenants','demo-a','commesse','c1','impianti','p1']));
+test('same identifiers remain isolated',()=>assert.notDeepEqual(commessePath(a,'c1','p1'),commessePath(b,'c1','p1')));
+test('reject traversal',()=>{for(const bad of ['',' ','/','..','.','a/b',null,1]){assert.throws(()=>commessePath(a,bad));assert.throws(()=>commessePath(a,'c1',bad));}});
+test('reject missing parent',()=>assert.throws(()=>commessePath(a,undefined,'p1')));
+test('reject missing context or role',()=>{for(const bad of [null,{...a,uid:''},{...a,role:'unknown'},{...a,tenantId:'../a'}])assert.throws(()=>commessePath(bad));});

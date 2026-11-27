@@ -1,0 +1,94 @@
+name: Staging unit tests
+on:
+  push:
+    branches: [varga-cantieri-v2-staging]
+    paths: ['staging/**', '.github/workflows/staging-unit-tests.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unit:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test staging/*.test.mjs
+      - run: node staging/audit-original-runtime.mjs
+  portal-build:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: staging/portal
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: compile-only-placeholder
+  firestore-emulator:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare isolated emulator
+        working-directory: staging
+        run: |
+          printf '%s' '{"name":"varga-emulator-ci","version":"1.0.0","private":true}' > package.json
+          npm install --no-save --no-audit --no-fund firebase@13.4.0 @firebase/rules-unit-testing@6.0.0 firebase-tools@15.34.2
+          node assemble-candidate-rules.mjs
+          printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > emulator-ci.json
+      - name: Test tenant isolation
+        working-directory: staging
+        run: npx --no-install firebase emulators:exec --config emulator-ci.json --only firestore --project demo-varga-verde-isolation 'node test-shared-isolation.cjs candidate.rules && node test-fatto-policy.cjs candidate.rules && node test-cobo-write.cjs candidate.rules && node test-commesse-write.cjs candidate.rules && node test-original-create.cjs candidate.rules && node test-original-native.cjs candidate.rules && node test-original-archives.cjs candidate.rules && node test-original-manual-plant.cjs candidate.rules && node test-original-price-list.cjs candidate.rules && node test-original-runtime-session.cjs candidate.rules && node test-superadmin.cjs candidate.rules'
+      - name: Package exact tested rules for review
+        working-directory: staging
+        run: |
+          node prepare-rules-review.mjs
+          cmp candidate.rules rules-review-dist/candidate.rules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staging-rules-reviewed-candidate
+          path: staging/rules-review-dist
+          retention-days: 3
+  original-preview-browser:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: staging/portal
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.55.0 leaflet@1.9.4
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: node test-original-preview-browser.cjs
+      - run: node test-full-original-runtime-browser.cjs

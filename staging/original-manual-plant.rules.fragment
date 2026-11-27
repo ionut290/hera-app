@@ -1,0 +1,51 @@
+// Emulator candidate, not deployed. Original manual insertion and price-code merge.
+// Separate capability because the original handler uses two non-atomic writes.
+function originalManualAllowed() {
+ return canManageCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalCreateEnabled',false)==true
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalManualEnabled',false)==true;
+}
+function manualPlantKeys() {
+ return ['distretto','idSap','denominazione','comune','indirizzo','voceRiferimento','codicePrezzo','sfalci','areaMq','frequenzaAnnua','tipologiaIntervento','lavorazioniRichieste','gpsY','gpsX','numeroProgressivo','sortOrder','hasOrdinario','hasStraordinario','tipoManutenzione','done','doneAt','doneBy','createdAt'];
+}
+function validManualPrices(d) {
+ return d.codicePrezzo is string && d.codicePrezzo.size()<=1000
+ && d.voceRiferimento is string && d.voceRiferimento.size()<=2000
+ && d.tipologiaIntervento is string && d.tipologiaIntervento.size()<=2000
+ && d.lavorazioniRichieste is string && d.lavorazioniRichieste.size()<=2000
+ && d.frequenzaAnnua is string && d.frequenzaAnnua.size()<=2000
+ && d.hasOrdinario is bool && d.hasStraordinario is bool
+ && d.tipoManutenzione==(d.hasOrdinario?(d.hasStraordinario?'Ordinaria + Straordinaria':'Ordinaria'):(d.hasStraordinario?'Straordinaria':'Non specificata'));
+}
+function manualPlantCreate(commessaId) {
+ let d=request.resource.data;
+ return originalManualAllowed()
+ && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId))
+ && d.keys().hasOnly(manualPlantKeys()) && d.keys().hasAll(manualPlantKeys())
+ && d.denominazione is string && d.denominazione.matches('.*[^\\s].*') && d.denominazione.size()<=250
+ && d.comune is string && d.comune.size()<=250 && d.indirizzo is string && d.indirizzo.size()<=500
+ && d.distretto=='' && d.idSap=='' && d.voceRiferimento=='' && d.sfalci=='' && d.areaMq==null
+ && d.frequenzaAnnua=='' && d.tipologiaIntervento=='' && d.lavorazioniRichieste==''
+ && d.gpsY==null && d.gpsX==null && d.done==false && d.doneAt==null && d.doneBy==''
+ && d.numeroProgressivo is int && d.numeroProgressivo>0 && d.sortOrder==d.numeroProgressivo
+ && d.createdAt==request.time && validManualPrices(d);
+}
+function manualPlantMerge() {
+ return originalManualAllowed()
+ && resource.data.keys().hasOnly(manualPlantKeys()) && resource.data.keys().hasAll(manualPlantKeys())
+ && resource.data.done==false
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['codicePrezzo','voceRiferimento','tipologiaIntervento','lavorazioniRichieste','frequenzaAnnua','hasOrdinario','hasStraordinario','tipoManutenzione'])
+ && validManualPrices(request.resource.data);
+}
+match /commesse/{commessaId} {
+ allow update: if commessaId!='sfalcio-cobo' && originalManualAllowed()
+ && resource.data.get('excelModelVersion',0)==2
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nextImpiantoNumber'])
+ && request.resource.data.nextImpiantoNumber is int
+ && request.resource.data.nextImpiantoNumber>=resource.data.nextImpiantoNumber
+ && request.resource.data.nextImpiantoNumber<=resource.data.nextImpiantoNumber+1;
+ match /impianti/{impiantoId} {
+  allow create: if commessaId!='sfalcio-cobo' && manualPlantCreate(commessaId);
+  allow update: if commessaId!='sfalcio-cobo' && manualPlantMerge();
+ }
+}

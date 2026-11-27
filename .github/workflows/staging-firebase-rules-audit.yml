@@ -1,0 +1,41 @@
+name: Varga V2 read-only published Firebase rules audit
+on:
+  push:
+    branches: [varga-cantieri-v2-staging]
+    paths: ['.github/workflows/staging-firebase-rules-audit.yml', 'staging/audit-live-firebase-rules.mjs', 'staging/audit-live-firebase-rules.test.mjs']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: node --test staging/audit-live-firebase-rules.test.mjs
+      - name: Report audit readiness without exposing credentials
+        env:
+          AUDIT_READY: ${{ vars.VARGA_V2_RULES_AUDIT_READY }}
+        run: |
+          if [[ "$AUDIT_READY" != true ]]; then
+            echo '::warning::Read-only federation readiness not enabled; online audit cannot be certified.'
+          fi
+  audit:
+    needs: checks
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging' && vars.VARGA_V2_RULES_AUDIT_READY == 'true'
+    environment: ios-varga-v2-staging
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compare actual deployed staging rules
+        env:
+          VARGA_V2_RULES_AUDIT_READY: ${{ vars.VARGA_V2_RULES_AUDIT_READY }}
+        run: node staging/audit-live-firebase-rules.mjs

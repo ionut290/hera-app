@@ -1,0 +1,66 @@
+name: Staging integrated original package
+on:
+  push:
+    branches: [varga-cantieri-v2-staging]
+    paths: ['staging/**', '.github/workflows/staging-integrated-package.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  full-package:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: staging/portal
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund leaflet@1.9.4
+      - run: node build-full-runtime.mjs
+      - run: |
+          test -s full-runtime-dist/launcher.js
+          test -s full-runtime-dist/original.html
+          test -s full-runtime-dist/app.js
+          test -s full-runtime-dist/app-snow.js
+          test -s full-runtime-dist/accounting-v2.js
+          test -s full-runtime-dist/LOCAL_TEST_ONLY.txt
+          node -e "new (require('node:vm').Script)(require('node:fs').readFileSync('full-runtime-dist/app.js','utf8'));"
+          node --check full-runtime-dist/launcher.js
+          node --check full-runtime-dist/runtime-bootstrap.js
+          test ! -e full-runtime-dist/sw.js
+          test ! -e full-runtime-dist/GoogleService-Info.plist
+          test ! -e full-runtime-dist/firebase.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.55.0 leaflet@1.9.4
+      - run: npx --no-install playwright install --with-deps chromium
+      - name: Real Auth and Firestore emulators
+        working-directory: staging
+        run: |
+          printf '%s' '{"name":"varga-emulator-package-ci","version":"1.0.0","private":true}' > package.json
+          npm install --no-save --no-audit --no-fund firebase-tools@15.34.2 firebase-admin
+          node assemble-candidate-rules.mjs
+          printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}' > emulator-package.json
+          npx --no-install firebase emulators:exec --config emulator-package.json --only firestore,auth --project varga-cantieri-v2-staging 'node portal/test-full-package-auth.cjs'
+      - name: Compile private staging login candidate without live network
+        run: |
+          VARGA_STAGING_WEB_API_KEY=AIzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA node build-full-runtime.mjs private-staging
+          test -s private-staging-dist/PRIVATE_STAGING_NOT_RELEASED.txt
+          test ! -e private-staging-dist/LOCAL_TEST_ONLY.txt
+          grep -F 'https://identitytoolkit.googleapis.com' private-staging-dist/index.html
+          grep -F 'Moduli operativi disabilitati' private-staging-dist/index.html
+          if grep -F 'connect-src http://127.0.0.1:9099' private-staging-dist/index.html; then exit 1; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: local-emulator-integrated-original
+          path: staging/portal/full-runtime-dist
+          retention-days: 1

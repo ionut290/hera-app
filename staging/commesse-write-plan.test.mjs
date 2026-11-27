@@ -1,0 +1,12 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {planCreateCommessa,planCreatePlant} from './commesse-write-plan.mjs';
+const context={uid:'u',tenantId:'azienda-a',role:'admin'};
+test('company creates own commessa',()=>assert.deepEqual(planCreateCommessa({context,commessaId:'giardinaggio',data:{nome:'Giardinaggio'}}).path,['tenants','azienda-a','commesse','giardinaggio']));
+test('tenant separation',()=>assert.notDeepEqual(planCreateCommessa({context,commessaId:'x',data:{nome:'X'}}).path,planCreateCommessa({context:{...context,tenantId:'azienda-b'},commessaId:'x',data:{nome:'X'}}).path));
+test('supervisor cannot create commessa',()=>assert.throws(()=>planCreateCommessa({context:{...context,role:'supervisor'},commessaId:'x',data:{nome:'X'}})));
+test('employee cannot create commessa',()=>assert.throws(()=>planCreateCommessa({context:{...context,role:'employee'},commessaId:'x',data:{nome:'X'}})));
+test('employee cannot add plant',()=>assert.throws(()=>planCreatePlant({context:{...context,role:'employee'},commessaId:'x',plantId:'p1',data:{id:'p1',commessaId:'x',nome:'Cantiere'}})));
+test('plant path tenant scoped',()=>assert.deepEqual(planCreatePlant({context,commessaId:'x',plantId:'p1',data:{id:'p1',commessaId:'x',nome:'Cantiere'}}).path,['tenants','azienda-a','commesse','x','impianti','p1']));
+for(const key of ['done','doneAt','doneBy','fatto','completato','completedAt','tenantId'])test('reject protected '+key,()=>assert.throws(()=>planCreatePlant({context,commessaId:'x',plantId:'p1',data:{id:'p1',commessaId:'x',nome:'Cantiere',[key]:true}})));
+test('reject path injection',()=>assert.throws(()=>planCreateCommessa({context,commessaId:'../x',data:{nome:'X'}})));
+test('reject unknown fields',()=>assert.throws(()=>planCreateCommessa({context,commessaId:'x',data:{nome:'X',isSuperAdmin:true}})));

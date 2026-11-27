@@ -1,0 +1,40 @@
+// Candidate only; insert within /tenants/{tenantId}. No deployment.
+function canReadDemoFatto() {
+ return activeMember(tenantId)
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.demo == true
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.fattoMode == 'configurable-demo'
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['admin','supervisor','employee']
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.status == 'active'
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.tenantId == tenantId
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role;
+}
+function canConfigureDemoFatto() {
+ return canReadDemoFatto() && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin';
+}
+function validFattoPolicy() {
+ let d = request.resource.data;
+ let t = get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+ return d.keys().hasAll(['version','actions','updatedAt','updatedBy'])
+ && d.keys().hasOnly(['version','actions','updatedAt','updatedBy'])
+ && d.version is int && d.version >= 1 && d.version <= 9007199254740991
+ && d.actions is list && d.actions.size() >= 1 && d.actions.size() <= 4
+ && d.actions[0] == 'saveCompletion'
+ && d.actions.toSet().size() == d.actions.size()
+ && d.actions.hasOnly(['saveCompletion','moveToCompleted','openWhatsApp','exportSheet'])
+ && (!d.actions.hasAny(['openWhatsApp']) || t.get('whatsappConfigured',false) == true)
+ && (!d.actions.hasAny(['exportSheet']) || t.get('sheetConfigured',false) == true)
+ && d.updatedAt == request.time && d.updatedBy == request.auth.uid;
+}
+match /fattoSettings/{settingId} {
+ allow get: if settingId == 'workflow' && canReadDemoFatto();
+ allow list, delete: if false;
+ allow create: if settingId == 'workflow' && canConfigureDemoFatto() && validFattoPolicy() && request.resource.data.version == 1;
+ allow update: if settingId == 'workflow' && canConfigureDemoFatto() && validFattoPolicy() && request.resource.data.version == resource.data.version + 1;
+}
+
+// Journal records are readable only by authorized tenant members.
+// Client writes remain denied until a trusted executor is available.
+match /fattoExecutions/{operationId} {
+ allow get: if canReadDemoFatto();
+ allow list, create, update, delete: if false;
+}

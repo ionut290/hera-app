@@ -1,0 +1,65 @@
+// Emulator-only candidate: exact initial payloads from original app.js handlers.
+// Do not deploy: no operational update, deletion or FATTO permission is granted here.
+function originalCommessaCreate(archive) {
+ let d=request.resource.data;
+ return canManageCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalCreateEnabled',false)==true
+ && d.keys().hasOnly(['nome','codice','excelModelVersion','priceListVersion','workItemsModelVersion','percentualeRibassoGenerale','excelModelActivatedAt','excelModelActivatedBy','nextImpiantoNumber','parentCommessaId','creatoDa','createdAt'])
+ && d.keys().hasAll(['nome','codice','excelModelVersion','priceListVersion','workItemsModelVersion','percentualeRibassoGenerale','excelModelActivatedAt','excelModelActivatedBy','nextImpiantoNumber','parentCommessaId','creatoDa','createdAt'])
+ && d.nome is string && d.nome.matches('.*[^\\s].*') && d.nome.size()<=200
+ && d.codice is string && d.codice.size()<=200
+ && d.excelModelVersion==2 && d.priceListVersion==2 && d.workItemsModelVersion==2
+ && d.percentualeRibassoGenerale==0.01 && d.nextImpiantoNumber==1
+ && d.excelModelActivatedAt==request.time && d.createdAt==request.time
+ && d.creatoDa==request.auth.token.email && d.excelModelActivatedBy==request.auth.token.email
+ && (d.parentCommessaId==null || (d.parentCommessaId is string && exists(/databases/$(database)/documents/tenants/$(tenantId)/$(archive)/$(d.parentCommessaId))));
+}
+function originalImpiantoCreate(commessaId) {
+ let d=request.resource.data;
+ return canManageCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalCreateEnabled',false)==true
+ && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId))
+ && d.keys().hasOnly(['denominazione','idSap','tipologiaImpianto','comune','indirizzo','gpsY','gpsX','codicePrezzo','area','dittaEsecutrice','note','stato','done','doneAt','doneBy','numeroProgressivo','commessaId','createdAt','updatedAt','updatedByUid','updatedByName'])
+ && d.keys().hasAll(['denominazione','idSap','tipologiaImpianto','comune','indirizzo','gpsY','gpsX','codicePrezzo','area','dittaEsecutrice','note','stato','done','doneAt','doneBy','numeroProgressivo','commessaId','createdAt','updatedAt','updatedByUid','updatedByName'])
+ && d.denominazione is string && d.denominazione.matches('.*[^\\s].*') && d.denominazione.size()<=250
+ && d.idSap is string && d.idSap.size()<=200
+ && d.tipologiaImpianto=='' && d.comune=='' && d.indirizzo=='' && d.gpsY==null && d.gpsX==null
+ && d.codicePrezzo=='' && d.area=='' && d.dittaEsecutrice=='' && d.note==''
+ && d.stato=='DA FARE' && d.done==false && d.doneAt==null && d.doneBy==''
+ && (d.numeroProgressivo==null || (d.numeroProgressivo is int && d.numeroProgressivo>0))
+ && d.commessaId==commessaId && d.createdAt==request.time && d.updatedAt==request.time
+ && d.updatedByUid==request.auth.uid && d.updatedByName is string && d.updatedByName.size()<=250;
+}
+match /commesse/{commessaId} {
+ allow create: if commessaId!='sfalcio-cobo' && originalCommessaCreate('commesse');
+ match /impianti/{impiantoId} {
+  allow create: if commessaId!='sfalcio-cobo' && originalImpiantoCreate(commessaId);
+ }
+}
+
+ // Snow-specific candidate. Initial road creation only; never grant completion or delete.
+ function snowCreateAllowed() {
+  return canManageCommesse()
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalArchivesEnabled',false)==true
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('snowCreateEnabled',false)==true;
+ }
+ function originalSnowRoadCreate(commessaId) {
+  let d=request.resource.data;
+  let keys=['denominazione','indirizzo','descrizioneVia','tipologiaImpianto','codicePrezzo','snowRoad','roadStatus','routePath','done','doneAt','doneBy','sortOrder','createdAt','createdBy'];
+  return snowCreateAllowed()
+   && exists(/databases/$(database)/documents/tenants/$(tenantId)/neve_commesse/$(commessaId))
+   && d.keys().hasAll(keys) && d.keys().hasOnly(keys)
+   && d.denominazione is string && d.denominazione.size()>0 && d.denominazione.size()<=500
+   && d.indirizzo==d.denominazione && d.descrizioneVia==d.denominazione
+   && d.tipologiaImpianto=='Via neve' && d.codicePrezzo=='NEVE-STRADA'
+   && d.snowRoad==true && d.roadStatus=='todo' && d.routePath==[]
+   && d.done==false && d.doneAt==null && d.doneBy==''
+   && d.sortOrder is int && d.sortOrder>0
+   && d.createdAt==request.time && d.createdBy==request.auth.token.email;
+ }
+ match /neve_commesse/{commessaId} {
+  allow create: if snowCreateAllowed() && originalCommessaCreate('neve_commesse');
+  match /impianti/{impiantoId} {
+   allow create: if originalSnowRoadCreate(commessaId);
+  }
+ }

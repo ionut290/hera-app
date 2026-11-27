@@ -1,0 +1,28 @@
+// Candidate only; requires explicit trusted demo capability and emulator tests.
+function canWriteCobo() {
+ return canReadDemoCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('coboWriteEnabled',false) == true;
+}
+function coboFields() {
+ return ['id','commessaId','idSap','denominazione','nome','comune','indirizzo','descrizioneVia','area','competenza','gpsY','gpsX','latitudine','longitudine','coordinate','tipologia','tipologiaImpianto','tipologiaIntervento','lavorazioniRichieste','codicePrezzo','voceRiferimento','hasOrdinario','hasStraordinario','tipoManutenzione','sfalci','sfalciMq','note','noteImpianto','noteOperatore','hasNote','sfalcioCobo','parcoCobo','parcoCodvia','parcoNomevia','parcoQuartiere','parcoConfiniDisponibili','parcoDettagliPrimiSei','parcoFonte','parcoDataset','schedaVersione','updatedByUid','updatedByName','updatedAt'];
+}
+match /commesse/sfalcio-cobo/impianti/{plantId} {
+ function validCobo() {
+  let d=request.resource.data;
+  return canWriteCobo() && plantId.matches('^cobo-parco-[a-z0-9-]{1,100}$')
+  && d.id==plantId && d.commessaId=='sfalcio-cobo' && d.sfalcioCobo==true
+  && d.updatedByUid==request.auth.uid && d.updatedAt==request.time
+  && existsAfter(/databases/$(database)/documents/tenants/$(tenantId)/commesse/sfalcio-cobo);
+ }
+ allow create: if validCobo() && request.resource.data.keys().hasOnly(coboFields().concat(['stato','done','doneAt','doneBy','createdAt']))
+ && request.resource.data.stato=='da_fare' && request.resource.data.done==false
+ && request.resource.data.doneAt==null && request.resource.data.doneBy=='' && request.resource.data.createdAt==request.time;
+ allow update: if validCobo() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(coboFields());
+ allow delete: if false;
+}
+match /commesse/sfalcio-cobo {
+ allow create: if canWriteCobo()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role=='admin'
+ && request.resource.data == {'nome':'Sfalcio COBO','codice':'COBO-SFALCIO','speciale':true,'tipoSpeciale':'SFALCIO_COBO','verdeBologna':true,'parchiGiardini':true,'attiva':true,'parentCommessaId':null,'excelModelVersion':2,'priceListVersion':2,'workItemsModelVersion':2,'percentualeRibassoGenerale':0.01,'nextImpiantoNumber':1,'creatoDa':request.auth.token.email,'createdAt':request.time};
+ allow update, delete: if false;
+}

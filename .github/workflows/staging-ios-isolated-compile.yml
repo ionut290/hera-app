@@ -1,0 +1,71 @@
+name: Varga Cantieri 2.0 isolated iOS compile
+on:
+  push:
+    branches: [varga-cantieri-v2-staging]
+    paths: ['.github/workflows/staging-ios-isolated-compile.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  simulator:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: macos-26
+    timeout-minutes: 40
+    concurrency:
+      group: varga-staging-ios-compile
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+        working-directory: staging/portal
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund leaflet@1.9.4
+        working-directory: staging/portal
+      - name: Build private staging login candidate (no emulator fallback)
+        working-directory: staging/portal
+        env:
+          VARGA_STAGING_WEB_API_KEY: ${{ vars.VARGA_STAGING_WEB_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$VARGA_STAGING_WEB_API_KEY" ]]; then
+            echo 'Missing the verified staging web configuration. Refusing to build a misleading live candidate.' >&2
+            exit 1
+          fi
+          echo "::add-mask::$VARGA_STAGING_WEB_API_KEY"
+          node build-full-runtime.mjs private-staging
+          test -s private-staging-dist/PRIVATE_STAGING_NOT_RELEASED.txt
+          test ! -e private-staging-dist/LOCAL_TEST_ONLY.txt
+          echo 'VARGA_IOS_WEB_DIR=staging/portal/private-staging-dist' >> "$GITHUB_ENV"
+          echo 'PRIVATE_STAGING_LOGIN_ONLY: real staging client configuration, operational runtime blocked' >> "$GITHUB_STEP_SUMMARY"
+      - name: Compile separate native shell, no production credentials
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/varga-staging-ios"
+          cp -R "$VARGA_IOS_WEB_DIR" "$RUNNER_TEMP/varga-staging-ios/www"
+          cd "$RUNNER_TEMP/varga-staging-ios"
+          printf '%s' '{"name":"varga-staging-ios","version":"2.0.0","private":true}' > package.json
+          npm install --no-audit --no-fund @capacitor/cli@7.6.10 @capacitor/core@7.6.10 @capacitor/ios@7.6.10
+          printf '%s' '{"appId":"it.vargacantieri.staging","appName":"Varga Cantieri 2.0 Collaudo","webDir":"www"}' > capacitor.config.json
+          npx cap add ios
+          npx cap sync ios
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/varga-staging-derived" CODE_SIGNING_ALLOWED=NO build
+          test -d "$RUNNER_TEMP/varga-staging-derived/Build/Products/Debug-iphonesimulator/App.app"
+          test ! -e "$RUNNER_TEMP/varga-staging-derived/Build/Products/Debug-iphonesimulator/App.app/GoogleService-Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$RUNNER_TEMP/varga-staging-derived/Build/Products/Debug-iphonesimulator/App.app/Info.plist" | grep -Fx 'it.vargacantieri.staging'
+
+      - name: Validate device architecture without signing or upload
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/varga-staging-ios"
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/varga-staging-device" CODE_SIGNING_ALLOWED=NO build
+          APP="$RUNNER_TEMP/varga-staging-device/Build/Products/Release-iphoneos/App.app"
+          test -s "$APP/App"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'it.vargacantieri.staging'
+          test ! -e "$APP/GoogleService-Info.plist"
+          test -s "$APP/public/PRIVATE_STAGING_NOT_RELEASED.txt"
+          test ! -e "$APP/public/LOCAL_TEST_ONLY.txt"
+          echo 'Unsigned device compile succeeded; not installable, no Apple upload.' >> "$GITHUB_STEP_SUMMARY"

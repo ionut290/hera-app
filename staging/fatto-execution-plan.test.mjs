@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {planFatto} from './fatto-execution-plan.mjs';
+const tenant={id:'demo-a',demo:true,status:'active',fattoMode:'configurable-demo',whatsappConfigured:true};
+const context={uid:'u',tenantId:'demo-a',role:'employee'};
+const args={tenant,context,policy:{version:1,actions:['saveCompletion','openWhatsApp']},siteId:'site-a',operationId:'op-a'};
+test('employee plans approved steps',()=>{const p=planFatto(args);assert.deepEqual(p.steps.map(x=>x.action),args.policy.actions);assert.ok(Object.isFrozen(p.steps));});
+test('retry keys stable',()=>assert.deepEqual(planFatto(args),planFatto(args)));
+test('different operation distinct keys',()=>assert.notEqual(planFatto(args).steps[0].key,planFatto({...args,operationId:'op-b'}).steps[0].key));
+test('different tenant distinct keys',()=>assert.notEqual(planFatto(args).steps[0].key,planFatto({...args,tenant:{...tenant,id:'demo-b'},context:{...context,tenantId:'demo-b'}}).steps[0].key));
+for(const [name,change] of Object.entries({protected:{tenant:{...tenant,fattoMode:'immutable'}},crossTenant:{context:{...context,tenantId:'demo-b'}},unknownRole:{context:{...context,role:'viewer'}},badId:{siteId:'../site'},missingOperation:{operationId:''}}))test('reject '+name,()=>assert.throws(()=>planFatto({...args,...change})));

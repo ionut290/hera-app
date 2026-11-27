@@ -2,7 +2,7 @@ name: Varga V2 read-only published Firebase rules audit
 on:
   push:
     branches: [varga-cantieri-v2-staging]
-    paths: ['.github/workflows/staging-firebase-rules-audit.yml']
+    paths: ['.github/workflows/staging-firebase-rules-audit.yml', 'staging/audit-live-firebase-rules.mjs', 'staging/audit-live-firebase-rules.test.mjs']
   workflow_dispatch:
 permissions:
   contents: read

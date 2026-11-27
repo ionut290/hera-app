@@ -1,5 +1,5 @@
-// Self-service trial onboarding for a new staging company.
-// The tenant, owner membership and owner member must be created in one batch.
+// Self-service trial onboarding and company-code membership requests.
+// All bootstrap writes must be authenticated, verified and tenant-scoped.
 function canCreateTrialTenant() {
  return eligible()
   && request.auth.uid == request.resource.data.ownerUid
@@ -24,4 +24,27 @@ match /members/{uid} {
   && request.resource.data.role == 'admin'
   && request.resource.data.status == 'active'
   && request.resource.data.demo == true;
+ allow create: if companyAdmin(tenantId)
+  && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'accepted'
+  && request.resource.data.uid == uid
+  && request.resource.data.role == 'employee'
+  && request.resource.data.status == 'active'
+  && request.resource.data.demo == true;
+}
+match /joinRequests/{uid} {
+ allow create: if eligible()
+  && uid == request.auth.uid
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active'
+  && request.resource.data.uid == request.auth.uid
+  && request.resource.data.status == 'pending'
+  && request.resource.data.email is string;
+ allow get: if eligible() && (uid == request.auth.uid || companyAdmin(tenantId));
+ allow list: if companyAdmin(tenantId);
+ allow update: if companyAdmin(tenantId)
+  && request.resource.data.uid == resource.data.uid
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewedAt','reviewedBy'])
+  && request.resource.data.status in ['accepted','rejected']
+  && request.resource.data.reviewedBy == request.auth.uid
+  && request.resource.data.reviewedAt == request.time;
+ allow delete: if false;
 }

@@ -1,0 +1,63 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {once} from 'node:events';
+import {Pool} from 'pg';
+import {createApi} from './api.mjs';
+test('real PostgreSQL: onboarding, isolation, roles and concurrent trial quotas',async()=>{
+ const url=new URL(process.env.DATABASE_URL||'');
+ assert.equal(url.hostname,'127.0.0.1');assert.equal(url.pathname,'/varga_v2_oracle');assert.equal(url.username,'varga_app');
+ const pool=new Pool({connectionString:url.toString()});
+ const server=createApi({pool,verifyToken:async token=>{
+  if(token==='invalid')throw Error('bad token');
+  return {uid:token,email:token+'@example.test',email_verified:token!=='unverified'};
+ }});
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ const call=async(method,path,who,data)=>{
+  const response=await fetch(base+path,{method,headers:{...(who?{Authorization:'Bearer '+who}:{}),'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
+  return {status:response.status,data:await response.json()};
+ };
+ const post=(path,who,data)=>call('POST',path,who,data);
+ const get=(path,who)=>call('GET',path,who);
+ try{
+  assert.equal((await get('/v1/companies')).status,401);
+  assert.equal((await get('/v1/companies','invalid')).status,401);
+  assert.equal((await get('/v1/companies','unverified')).status,403);
+  const requestId=randomUUID();
+  const a=await post('/v1/companies','owner-a',{name:'Demo A',requestId});assert.equal(a.status,200,JSON.stringify(a));
+  const b=await post('/v1/companies','owner-b',{name:'Demo B',requestId:randomUUID()});assert.equal(b.status,200);
+  assert.notEqual(a.data.id,b.data.id);
+  assert.deepEqual(a.data.limits,{commesse:1,impianti:10,admin:1,operatori:3});
+  assert.equal((await post('/v1/companies','owner-a',{name:'Demo A',requestId})).data.id,a.data.id);
+  assert.equal((await post('/v1/companies','owner-a',{name:'Other',requestId})).status,409);
+  assert.equal((await get('/v1/companies','owner-a')).data.length,1);
+  const path='/v1/companies/'+a.data.id;
+  assert.equal((await get(path+'/jobs','owner-b')).status,404);
+  assert.equal((await post(path+'/jobs','owner-b',{name:'Intrusion'})).status,404);
+  const jobs=await Promise.all([post(path+'/jobs','owner-a',{name:'Cantiere demo'}),post(path+'/jobs','owner-a',{name:'Secondo cantiere'})]);
+  assert.deepEqual(jobs.map(x=>x.status).sort(),[200,409]);
+  const job=jobs.find(x=>x.status===200).data;
+  const plants=path+'/jobs/'+job.id+'/plants';
+  const results=await Promise.all(Array.from({length:11},(_,i)=>post(plants,'owner-a',{name:'Impianto '+i,lat:0,lng:0})));
+  assert.equal(results.filter(x=>x.status===200).length,10,JSON.stringify(results));
+  assert.equal(results.filter(x=>x.status===409).length,1);
+  assert.equal((await get(plants,'owner-a')).data.length,10);
+  assert.equal((await get(plants,'owner-b')).status,404);
+  assert.equal((await get('/v1/companies/'+b.data.id+'/jobs/'+job.id+'/plants','owner-b')).status,404);
+  assert.equal((await pool.query('SELECT count(*) n FROM jobs')).rows[0].n,'0','RLS without scope must deny rows');
+  for(let i=0;i<4;i++)assert.equal((await post('/v1/join','operator-'+i,{code:a.data.joinCode})).data.status,'pending');
+  assert.equal((await get(path+'/requests','owner-b')).status,404);
+  const decisions=await Promise.all(Array.from({length:4},(_,i)=>post(path+'/requests/operator-'+i,'owner-a',{decision:'accepted'})));
+  assert.equal(decisions.filter(x=>x.status===200).length,3,JSON.stringify(decisions));
+  assert.equal(decisions.filter(x=>x.status===409).length,1);
+  const active='operator-'+decisions.findIndex(x=>x.status===200);
+  const inactive='operator-'+decisions.findIndex(x=>x.status===409);
+  assert.equal((await get(path+'/jobs',active)).status,200);
+  assert.equal((await get(path+'/requests',active)).status,403);
+  assert.equal((await get('/v1/companies',active)).data[0].joinCode,undefined);
+  assert.equal((await post(path+'/jobs',active,{name:'Not allowed'})).status,403);
+  assert.equal((await get(path+'/jobs',inactive)).status,404);
+  console.log('PASS: actual PostgreSQL, idempotent company creation, tenant isolation, RLS, admin permissions, concurrent 1/10/3 quotas.');
+ }finally{await new Promise(resolve=>server.close(resolve));await pool.end()}
+});

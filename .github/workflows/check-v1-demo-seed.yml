@@ -1,0 +1,23 @@
+name: V1 demo seed offline safety
+on:
+  push:
+    branches: [v1-demo-isolated-seed]
+    paths:
+      - scripts/seed-v1-demo-isolated.cjs
+      - .github/workflows/check-v1-demo-seed.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --check scripts/seed-v1-demo-isolated.cjs
+      - run: node scripts/seed-v1-demo-isolated.cjs --self-test
+      - run: node scripts/seed-v1-demo-isolated.cjs

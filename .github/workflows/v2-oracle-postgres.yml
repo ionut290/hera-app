@@ -53,8 +53,8 @@ jobs:
       run:
         working-directory: staging/oracle/deploy
     env:
-      VARGA_SECRETS_DIR: ${{ runner.temp }}/varga-ci-secrets
-      VARGA_BACKUP_DIR: ${{ runner.temp }}/varga-ci-backups
+      VARGA_SECRETS_DIR: /tmp/varga-ci-${{ github.run_id }}-secrets
+      VARGA_BACKUP_DIR: /tmp/varga-ci-${{ github.run_id }}-backups
     steps:
       - uses: actions/checkout@v4
         with:

@@ -22,9 +22,9 @@ export async function getActiveRules({token,request=fetch}){
  if(ruleset.name!==release.rulesetName||!Array.isArray(ruleset.source?.files)||ruleset.source.files.length!==1||typeof ruleset.source.files[0].content!=='string')throw Error('Unexpected ruleset source');
  const content=ruleset.source.files[0].content;
  if(!content.trim())throw Error('Empty active rules');
- return Object.freeze({rulesetName:release.rulesetName,updateTime:release.updateTime||null,sha256:sha(content),matchesTestedCandidate:content===assembleRules(),lineCount:content.split('\n').length});
+ return Object.freeze({rulesetName:release.rulesetName,updateTime:release.updateTime||null,sha256:sha(content),matchesTestedCandidate:content===assembleRules(),lineCount:content.split('\n').length,candidateSha256:sha(assembleRules()),candidateLineCount:assembleRules().split('\n').length});
 }
-async function getFederatedToken(env,request=fetch){
+export async function getFederatedToken(env,request=fetch){
  if(env.GITHUB_REPOSITORY!=='ionut290/hera-app'||env.GITHUB_REF!=='refs/heads/varga-cantieri-v2-staging'||env.GITHUB_WORKFLOW_REF!=='ionut290/hera-app/.github/workflows/staging-firebase-rules-audit.yml@refs/heads/varga-cantieri-v2-staging')throw Error('Unexpected audit workflow identity');
  if(env.VARGA_V2_RULES_AUDIT_READY!=='true')throw Error('Read-only federation not authorized');
  if(!env.ACTIONS_ID_TOKEN_REQUEST_URL||!env.ACTIONS_ID_TOKEN_REQUEST_TOKEN)throw Error('GitHub OIDC unavailable');

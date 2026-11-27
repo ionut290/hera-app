@@ -24,8 +24,7 @@ jobs:
           fi
   audit:
     needs: checks
-    # Fail closed until the complete federation condition has been independently verified.
-    if: false
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging' && vars.VARGA_V2_RULES_AUDIT_READY == 'true'
     environment: ios-varga-v2-staging
     permissions:
       contents: read

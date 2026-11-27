@@ -1,14 +1,14 @@
 name: Staging integrated original package
 on:
   push:
-    branches: [varga-cantieri-v2-staging, v2/login-onboarding-redesign]
+    branches: [varga-cantieri-v2-staging, v2/fix-registration-session]
     paths: ['staging/**', '.github/workflows/staging-integrated-package.yml']
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   full-package:
-    if: github.ref == 'refs/heads/varga-cantieri-v2-staging' || github.ref == 'refs/heads/v2/login-onboarding-redesign'
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging' || github.ref == 'refs/heads/v2/fix-registration-session'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:

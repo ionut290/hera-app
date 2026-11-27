@@ -1,4 +1,4 @@
-name: Prepare Varga Cantieri 1.1 draft with build 20033 (no review)
+name: Verify Varga Cantieri 1.1 draft and screenshot delivery (no review)
 on:
   push:
     branches: [release/ios-1.1-snow-20032]
@@ -75,20 +75,23 @@ jobs:
             if(!attached)await request("PATCH",relationship,{data:{type:"builds",id:b.id}});
             assert.equal((await request("GET",relationship)).data?.id,b.id);
             console.log("PASS: original app version 1.1 draft now associated with valid build 20033.");
-            const reviewRelationship=(await request("GET","/v1/appStoreVersions/"+v.id+"/relationships/appStoreReviewDetail")).data;
-            if(reviewRelationship?.id){
-              const path="/v1/appStoreReviewDetails/"+reviewRelationship.id;
-              const info=(await request("GET",path)).data;
-              const notes=info.attributes.notes||"";
-              const updated=notes.replace("New for version 1.1, build 20032:","New for version 1.1, build 20033 (same application runtime as TestFlight build 20032):");
-              if(updated!==notes){
-                await request("PATCH",path,{data:{type:"appStoreReviewDetails",id:info.id,attributes:{notes:updated}}});
-                assert.equal((await request("GET",path)).data.attributes.notes,updated);
-                console.log("PASS: review notes build reference updated. Existing instructions and credentials unchanged.");
-              }else console.log("No exact old build reference found; existing review notes preserved.");
-            }
             const final=(await request("GET","/v1/appStoreVersions/"+v.id)).data;
             assert.equal(final.attributes.appStoreState,"PREPARE_FOR_SUBMISSION");
+            console.log("VERSION_STATE="+final.attributes.appStoreState);
+            console.log("RELEASE_TYPE="+final.attributes.releaseType);
+            console.log("BUILD=20033; PROCESSING="+b.attributes.processingState+"; EXPIRED="+b.attributes.expired);
+            const locales=(await request("GET","/v1/appStoreVersions/"+v.id+"/appStoreVersionLocalizations?limit=50")).data;
+            for(const l of locales){
+              const sets=(await request("GET","/v1/appStoreVersionLocalizations/"+l.id+"/appScreenshotSets?limit=50")).data;
+              for(const set of sets){
+                const shots=(await request("GET","/v1/appScreenshotSets/"+set.id+"/appScreenshots?limit=50")).data;
+                console.log(JSON.stringify({locale:l.attributes.locale,display:set.attributes.screenshotDisplayType,count:shots.length,assets:shots.map(s=>({file:s.attributes.fileName,state:s.attributes.assetDeliveryState?.state}))}));
+              }
+            }
+            try {
+              const subs=(await request("GET","/v1/apps/"+appId+"/reviewSubmissions?limit=50")).data;
+              console.log(JSON.stringify({submissions:subs.map(s=>({state:s.attributes.state,platform:s.attributes.platform}))}));
+            } catch(e) {console.log("Submission listing unavailable: "+e.message);}
             console.log("Draft only. No submission, release, screenshot or credential changes.");
-          })().catch(e=>{console.error("Draft preparation stopped:",e.message);process.exitCode=1;});
+          })().catch(e=>{console.error("Draft verification stopped:",e.message);process.exitCode=1;});
           JS

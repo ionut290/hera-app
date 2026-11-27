@@ -97,7 +97,7 @@ $('admin-toggle').onclick=async()=>{
  $('companies').hidden=true;adminVisible=true;$('admin-toggle').textContent='Torna alle aziende';status('Area amministrativa.');await adminPanel.open(auth.currentUser);
 };
 auth.onAuthStateChanged(async user=>{
- closeRuntime();adminPanel.clear();superAdmin=false;adminVisible=false;const request=revision;$('companies').replaceChildren();$('companies').hidden=false;$('admin-toggle').hidden=true;$('admin-toggle').textContent='Super Admin';$('login').hidden=Boolean(user);$('login-card').hidden=Boolean(user);$('register-panel').hidden=true;$('company-panel').hidden=!user;$('logout').hidden=!user;$('back').hidden=!user;
+ closeRuntime();adminPanel.clear();superAdmin=false;adminVisible=false;const request=revision;let companyCount=0;$('companies').replaceChildren();$('companies').hidden=false;$('admin-toggle').hidden=true;$('admin-toggle').textContent='Super Admin';$('login').hidden=Boolean(user);$('login-card').hidden=Boolean(user);$('register-panel').hidden=true;$('join-panel').hidden=!user;$('company-panel').hidden=!user;$('company-admin-panel').hidden=true;$('logout').hidden=!user;$('back').hidden=!user;
  if(!user){showLogin();status(isLive?'Accedi oppure crea la tua azienda.':'Accedi con un account di prova locale.');return;}
  try{
   const claims=(await user.getIdTokenResult(true)).claims;if(claims.email_verified!==true||claims.apple_review===true)throw Error('Account non autorizzato');
@@ -110,11 +110,11 @@ auth.onAuthStateChanged(async user=>{
    try{tenant=await db.doc('tenants/'+item.id).get({source:'server'});}catch(err){if(err.code==='permission-denied'||err.code==='firestore/permission-denied')continue;throw err;}
    if(request!==revision)return;
    if(!tenant.exists||tenant.data().demo!==true||tenant.data().status!=='active')continue;
-   const button=document.createElement('button');button.textContent=tenant.data().name||item.id;button.dataset.tenant=item.id;
+   companyCount++;const button=document.createElement('button');button.textContent=(tenant.data().name||item.id)+' · '+(tenant.data().plan==='trial'?'Piano prova':'Azienda');button.dataset.tenant=item.id;
    button.onclick=async()=>{closeRuntime();const attempt=revision;status('Verifica azienda…');try{const session=await entry.enter(item.id);if(attempt!==revision)return;const approval=await session.approval.verify(auth.currentUser);if(!approval.allowed||attempt!==revision)throw Error('Accesso non autorizzato');if(isLive){present(session);status('Azienda staging caricata: '+session.session.company.name+' — '+session.session.context.role+'.');return;}present(session);status('Azienda locale: '+session.session.company.name);}catch(err){if(attempt===revision){closeRuntime();status('Accesso aziendale non disponibile.');}}};
-   $('companies').append(button);
+   $('companies').append(button);if(item.data().role==='admin'){const manage=document.createElement('button');manage.textContent='Gestisci codice e richieste';manage.onclick=e=>{e.stopPropagation();showCompanyAdmin(item.id,tenant.data());};$('companies').append(manage);}
   }
-  if(!$('companies').childElementCount){$('company-panel').hidden=superAdmin;const pending=localStorage.getItem('varga.pendingCompanyName');if(pending)$('company-name-existing').value=pending;status(superAdmin?'Nessuna appartenenza aziendale operativa. Apri Super Admin per amministrare le aziende.':'Nessuna azienda autorizzata: registra la tua azienda per iniziare.');return;}$('company-panel').hidden=true;
+  if(!companyCount){$('company-panel').hidden=superAdmin;const pending=localStorage.getItem('varga.pendingCompanyName');if(pending)$('company-name-existing').value=pending;status(superAdmin?'Nessuna appartenenza aziendale operativa. Apri Super Admin per amministrare le aziende.':'Nessuna azienda autorizzata: registra la tua azienda per iniziare.');return;}$('company-panel').hidden=true;
   status(isLive?'Seleziona azienda staging (accesso in sola consultazione delle appartenenze).':'Seleziona azienda di prova.');
  }catch(err){status('Accesso non disponibile: '+(err.code||err.message));}
 });

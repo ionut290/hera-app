@@ -12,7 +12,7 @@ const apiKey=live?makeStagingWebConfig(process.env.VARGA_STAGING_WEB_API_KEY).ap
 const read=p=>readFileSync(resolve(root,p),'utf8');
 const req=createRequire(import.meta.url);
 rmSync(out,{recursive:true,force:true});mkdirSync(out,{recursive:true});
-await build({root:here,configFile:false,define:{__VARGA_BUILD_MODE__:JSON.stringify(mode),__VARGA_STAGING_WEB_KEY__:JSON.stringify(apiKey)},build:{outDir:out,emptyOutDir:false,lib:{entry:resolve(here,'full-runtime-launcher.js'),name:'VargaLocalLauncher',formats:['iife'],fileName:()=> 'launcher.js'},minify:false}});
+await build({root:here,configFile:false,define:{__VARGA_BUILD_MODE__:JSON.stringify(mode),__VARGA_STAGING_WEB_KEY__:JSON.stringify(apiKey),__VARGA_SOCIAL_AUTH_READY__:JSON.stringify(live&&process.env.VARGA_V2_SOCIAL_AUTH_READY==='true')},build:{outDir:out,emptyOutDir:false,lib:{entry:resolve(here,'full-runtime-launcher.js'),name:'VargaLocalLauncher',formats:['iife'],fileName:()=> 'launcher.js'},minify:false}});
 const original=read('index.html');
 const oldCsp="default-src 'none'; base-uri 'none'; form-action 'none'";
 const newCsp="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'";

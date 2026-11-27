@@ -1,4 +1,5 @@
 import firebase from 'firebase/compat/app';
+import {nativeProviderBridge,getProviderCredential,socialIntent} from './social-auth.mjs';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import {createOriginalRuntimeEntry} from '../original-runtime-entry.mjs';
@@ -14,6 +15,7 @@ if(!isLive&&mode!=='local-emulator')throw Error('Build mode not approved');
 const apiKey=isLive?__VARGA_STAGING_WEB_KEY__:'demo-local-emulator-key';
 const {auth,db,statics}=await (isLive?connectStagingFirebase({firebase,location,apiKey}):connectLocalFirebase({firebase,location}));
 const entry=createOriginalRuntimeEntry({auth,db});
+const socialBridge=nativeProviderBridge(window.Capacitor,isLive&&__VARGA_SOCIAL_AUTH_READY__);
 const adminPanel=createAdminPanel({host:$('admin-panel'),auth,db,statics,readOnly:isLive});
 let prepared=null,revision=0,superAdmin=false,adminVisible=false,registrationMode='company',creatingAccount=false,loginJoinCode='',activationBusy=false,verificationBusy=false;
 const intentKey=uid=>'varga.onboarding.'+uid;
@@ -154,6 +156,27 @@ async function refreshAccount(user){
 }
 $('verify-check').onclick=async()=>{if(verificationBusy||!auth.currentUser)return;verificationBusy=true;$('verify-check').disabled=$('verify-resend').disabled=true;try{await refreshAccount(auth.currentUser);if(!$('verify-panel').hidden)$('verify-status').textContent='Email non ancora verificata. Apri il link ricevuto e riprova.';}finally{verificationBusy=false;$('verify-check').disabled=$('verify-resend').disabled=false;}};
 $('verify-resend').onclick=async()=>{if(verificationBusy||!auth.currentUser)return;verificationBusy=true;$('verify-check').disabled=$('verify-resend').disabled=true;try{await auth.currentUser.sendEmailVerification();$('verify-status').textContent='Email inviata. Controlla anche la posta indesiderata.';}catch(err){$('verify-status').textContent=userError(err);}finally{verificationBusy=false;$('verify-check').disabled=$('verify-resend').disabled=false;}};
+let socialBusy=false;
+if(socialBridge){
+ for(const group of document.querySelectorAll('[data-social-group]'))group.hidden=false;
+ for(const button of document.querySelectorAll('[data-provider]'))button.onclick=async()=>{
+  if(socialBusy||creatingAccount||auth.currentUser)return;
+  const feedback=button.closest('[data-social-group]').querySelector('[data-social-status]');
+  let intent;
+  try{const mode=button.dataset.mode==='register'?registrationMode:button.dataset.mode;intent=socialIntent(mode,mode==='company'?$('company-name').value:mode==='join'?$('join-code').value:'');}
+  catch(err){feedback.textContent=err.message==='COMPANY_NAME_INVALID'?'Inserisci prima il nome della tua azienda.':'Inserisci prima un codice aziendale valido.';return;}
+  socialBusy=true;creatingAccount=true;const controls=Array.from(document.querySelectorAll('[data-provider],#register-submit,#login button,#join-submit,#back-to-login,#back-from-join,#join-existing'));const previous=controls.map(el=>el.disabled);controls.forEach(el=>el.disabled=true);feedback.textContent='Accesso in corso…';
+  try{
+   const credential=await getProviderCredential({provider:button.dataset.provider,bridge:socialBridge,firebase});
+   const result=await auth.signInWithCredential(credential);
+   if(intent)saveIntent(result.user.uid,intent);
+   creatingAccount=false;await refreshAccount(result.user);
+  }catch(err){
+   feedback.textContent=err.code==='auth/account-exists-with-different-credential'?'Esiste già un account con questa email. Accedi con il metodo originale.':err.code==='auth/operation-not-allowed'?'Questo metodo di accesso non è ancora attivo.':userError(err);
+   if(auth.currentUser){creatingAccount=false;await refreshAccount(auth.currentUser);}
+  }finally{socialBusy=false;creatingAccount=false;controls.forEach((el,i)=>el.disabled=previous[i]);}
+ };
+}
 auth.onAuthStateChanged(refreshAccount);
 window.addEventListener('pagehide',()=>{adminPanel.clear();entry.close();},{once:true});
 

@@ -4,8 +4,10 @@ name: varga-v2-oracle
 services:
   db:
     image: postgres:16
-    cpus: 0.75
-    mem_limit: 1g
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=30", "-c", "work_mem=2MB"]
+    cpus: 0.50
+    mem_limit: 768m
+    cpu_shares: 128
     pids_limit: 150
     environment:
       POSTGRES_DB: varga_v2_oracle
@@ -25,8 +27,9 @@ services:
       timeout: 5s
       retries: 10
   api:
-    cpus: 0.5
-    mem_limit: 512m
+    cpus: 0.25
+    mem_limit: 256m
+    cpu_shares: 128
     pids_limit: 100
     build:
       context: ..

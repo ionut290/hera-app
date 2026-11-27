@@ -2,7 +2,9 @@ name: Varga Cantieri 2.0 internal login-only TestFlight (approval required)
 on:
   push:
     branches: [varga-cantieri-v2-staging]
-    paths: ['.github/workflows/staging-ios-internal-upload.yml']
+    paths:
+      - '.github/workflows/staging-ios-internal-upload.yml'
+      - 'staging/portal/**'
   workflow_dispatch:
 permissions:
   contents: read

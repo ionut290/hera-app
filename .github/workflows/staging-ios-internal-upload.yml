@@ -64,18 +64,21 @@ jobs:
           printf '%s' '{"name":"varga-v2-staging","version":"1.0.0","private":true}' > package.json
           npm install --no-audit --no-fund @capacitor/cli@7.6.10 @capacitor/core@7.6.10 @capacitor/ios@7.6.10
           printf '%s' '{"appId":"it.vargacantieri.staging","appName":"Varga Cantieri 2.0","webDir":"www"}' > capacitor.config.json
-          if [[ "$VARGA_V2_SOCIAL_AUTH_READY" == true ]]; then
-            test -n "$VARGA_V2_IOS_FIREBASE_PLIST_BASE64"
-            npm install --save-exact --no-audit --no-fund @capacitor-firebase/authentication@7.5.0 firebase@11.10.0
-          fi
           npx cap add ios
           if [[ "$VARGA_V2_SOCIAL_AUTH_READY" == true ]]; then
+            test -n "$VARGA_V2_IOS_FIREBASE_PLIST_BASE64"
+            # Install the auth plugin AFTER cap add: the first implicit pod install
+            # otherwise locks Firebase's fetcher before the Google subspec exists.
+            npm install --save-exact --no-audit --no-fund @capacitor-firebase/authentication@7.5.0 firebase@11.10.0
             umask 077
             CLIENT="$RUNNER_TEMP/varga-v2-firebase.plist"
             printf '%s' "$VARGA_V2_IOS_FIREBASE_PLIST_BASE64" | base64 --decode > "$CLIENT"
             python3 "$GITHUB_WORKSPACE/staging/prepare_v2_native_social.py" "$PWD" "$CLIENT"
             rm -f "$CLIENT"
             ruby -r xcodeproj -e 'p=Xcodeproj::Project.open("ios/App/App.xcodeproj"); t=p.targets.find{|x|x.name=="App"}; abort "No App target" unless t; g=p.main_group.find_subpath("App",false); abort "No App group" unless g; r=g.files.find{|x|x.path=="GoogleService-Info.plist"} || g.new_file("GoogleService-Info.plist"); t.add_resources([r]) unless t.resources_build_phase.files_references.include?(r); t.build_configurations.each{|c| c.build_settings["CODE_SIGN_ENTITLEMENTS"]="App/App.entitlements"}; p.save'
+            # Only this freshly generated temporary V2 project is affected.
+            # Resolve all social dependencies together, not against an earlier snapshot.
+            rm -f ios/App/Podfile.lock
           fi
           npx cap sync ios
           swift "$GITHUB_WORKSPACE/scripts/prepare-ios-app-icon.swift" "$GITHUB_WORKSPACE/icons/varga-cantieri-512.png" ios/App/App/Assets.xcassets/AppIcon.appiconset

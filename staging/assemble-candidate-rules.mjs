@@ -2,7 +2,7 @@
 import {readFileSync,writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 const read=name=>readFileSync(new URL(name,import.meta.url),'utf8');
-export const fragments=Object.freeze(['verde-levato-readonly','commesse-readonly','commesse-write','original-create','original-manual-plant','original-price-list','original-archives-readonly','fatto-policy','cobo-write']);
+export const fragments=Object.freeze(['tenant-onboarding','verde-levato-readonly','commesse-readonly','commesse-write','original-create','original-manual-plant','original-price-list','original-archives-readonly','original-registry-write','fatto-policy','cobo-write']);
 export function assembleRules(){
  let rules=read('firestore-emulator-base.rules');
  for(const [marker,code] of [['// SUPER_ADMIN_FRAGMENT',read('superadmin.rules.fragment')],['// VERDE_FRAGMENT',fragments.map(f=>read(f+'.rules.fragment')).join('\n')]]){

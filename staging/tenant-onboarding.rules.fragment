@@ -1,0 +1,50 @@
+// Self-service trial onboarding and company-code membership requests.
+// All bootstrap writes must be authenticated, verified and tenant-scoped.
+function canCreateTrialTenant() {
+ return eligible()
+  && request.auth.uid == request.resource.data.ownerUid
+  && request.resource.data.demo == true
+  && request.resource.data.status == 'active'
+  && request.resource.data.plan == 'trial'
+  && request.resource.data.limits.commesse == 1
+  && request.resource.data.limits.impianti == 10
+  && request.resource.data.limits.admin == 1
+  && request.resource.data.limits.operatori == 3
+  && request.resource.data.usage.commesse == 0
+  && request.resource.data.usage.impianti == 0
+  && request.resource.data.usage.admin == 1
+  && request.resource.data.usage.operatori == 0;
+}
+allow create: if canCreateTrialTenant();
+match /members/{uid} {
+ allow create: if eligible()
+  && uid == request.auth.uid
+  && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid
+  && request.resource.data.uid == request.auth.uid
+  && request.resource.data.role == 'admin'
+  && request.resource.data.status == 'active'
+  && request.resource.data.demo == true;
+ allow create: if companyAdmin(tenantId)
+  && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'accepted'
+  && request.resource.data.uid == uid
+  && request.resource.data.role == 'employee'
+  && request.resource.data.status == 'active'
+  && request.resource.data.demo == true;
+}
+match /joinRequests/{uid} {
+ allow create: if eligible()
+  && uid == request.auth.uid
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active'
+  && request.resource.data.uid == request.auth.uid
+  && request.resource.data.status == 'pending'
+  && request.resource.data.email is string;
+ allow get: if eligible() && (uid == request.auth.uid || companyAdmin(tenantId));
+ allow list: if companyAdmin(tenantId);
+ allow update: if companyAdmin(tenantId)
+  && request.resource.data.uid == resource.data.uid
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewedAt','reviewedBy'])
+  && request.resource.data.status in ['accepted','rejected']
+  && request.resource.data.reviewedBy == request.auth.uid
+  && request.resource.data.reviewedAt == request.time;
+ allow delete: if false;
+}

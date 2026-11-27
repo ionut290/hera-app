@@ -7,7 +7,7 @@ import {connectLocalFirebase,connectStagingFirebase} from '../firebase-runtime-p
 import {createAdminPanel} from './integrated-superadmin.js';
 async function start(){
 const $=id=>document.getElementById(id);
-const status=m=>$('status').textContent=m;
+const status=m=>{const node=auth.currentUser?$('session-status'):$('status');node.textContent=m;};
 const mode=__VARGA_BUILD_MODE__;
 const isLive=mode==='private-staging';
 if(!isLive&&mode!=='local-emulator')throw Error('Build mode not approved');
@@ -15,7 +15,13 @@ const apiKey=isLive?__VARGA_STAGING_WEB_KEY__:'demo-local-emulator-key';
 const {auth,db,statics}=await (isLive?connectStagingFirebase({firebase,location,apiKey}):connectLocalFirebase({firebase,location}));
 const entry=createOriginalRuntimeEntry({auth,db});
 const adminPanel=createAdminPanel({host:$('admin-panel'),auth,db,statics,readOnly:isLive});
-let prepared=null,revision=0,superAdmin=false,adminVisible=false;
+let prepared=null,revision=0,superAdmin=false,adminVisible=false,registrationMode='company',creatingAccount=false,loginJoinCode='';
+const intentKey=uid=>'varga.onboarding.'+uid;
+function saveIntent(uid,intent){localStorage.setItem(intentKey(uid),JSON.stringify(intent));}
+function readIntent(uid){try{return JSON.parse(localStorage.getItem(intentKey(uid))||'null');}catch{return null;}}
+function clearIntent(uid){localStorage.removeItem(intentKey(uid));}
+function normalizeCode(value){const code=String(value||'').trim().toUpperCase().replace(/\s/g,'');if(!/^VC-[A-Z0-9]{8}$/.test(code))throw Error('CODE_INVALID');return code;}
+function userError(err){return ({'auth/invalid-email':'Indirizzo email non valido.','auth/invalid-credential':'Email o password non corrette.','auth/wrong-password':'Email o password non corrette.','auth/user-not-found':'Email o password non corrette.','auth/too-many-requests':'Troppi tentativi. Riprova più tardi.','auth/network-request-failed':'Connessione non disponibile. Riprova.','auth/email-already-in-use':'Questa email è già registrata. Accedi con il tuo account.','auth/weak-password':'Scegli una password di almeno 8 caratteri.','permission-denied':'Operazione non autorizzata. Contatta l’amministratore.','firestore/permission-denied':'Operazione non autorizzata. Contatta l’amministratore.'})[err.code]||'Operazione non riuscita. Riprova o contatta l’assistenza.';}
 function closeRuntime(){revision++;$('runtime').removeAttribute('src');$('runtime').hidden=true;$('company-return').hidden=true;document.body.classList.remove('company-runtime');prepared=null;entry.leave();}
 function present(session){
  const namespace=createLegacyFirebaseNamespace({prepared:session,statics});
@@ -28,9 +34,10 @@ prepared=Object.freeze({session:view,namespace,apiKey});
 // This is a local testing bridge, not a security boundary. The emulator rules are mandatory.
 Object.defineProperty(window,'__vargaLocalRuntime',{value:()=>{if(!prepared?.session.isActive())throw Error('Verified local company required');return prepared;},writable:false,configurable:false});
 function clearCompanyAdmin(){ $('company-admin-panel').hidden=true; $('company-admin-list').replaceChildren(); }
-function showLogin(){ $('login-card').hidden=false; $('register-panel').hidden=true; $('join-panel').hidden=true; $('company-panel').hidden=true; clearCompanyAdmin(); }
-function showRegister(){ $('login-card').hidden=true; $('register-panel').hidden=false; $('join-panel').hidden=true; $('company-panel').hidden=true; clearCompanyAdmin(); }
-function showJoin(){ $('login-card').hidden=true; $('register-panel').hidden=true; $('join-panel').hidden=false; $('company-panel').hidden=true; clearCompanyAdmin(); }
+function showWelcome(){ $('login-card').hidden=false; $('auth-options').hidden=false; $('login').hidden=true; $('login-title').textContent='Benvenuto'; $('register-panel').hidden=true; $('join-panel').hidden=true; $('company-panel').hidden=true; $('session-status').hidden=true; $('status').textContent=''; loginJoinCode=''; clearCompanyAdmin(); }
+function showLogin(code=''){loginJoinCode=code; $('login-card').hidden=false; $('auth-options').hidden=true; $('login').hidden=false; $('login-title').textContent='Accedi'; $('register-panel').hidden=true; $('join-panel').hidden=true; $('company-panel').hidden=true; $('status').textContent=code?'Accedi per inviare la richiesta alla tua azienda.':''; clearCompanyAdmin(); }
+function showRegister(mode='company'){registrationMode=mode;const join=mode==='join'; $('login-card').hidden=true; $('register-panel').hidden=false; $('join-panel').hidden=true; $('company-panel').hidden=true; $('register-title').textContent=join?'Crea il tuo account':'Crea la tua azienda'; $('register-description').textContent=join?'Verifica l’email per inviare la richiesta di adesione.':'Registrati e verifica la tua email per attivare il piano prova.'; $('register-trial').hidden=join; $('company-name-field').hidden=join; $('company-name').required=!join; $('register-submit').textContent=join?'Crea account e continua':'Crea azienda gratuitamente'; $('register-status').textContent=''; clearCompanyAdmin(); }
+function showJoin(){ $('login-card').hidden=true; $('register-panel').hidden=true; $('join-panel').hidden=false; $('company-panel').hidden=true; $('join-submit').textContent=auth.currentUser?'Invia richiesta':'Continua'; $('join-existing').hidden=Boolean(auth.currentUser); $('back-from-join').hidden=Boolean(auth.currentUser); $('join-status').textContent=''; clearCompanyAdmin(); }
 function makeJoinCode(){return 'VC-'+crypto.randomUUID().replaceAll('-','').slice(0,8).toUpperCase();}
 async function createCompany(name,node){
  const user=auth.currentUser;if(!user)throw Error('LOGIN_REQUIRED');
@@ -44,19 +51,19 @@ async function createCompany(name,node){
  batch.set(codeDoc,{tenantId,companyName:clean,status:'active',createdAt:now,createdBy:user.uid});
  batch.set(member,{uid:user.uid,email:user.email||'',displayName:user.displayName||user.email||'Amministratore',role:'admin',status:'active',demo:true,createdAt:now});
  batch.set(membership,{tenantId,role:'admin',status:'active',demo:true,createdAt:now});
- await batch.commit();localStorage.setItem('varga.pendingCompanyName','');node.textContent='Azienda registrata. Codice azienda: '+joinCode+'. Apertura dell’app completa…';location.reload();
+ await batch.commit();clearIntent(user.uid);node.textContent='Azienda registrata. Codice azienda: '+joinCode+'. Apertura dell’app completa…';location.reload();
 }
 async function requestJoin(code,node){
  const user=auth.currentUser;if(!user)throw Error('LOGIN_REQUIRED');
  await user.reload();const token=await user.getIdTokenResult(true);
  if(token.claims.email_verified!==true){try{await user.sendEmailVerification();}catch{}throw Error('EMAIL_NOT_VERIFIED');}
- const clean=String(code||'').trim().toUpperCase().replace(/\s/g,'');if(!/^VC-[A-Z0-9]{8}$/.test(clean))throw Error('CODE_INVALID');
+ const clean=normalizeCode(code);
  const codeSnap=await db.doc('tenantJoinCodes/'+clean).get({source:'server'});if(!codeSnap.exists||codeSnap.data().status!=='active')throw Error('CODE_NOT_FOUND');
- const tenantId=codeSnap.data().tenantId,tenant=await db.doc('tenants/'+tenantId).get({source:'server'});if(!tenant.exists||tenant.data().status!=='active')throw Error('COMPANY_NOT_AVAILABLE');
+ const tenantId=codeSnap.data().tenantId;const companyName=codeSnap.data().companyName||'azienda';
  const ref=db.doc('tenants/'+tenantId+'/joinRequests/'+user.uid),existing=await ref.get({source:'server'});
- if(existing.exists&&existing.data().status==='pending')throw Error('REQUEST_PENDING');
- await ref.set({uid:user.uid,email:user.email||'',displayName:user.displayName||user.email||'Utente',status:'pending',requestedAt:statics.FieldValue.serverTimestamp()});
- node.textContent='Richiesta inviata a '+tenant.data().name+'. Attendi l’approvazione dell’amministratore.';
+ if(existing.exists){const state=existing.data().status;node.textContent=state==='accepted'?'Richiesta approvata. Accedi nuovamente per entrare.':state==='rejected'?'Richiesta rifiutata. Contatta l’amministratore.':'Richiesta già inviata a '+companyName+'. Attendi l’approvazione.';return;}
+ await ref.set({uid:user.uid,email:user.email||'',displayName:user.displayName||user.email||'Utente',status:'pending',joinCode:clean,requestedAt:statics.FieldValue.serverTimestamp()});
+ node.textContent='Richiesta inviata a '+companyName+'. Attendi l’approvazione dell’amministratore.';
 }
 async function showCompanyAdmin(tenantId,tenantData){
  clearCompanyAdmin();const panel=$('company-admin-panel'),list=$('company-admin-list'),feedback=$('company-admin-status');panel.hidden=false;
@@ -78,15 +85,30 @@ async function showCompanyAdmin(tenantId,tenantData){
   }
  }catch(err){feedback.textContent='Richieste non disponibili: '+(err.code||err.message);}
 }
-$('open-register').onclick=showRegister;
+$('open-register').onclick=()=>showRegister();
 $('open-join').onclick=showJoin;
-$('back-to-login').onclick=showLogin;
-$('back-from-join').onclick=showLogin;
-$('login').addEventListener('submit',async e=>{e.preventDefault();status('Accesso in corso…');try{await auth.signInWithEmailAndPassword($('email').value,$('password').value);$('password').value='';}catch(err){status('Accesso non riuscito: '+err.code);}});
-$('register').addEventListener('submit',async e=>{e.preventDefault();const node=$('register-status');node.textContent='Creazione account…';try{const company=$('company-name').value.trim();const credential=await auth.createUserWithEmailAndPassword($('register-email').value.trim(),$('register-password').value);localStorage.setItem('varga.pendingCompanyName',company);await credential.user.sendEmailVerification();node.textContent='Account creato. Controlla l’email, verifica l’indirizzo e poi accedi per attivare la tua azienda.';await auth.signOut();}catch(err){node.textContent=err.code==='auth/email-already-in-use'?'Questa email è già registrata. Accedi e crea l’azienda.':'Registrazione non riuscita: '+(err.code||err.message);}});
-$('company-form').addEventListener('submit',async e=>{e.preventDefault();const node=$('company-status');node.textContent='Attivazione piano prova…';try{await createCompany($('company-name-existing').value,node);}catch(err){node.textContent=err.message==='EMAIL_NOT_VERIFIED'?'Verifica prima l’email: ti abbiamo inviato un nuovo messaggio di verifica.':'Azienda non creata: '+(err.code||err.message);}});
-$('join').addEventListener('submit',async e=>{e.preventDefault();const node=$('join-status');node.textContent='Invio richiesta…';try{await requestJoin($('join-code').value,node);}catch(err){node.textContent=err.message==='LOGIN_REQUIRED'?'Crea prima un account e accedi.':err.message==='EMAIL_NOT_VERIFIED'?'Verifica prima l’email: ti abbiamo inviato un nuovo messaggio di verifica.':err.message==='CODE_NOT_FOUND'?'Codice azienda non valido o non più attivo.':err.message==='REQUEST_PENDING'?'Richiesta già inviata e in attesa di risposta.':'Richiesta non inviata: '+(err.code||err.message);}});
-
+$('open-login').onclick=()=>showLogin();
+$('back-to-login').onclick=()=>registrationMode==='join'?showJoin():showWelcome();
+$('back-from-join').onclick=showWelcome;
+$('back-from-login').onclick=()=>loginJoinCode?showJoin():showWelcome();
+$('join-existing').onclick=()=>{try{showLogin(normalizeCode($('join-code').value));}catch{$('join-status').textContent='Inserisci un codice valido (VC- seguito da 8 caratteri).';}};
+for(const button of document.querySelectorAll('[data-password-toggle]'))button.onclick=()=>{const input=$(button.dataset.passwordToggle),visible=input.type==='password';input.type=visible?'text':'password';button.textContent=visible?'Nascondi':'Mostra';button.setAttribute('aria-label',visible?'Nascondi password':'Mostra password');};
+$('reset-password').onclick=async()=>{const email=$('email');if(!email.value||!email.checkValidity()){status('Inserisci prima il tuo indirizzo email.');email.focus();return;}try{await auth.sendPasswordResetEmail(email.value.trim());status('Se l’account esiste, riceverai un’email per reimpostare la password.');}catch(err){status(err.code==='auth/user-not-found'?'Se l’account esiste, riceverai un’email per reimpostare la password.':userError(err));}};
+$('login').addEventListener('submit',async e=>{e.preventDefault();status('Accesso in corso…');const button=e.submitter;button.disabled=true;try{await auth.signInWithEmailAndPassword($('email').value.trim(),$('password').value);$('password').value='';}catch(err){status(userError(err));}finally{button.disabled=false;}});
+$('register').addEventListener('submit',async e=>{
+ e.preventDefault();const node=$('register-status'),button=$('register-submit'),company=$('company-name').value.trim(),name=$('register-name').value.trim(),email=$('register-email').value.trim(),password=$('register-password').value;
+ if(password!==$('register-confirm').value){node.textContent='Le password non coincidono.';return;}
+ if(name.length<2||(registrationMode==='company'&&company.length<2)){node.textContent='Completa correttamente i dati richiesti.';return;}
+ let intent;try{intent=registrationMode==='join'?{type:'join',code:normalizeCode($('join-code').value)}:{type:'company',name:company};}catch{node.textContent='Codice aziendale non valido.';return;}
+ creatingAccount=true;button.disabled=true;node.textContent='Creazione account…';
+ try{
+  const credential=await auth.createUserWithEmailAndPassword(email,password);saveIntent(credential.user.uid,intent);await credential.user.updateProfile({displayName:name});await credential.user.sendEmailVerification();await auth.signOut();showLogin();$('email').value=email;status('Account creato. Controlla l’email, verifica l’indirizzo e poi accedi per continuare.');$('register-password').value=$('register-confirm').value='';
+ }catch(err){if(auth.currentUser){try{await auth.signOut();}catch{}showLogin();$('email').value=email;status('Account registrato. Accedi per completare la verifica dell’email.');}else{node.textContent=userError(err);}}
+ finally{creatingAccount=false;button.disabled=false;}
+});
+$('company-form').addEventListener('submit',async e=>{e.preventDefault();const node=$('company-status');node.textContent='Attivazione piano prova…';try{await createCompany($('company-name-existing').value,node);}catch(err){node.textContent=err.message==='EMAIL_NOT_VERIFIED'?'Verifica prima l’email.':userError(err);}});
+function joinError(err){return ({CODE_INVALID:'Inserisci un codice valido (VC- seguito da 8 caratteri).',EMAIL_NOT_VERIFIED:'Verifica prima l’email.',CODE_NOT_FOUND:'Codice aziendale non valido o non più attivo.'})[err.message]||userError(err);}
+$('join').addEventListener('submit',async e=>{e.preventDefault();const node=$('join-status');try{const code=normalizeCode($('join-code').value);if(!auth.currentUser){showRegister('join');return;}node.textContent='Invio richiesta…';await requestJoin(code,node);saveIntent(auth.currentUser.uid,{type:'join',code});}catch(err){node.textContent=joinError(err);}});
 $('logout').onclick=async()=>{closeRuntime();adminPanel.clear();await auth.signOut();};
 $('back').onclick=()=>{closeRuntime();status('Seleziona un’altra azienda.');};
 $('company-return').onclick=()=>{closeRuntime();status('Seleziona un’altra azienda.');};
@@ -97,10 +119,13 @@ $('admin-toggle').onclick=async()=>{
  $('companies').hidden=true;adminVisible=true;$('admin-toggle').textContent='Torna alle aziende';status('Area amministrativa.');await adminPanel.open(auth.currentUser);
 };
 auth.onAuthStateChanged(async user=>{
- closeRuntime();adminPanel.clear();superAdmin=false;adminVisible=false;const request=revision;let companyCount=0;$('companies').replaceChildren();$('companies').hidden=false;$('admin-toggle').hidden=true;$('admin-toggle').textContent='Super Admin';$('login').hidden=Boolean(user);$('login-card').hidden=Boolean(user);$('register-panel').hidden=true;$('join-panel').hidden=!user;$('company-panel').hidden=!user;$('company-admin-panel').hidden=true;$('logout').hidden=!user;$('back').hidden=!user;
- if(!user){showLogin();status(isLive?'Accedi oppure crea la tua azienda.':'Accedi con un account di prova locale.');return;}
+ if(creatingAccount&&user)return;
+ closeRuntime();adminPanel.clear();superAdmin=false;adminVisible=false;const request=revision;let companyCount=0;$('companies').replaceChildren();$('companies').hidden=false;$('admin-toggle').hidden=true;$('admin-toggle').textContent='Super Admin';$('login-card').hidden=Boolean(user);$('session-status').hidden=!user;$('session-status').textContent='';$('join-existing').hidden=Boolean(user);$('back-from-join').hidden=Boolean(user);$('join-submit').textContent=user?'Invia richiesta':'Continua';$('register-panel').hidden=true;$('join-panel').hidden=!user;$('company-panel').hidden=!user;$('company-admin-panel').hidden=true;$('logout').hidden=!user;$('back').hidden=!user;
+ if(!user){if(!creatingAccount)showWelcome();return;}
  try{
-  const claims=(await user.getIdTokenResult(true)).claims;if(claims.email_verified!==true||claims.apple_review===true)throw Error('Account non autorizzato');
+  const joinCode=loginJoinCode;loginJoinCode='';if(joinCode)saveIntent(user.uid,{type:'join',code:joinCode});
+  const claims=(await user.getIdTokenResult(true)).claims;if(request!==revision)return;
+  if(claims.email_verified!==true||claims.apple_review===true){let message='Account non autorizzato.';if(claims.email_verified!==true){try{await user.sendEmailVerification();}catch{}message='Verifica il tuo indirizzo email prima di accedere. Controlla anche la posta indesiderata.';}await auth.signOut();showLogin();$('email').value=user.email||'';status(message);return;}
   superAdmin=claims.superAdmin===true;$('admin-toggle').hidden=!superAdmin;
   const memberships=await db.collection('users').doc(user.uid).collection('memberships').get({source:'server'});
   if(request!==revision)return;
@@ -111,14 +136,17 @@ auth.onAuthStateChanged(async user=>{
    if(request!==revision)return;
    if(!tenant.exists||tenant.data().demo!==true||tenant.data().status!=='active')continue;
    companyCount++;const button=document.createElement('button');button.textContent=(tenant.data().name||item.id)+' · '+(tenant.data().plan==='trial'?'Piano prova':'Azienda');button.dataset.tenant=item.id;
-   button.onclick=async()=>{closeRuntime();const attempt=revision;status('Verifica azienda…');try{const session=await entry.enter(item.id);if(attempt!==revision)return;const approval=await session.approval.verify(auth.currentUser);if(!approval.allowed||attempt!==revision)throw Error('Accesso non autorizzato');if(isLive){present(session);status('Azienda staging caricata: '+session.session.company.name+' — '+session.session.context.role+'.');return;}present(session);status('Azienda locale: '+session.session.company.name);}catch(err){if(attempt===revision){closeRuntime();status('Accesso aziendale non disponibile.');}}};
+   button.onclick=async()=>{closeRuntime();const attempt=revision;status('Verifica azienda…');try{const session=await entry.enter(item.id);if(attempt!==revision)return;const approval=await session.approval.verify(auth.currentUser);if(!approval.allowed||attempt!==revision)throw Error('Accesso non autorizzato');if(isLive){present(session);status('Azienda caricata: '+session.session.company.name+' — '+session.session.context.role+'.');return;}present(session);status('Azienda locale: '+session.session.company.name);}catch(err){if(attempt===revision){closeRuntime();status('Accesso aziendale non disponibile.');}}};
    $('companies').append(button);if(item.data().role==='admin'){const manage=document.createElement('button');manage.textContent='Gestisci codice e richieste';manage.onclick=e=>{e.stopPropagation();showCompanyAdmin(item.id,tenant.data());};$('companies').append(manage);}
   }
-  if(!companyCount){$('company-panel').hidden=superAdmin;const pending=localStorage.getItem('varga.pendingCompanyName');if(pending)$('company-name-existing').value=pending;status(superAdmin?'Nessuna appartenenza aziendale operativa. Apri Super Admin per amministrare le aziende.':'Nessuna azienda autorizzata: registra la tua azienda per iniziare.');return;}$('company-panel').hidden=true;
-  status(isLive?'Seleziona azienda staging (accesso in sola consultazione delle appartenenze).':'Seleziona azienda di prova.');
- }catch(err){status('Accesso non disponibile: '+(err.code||err.message));}
+  const intent=readIntent(user.uid);
+  if(intent?.type==='join'){ $('join-code').value=intent.code;$('join-panel').hidden=false;$('company-panel').hidden=true;try{await requestJoin(intent.code,$('join-status'));}catch(err){$('join-status').textContent=joinError(err);} }
+  if(!companyCount){$('company-panel').hidden=superAdmin||intent?.type==='join';if(intent?.type==='company'&&!superAdmin){$('company-name-existing').value=intent.name;try{await createCompany(intent.name,$('company-status'));return;}catch(err){$('company-status').textContent=userError(err);}}status(superAdmin?'Apri Super Admin per amministrare le aziende.':intent?.type==='join'?'Controlla lo stato della tua richiesta.':'Crea la tua azienda oppure unisciti a un’azienda esistente.');return;}
+  $('company-panel').hidden=true;if(intent?.type==='company')clearIntent(user.uid);
+  status('Seleziona la tua azienda.');
+ }catch(err){status(userError(err));}
 });
 window.addEventListener('pagehide',()=>{adminPanel.clear();entry.close();},{once:true});
 
 }
-start().catch(e=>{document.getElementById('status').textContent='Avvio locale non disponibile: '+e.message;});
+start().catch(e=>{document.getElementById('status').textContent='Avvio non disponibile. Riprova o contatta l’assistenza.';});

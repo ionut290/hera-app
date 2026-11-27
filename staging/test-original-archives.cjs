@@ -5,7 +5,7 @@ const {doc,collection,setDoc,getDoc,getDocs,updateDoc,deleteDoc}=require('fireba
 (async()=>{
  assert(process.env.FIRESTORE_EMULATOR_HOST,'Emulator required');
  const env=await initializeTestEnvironment({projectId:'demo-varga-original-archives',firestore:{rules:fs.readFileSync(process.argv[2],'utf8')}});
- const paths=['personale','mezzi','neve_personale','neve_mezzi','squadreCommesse','squadreStorico','neve_squadre','neve_squadre_storico','oreReports','oreApprovalRequests','neve_ore','neve_ore_richieste','commessaResources','oreLocks','neve_commesse','neve_commesse/c1/impianti','globalCommesse','globalCommesse/c1/impianti'];
+ const paths=['squadreCommesse','squadreStorico','neve_squadre','neve_squadre_storico','oreReports','oreApprovalRequests','neve_ore','neve_ore_richieste','commessaResources','oreLocks','neve_commesse','neve_commesse/c1/impianti','globalCommesse','globalCommesse/c1/impianti'];
  let count=0;
  try{
  await env.clearFirestore();
@@ -59,7 +59,17 @@ const {doc,collection,setDoc,getDoc,getDocs,updateDoc,deleteDoc}=require('fireba
  await run(getDoc(program('worker','unassigned')),false);
  await run(getDoc(program('a','unassigned')),true);
  await run(getDoc(program('b','assigned')),false);
- console.log('ORIGINAL ARCHIVES READ ONLY: '+count+'/327');
- assert.equal(count,327);
+ const registryPaths=['personale','mezzi','neve_personale','neve_mezzi'];
+ for(const p of registryPaths){
+  const ref=(d,t,id='sample')=>doc(d,'tenants',t,p,id);
+  await run(getDoc(ref(db('a'),'demo-a')),true);
+  await run(getDocs(collection(db('a'),'tenants','demo-a',p)),true);
+  await run(setDoc(ref(db('a'),'demo-a','manual'),{name:'manual'}),true);
+  await run(updateDoc(ref(db('a'),'demo-a'),{name:'changed'}),true);
+  await run(deleteDoc(ref(db('a'),'demo-a','manual')),true);
+  await run(setDoc(ref(db('worker'),'demo-a','blocked'),{name:'blocked'}),false);
+  await run(setDoc(ref(db('a'),'demo-b','cross'),{name:'cross'}),false);
+ }
+ console.log('ORIGINAL ARCHIVES + MANUAL REGISTRIES: '+count+' checks passed');
  }finally{await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

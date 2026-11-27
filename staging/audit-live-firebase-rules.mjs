@@ -36,7 +36,11 @@ async function getFederatedToken(env,request=fetch){
  const body=new URLSearchParams({audience:'//iam.googleapis.com/'+PROVIDER,grant_type:'urn:ietf:params:oauth:grant-type:token-exchange',requested_token_type:'urn:ietf:params:oauth:token-type:access_token',scope:'https://www.googleapis.com/auth/cloud-platform',subject_token_type:'urn:ietf:params:oauth:token-type:jwt',subject_token:oidc.value});
  const sts=await json(request,'https://sts.googleapis.com/v1/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body},'Google STS');
  if(typeof sts.access_token!=='string'||!sts.access_token)throw Error('Invalid STS response');
- return sts.access_token;
+ // Exchange the federated credential for a short-lived token of the dedicated read-only account.
+ const account='varga-v2-rules-audit@varga-cantieri-v2-staging.iam.gserviceaccount.com';
+ const access=await json(request,'https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/'+account+':generateAccessToken',{method:'POST',headers:{Authorization:'Bearer '+sts.access_token,'Content-Type':'application/json'},body:JSON.stringify({scope:['https://www.googleapis.com/auth/cloud-platform'],lifetime:'600s'})},'IAM Credentials');
+ if(typeof access.accessToken!=='string'||!access.accessToken)throw Error('Invalid service account response');
+ return access.accessToken;
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
  try{
@@ -44,5 +48,5 @@ if(process.argv[1]===fileURLToPath(import.meta.url)){
   const result=await getActiveRules({token});
   console.log('ACTIVE STAGING RULES AUDIT '+JSON.stringify(result));
   if(!result.matchesTestedCandidate)console.log('Published rules differ from the tested candidate; deployment remains blocked.');
- }catch(e){console.error('Staging rules audit failed; no change made. '+(/^(?:Firebase Rules API|Google STS|GitHub OIDC) HTTP \d{3}$/.test(e.message)?e.message:'Verification unavailable.'));process.exitCode=1;}
+ }catch(e){console.error('Staging rules audit failed; no change made. '+(/^(?:Firebase Rules API|Google STS|GitHub OIDC|IAM Credentials) HTTP \d{3}$/.test(e.message)?e.message:'Verification unavailable.'));process.exitCode=1;}
 }

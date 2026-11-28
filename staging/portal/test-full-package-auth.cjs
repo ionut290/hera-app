@@ -137,8 +137,36 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
    await docs.waitFor({state:'hidden'});
    console.log('DOCUMENT UI PASS: original menu, private upload, confirmed deletion and quota recovery.');
   }
-  let firstJob;
-  for(let i=0;i<5;i++){const id=await createTrialJob();if(i===0)firstJob=id;}
+  // First-user operational setup through the real UI: personnel, vehicle and commessa.
+  const openMenu=async()=>{const menu=trialFrame.locator('#side-menu');if(!(await menu.isVisible()))await trialFrame.locator('#menu-toggle-btn').click();};
+  await openMenu();
+  await trialFrame.locator('#open-panel-personale').click();
+  await trialFrame.locator('#personale-form').waitFor({state:'visible'});
+  await trialFrame.locator('#personale-nome').fill('Operatore Collaudo');
+  await trialFrame.locator('#personale-form').locator('button[type="submit"]').click();
+  await trialFrame.waitForFunction(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('personale').where('nome','==','Operatore Collaudo').get()).size===1;});
+  console.log('FIRST USER PERSONALE PASS: Operatore Collaudo saved from the Personale form.');
+  await openMenu();
+  await trialFrame.locator('#open-panel-mezzi').click();
+  await trialFrame.locator('#mezzi-form').waitFor({state:'visible'});
+  await trialFrame.locator('#mezzo-n-id').fill('MEZZO-COLLAUDO-01');
+  await trialFrame.locator('#mezzo-marca').fill('Varga');
+  await trialFrame.locator('#mezzo-modello').fill('Furgone');
+  await trialFrame.locator('#mezzi-form').locator('button[type="submit"]').click();
+  await trialFrame.waitForFunction(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('mezzi').where('nId','==','MEZZO-COLLAUDO-01').get()).size===1;});
+  console.log('FIRST USER MEZZO PASS: MEZZO-COLLAUDO-01 saved from the Mezzi form.');
+  await openMenu();
+  await trialFrame.locator('#open-panel-commesse').click();
+  await trialFrame.locator('#open-new-commessa-btn').click();
+  await trialFrame.locator('#commessa-form').waitFor({state:'visible'});
+  await trialFrame.locator('#commessa-name').fill('Cantiere Collaudo Prima Configurazione');
+  await trialFrame.locator('#commessa-code').fill('COL-001');
+  await trialFrame.locator('#commessa-form').locator('button[type="submit"]').click();
+  await trialFrame.waitForFunction(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('commesse').where('nome','==','Cantiere Collaudo Prima Configurazione').get()).size===1;});
+  const uiJob=(await created.docs[0].ref.collection('commesse').where('nome','==','Cantiere Collaudo Prima Configurazione').get()).docs[0].id;
+  console.log('FIRST USER COMMESSA PASS: Cantiere Collaudo Prima Configurazione saved from the Gestione commesse form.');
+  let firstJob=uiJob;
+  for(let i=0;i<4;i++){const id=await createTrialJob();if(i===0&& !firstJob)firstJob=id;}
   await assert.rejects(createTrialJob);
   assert.equal((await created.docs[0].ref.collection('commesse').get()).size,5);
   assert.equal((await created.docs[0].ref.get()).data().usage.commesse,5);

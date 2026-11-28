@@ -203,7 +203,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await assert.rejects(()=>trialFrame.evaluate(()=>window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore.collection('mezzi').doc('seed-0').update({nome:'Denied after expiry'})));
   assert.equal(await trialFrame.evaluate(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('mezzi').doc('seed-0').get({source:'server'})).exists;}),true);
   await page.locator('#company-return').click();
-  console.log('TRIAL RESOURCE QUOTAS: 5 jobs, 102 plants, 11 vehicles, expired update denied, reads retained.');
+  console.log('TRIAL RESOURCE QUOTAS: 5 jobs, 100 plants, 11 vehicles, expired update denied, reads retained.');
 
   assert.equal((await db.doc('tenants/'+created.docs[0].id+'/members/'+fresh.uid).get()).data().role,'admin');
   assert.equal((await db.doc('users/'+fresh.uid+'/memberships/'+created.docs[0].id).get()).data().status,'active');

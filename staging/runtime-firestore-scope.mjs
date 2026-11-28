@@ -57,8 +57,8 @@ export function createRuntimeFirestoreScope({firestore,routerContext}){
   if(isDoc)f.collection=(name)=>{guard();return wrap(native.collection(name));};
   if(typeof native.get==='function')f.get=async(...args)=>{guard();const result=await native.get(...args);guard();return wrapSnapshot(result);};
   if(typeof native.onSnapshot==='function')f.onSnapshot=(...args)=>watch(native,args,wrapSnapshot);
-  if(typeof native.add==='function')f.add=async(...args)=>{guard();const ref=await native.add(...args.map(a=>normalize(a)));guard();return wrap(ref);};
-  for(const method of ['set','update'])if(isDoc&&typeof native[method]==='function')f[method]=async(...args)=>{guard();const result=await native[method](...args.map(a=>normalize(a)));guard();return result;};
+  if(typeof native.add==='function')f.add=async(...args)=>{guard();if(typeof firestore.writeQuotaDocument==='function'){const ref=native.doc();await firestore.writeQuotaDocument(ref,normalize(args[0]));guard();return wrap(ref);}const ref=await native.add(...args.map(a=>normalize(a)));guard();return wrap(ref);};
+  for(const method of ['set','update'])if(isDoc&&typeof native[method]==='function')f[method]=async(...args)=>{guard();const result=method==='set'&&typeof firestore.writeQuotaDocument==='function'?await firestore.writeQuotaDocument(native,...args.map(a=>normalize(a))):await native[method](...args.map(a=>normalize(a)));guard();return result;};
   if(isDoc)f.delete=()=>{throw Error('Deletion not enabled');};
   if(typeof native.isEqual==='function')f.isEqual=other=>{guard();return native.isEqual(unwrap(other));};
   Object.freeze(f);nativeByFacade.set(f,native);facadeByNative.set(native,f);return f;

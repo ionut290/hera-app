@@ -2,7 +2,7 @@
 // Creates only synthetic emulator data and one real Stripe TEST Checkout Session.
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {appendFileSync,chmodSync,writeFileSync} from 'node:fs';
+import {appendFileSync,chmodSync,mkdirSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {initializeApp,deleteApp} from 'firebase-admin/app';
 import {getAuth} from 'firebase-admin/auth';
@@ -32,8 +32,9 @@ try{
  assert.equal(remote.livemode,false);assert.equal(remote.status,'open');assert.equal(remote.payment_status,'unpaid');
  assert.equal((await db.doc('tenants/'+tenantId).get()).data().plan,'trial');
  created=true;
- const statePath=join(process.env.RUNNER_TEMP,'varga-sandbox-checkout-state.json');
- writeFileSync(statePath,JSON.stringify({email,password,tenantId,sessionId:session.sessionId}));
+ const stateDir=join(process.cwd(),'.sandbox-state');mkdirSync(stateDir,{recursive:true});
+ const statePath=join(stateDir,'state.json');
+ writeFileSync(statePath,JSON.stringify({uid,tenantId,sessionId:session.sessionId}));
  chmodSync(statePath,0o600);
  const summaryFile=process.env.GITHUB_STEP_SUMMARY;
  if(!summaryFile)throw new Error('SUMMARY_UNAVAILABLE');

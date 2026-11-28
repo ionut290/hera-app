@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function eligible() {
+      return request.auth != null
+        && request.auth.token.get('email_verified', false) == true
+        && request.auth.token.get('apple_review', false) == false;
+    }
+    function activeMember(tid) {
+      return eligible()
+        && get(/databases/$(database)/documents/tenants/$(tid)).data.status == 'active'
+        && get(/databases/$(database)/documents/tenants/$(tid)/members/$(request.auth.uid)).data.status == 'active';
+    }
+    function trialTenant() {
+      return eligible()
+        && request.auth.uid == request.resource.data.ownerUid
+        && request.resource.data.demo == true
+        && request.resource.data.status == 'active'
+        && request.resource.data.plan == 'trial'
+        && request.resource.data.trial == true
+        && request.resource.data.trialDays == 30
+        && request.resource.data.limits == {'commesse':5,'impianti':100,'admin':1,'operatori':11,'mezzi':11,'squadre':2,'storageBytes':100000000,'personale':11}
+        && request.resource.data.usage == {'commesse':0,'impianti':0,'admin':1,'operatori':0,'mezzi':0,'squadre':0,'storageBytes':0,'personale':0}
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.joinCode.matches('VC-[A-Z0-9]{8}')
+        && request.resource.data.createdBy == request.auth.uid;
+    }
+    match /tenants/{tid} {
+      allow create: if trialTenant()
+        && getAfter(/databases/$(database)/documents/tenants/$(tid)/members/$(request.auth.uid)).data.role == 'admin'
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tid)).data.role == 'admin';
+      allow get, list: if activeMember(tid) || (eligible() && resource.data.ownerUid == request.auth.uid);
+      allow update: if activeMember(tid) && request.auth.uid == resource.data.ownerUid;
+      match /members/{uid} {
+        allow get, list: if activeMember(tid);
+        allow create: if eligible() && uid == request.auth.uid
+          && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.ownerUid == request.auth.uid
+          && request.resource.data.role == 'admin' && request.resource.data.status == 'active';
+        allow update: if activeMember(tid) && request.auth.uid == resource.data.uid;
+      }
+      match /{document=**} {
+        allow read, write: if activeMember(tid);
+      }
+    }
+    match /users/{uid}/memberships/{tid} {
+      allow get, list: if eligible() && request.auth.uid == uid;
+      allow create: if eligible() && request.auth.uid == uid
+        && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.ownerUid == request.auth.uid
+        && request.resource.data.tenantId == tid
+        && request.resource.data.role == 'admin'
+        && request.resource.data.status == 'active';
+    }
+    match /tenantJoinCodes/{code} {
+      allow get: if eligible();
+      allow create: if eligible()
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdBy == request.auth.uid
+        && getAfter(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)).data.ownerUid == request.auth.uid;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

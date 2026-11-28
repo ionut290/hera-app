@@ -95,7 +95,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   const created=await db.collection('tenants').where('ownerUid','==',fresh.uid).get();
   assert.equal(created.size,1);
   const trial=created.docs[0].data();
-  assert.deepEqual(trial.limits,{commesse:5,impianti:102,admin:1,operatori:11,mezzi:11,squadre:2,storageBytes:100000000,personale:11});
+  assert.deepEqual(trial.limits,{commesse:5,impianti:100,admin:1,operatori:11,mezzi:11,squadre:2,storageBytes:100000000,personale:11});
   assert.equal(trial.trialDays,30);
   assert.ok(trial.trialStartedAt.toMillis()<=Date.now());
   await page.getByRole('combobox',{name:'Piano abbonamento',exact:true}).selectOption('professional');
@@ -142,11 +142,11 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await assert.rejects(createTrialJob);
   assert.equal((await created.docs[0].ref.collection('commesse').get()).size,5);
   assert.equal((await created.docs[0].ref.get()).data().usage.commesse,5);
-  // Seed 101 synthetic plant documents and 10 vehicles to exercise the exact boundary.
+  // Seed 99 synthetic plant documents and 10 vehicles to exercise the exact boundary.
   const seeded=db.batch();
-  for(let i=0;i<101;i++)seeded.set(created.docs[0].ref.collection('commesse').doc(firstJob).collection('impianti').doc('seed-'+i),{denominazione:'Synthetic '+i});
+  for(let i=0;i<99;i++)seeded.set(created.docs[0].ref.collection('commesse').doc(firstJob).collection('impianti').doc('seed-'+i),{denominazione:'Synthetic '+i});
   for(let i=0;i<10;i++)seeded.set(created.docs[0].ref.collection('mezzi').doc('seed-'+i),{nome:'Synthetic vehicle '+i});
-  seeded.update(created.docs[0].ref,{'usage.impianti':101,'usage.mezzi':10});
+  seeded.update(created.docs[0].ref,{'usage.impianti':99,'usage.mezzi':10});
   await seeded.commit();
   if(withStorage){
    // The candidate plant-card action calls this exact company-scoped bridge.
@@ -172,7 +172,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await plant();await assert.rejects(plant);
   const vehicle=()=>trialFrame.evaluate(()=>window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore.collection('mezzi').add({nome:'Quota vehicle'}).then(()=>true));
   await vehicle();await assert.rejects(vehicle);
-  assert.equal((await created.docs[0].ref.get()).data().usage.impianti,102);
+  assert.equal((await created.docs[0].ref.get()).data().usage.impianti,100);
   assert.equal((await created.docs[0].ref.get()).data().usage.mezzi,11);
   // Actual original squad payload: one current document per job with multiple rows,
   // plus date-keyed history. The quota counts rows across all current documents.
@@ -333,7 +333,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   const joinUid='local-join',joinEmail='local-join@example.test',code='VC-AB12CD34';
   await auth.createUser({uid:joinUid,email:joinEmail,password,emailVerified:true,displayName:'Local join employee'});
   await db.doc('tenantJoinCodes/'+code).set({tenantId:'demo-b',companyName:'demo-b',status:'active'});
-  await db.doc('tenants/demo-b').update({joinCode:code,plan:'trial',trialDays:30,trialStartedAt:new Date(),limits:{commesse:5,impianti:102,admin:1,operatori:11,mezzi:11,squadre:2,storageBytes:100000000,personale:11},usage:{commesse:1,impianti:0,admin:1,operatori:10,mezzi:0,squadre:0,storageBytes:0,personale:0}});
+  await db.doc('tenants/demo-b').update({joinCode:code,plan:'trial',trialDays:30,trialStartedAt:new Date(),limits:{commesse:5,impianti:100,admin:1,operatori:11,mezzi:11,squadre:2,storageBytes:100000000,personale:11},usage:{commesse:1,impianti:0,admin:1,operatori:10,mezzi:0,squadre:0,storageBytes:0,personale:0}});
   for(const reserved of Array.from({length:10},(_,i)=>'local-reserved-'+i)){
    await db.doc('tenants/demo-b/members/'+reserved).set({uid:reserved,role:'employee',status:'active',demo:true});
    await db.doc('users/'+reserved+'/memberships/demo-b').set({tenantId:'demo-b',role:'employee',status:'active',demo:true});

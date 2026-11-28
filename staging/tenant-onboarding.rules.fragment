@@ -9,7 +9,7 @@ function canCreateTrialTenant() {
   && request.resource.data.trial == true
   && request.resource.data.trialStartedAt == request.time
   && request.resource.data.trialDays == 30
-  && request.resource.data.limits == {'commesse':5,'impianti':102,'admin':1,'operatori':11,'mezzi':11,'squadre':2,'storageBytes':100000000,'personale':11}
+  && request.resource.data.limits == {'commesse':5,'impianti':100,'admin':1,'operatori':11,'mezzi':11,'squadre':2,'storageBytes':100000000,'personale':11}
   && request.resource.data.usage == {'commesse':0,'impianti':0,'admin':1,'operatori':0,'mezzi':0,'squadre':0,'storageBytes':0,'personale':0}
   && request.resource.data.keys().hasOnly(['name','status','demo','ownerUid','joinCode','plan','trial','trialStartedAt','trialDays','limits','usage','originalCreateEnabled','originalManualEnabled','originalArchivesEnabled','commesseWriteEnabled','snowCreateEnabled','fattoMode','createdAt','createdBy'])
   && request.resource.data.name is string && request.resource.data.name.size()>=2 && request.resource.data.name.size()<=120

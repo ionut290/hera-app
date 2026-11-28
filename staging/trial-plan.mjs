@@ -1,6 +1,6 @@
 // V2 staging only. Server rules independently validate every quota.
 export const TRIAL_DAYS=30;
-export const TRIAL_LIMITS=Object.freeze({commesse:5,impianti:102,admin:1,operatori:11,mezzi:11,squadre:2,storageBytes:100000000,personale:11});
+export const TRIAL_LIMITS=Object.freeze({commesse:5,impianti:100,admin:1,operatori:11,mezzi:11,squadre:2,storageBytes:100000000,personale:11});
 export function initialTrialUsage(){return {commesse:0,impianti:0,admin:1,operatori:0,mezzi:0,squadre:0,storageBytes:0,personale:0};}
 export function quotaKind(path){
  const p=String(path).split('/');

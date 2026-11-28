@@ -1,5 +1,6 @@
 import firebase from 'firebase/compat/app';
 import {TRIAL_DAYS,TRIAL_LIMITS,initialTrialUsage} from '../trial-plan.mjs';
+import {SUBSCRIPTION_PLANS,subscriptionLabel,formatPrice} from '../subscription-plans.mjs';
 import {nativeProviderBridge,getProviderCredential,socialIntent} from './social-auth.mjs';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
@@ -171,10 +172,19 @@ async function refreshAccount(user){
    try{tenant=await db.doc('tenants/'+item.id).get({source:'server'});}catch(err){if(err.code==='permission-denied'||err.code==='firestore/permission-denied')continue;throw err;}
    if(request!==revision)return;
    if(!tenant.exists||tenant.data().demo!==true||tenant.data().status!=='active')continue;
-   companyCount++;const button=document.createElement('button');const t=tenant.data(),started=t.trialStartedAt?.toMillis?.();const expired=t.plan==='trial'&&(!Number.isFinite(started)||Date.now()>=started+30*86400000);
-   button.textContent=(t.name||item.id)+' · '+(t.plan==='trial'?(expired?'Prova scaduta · consultazione':'Piano prova 30 giorni'):t.plan==='full'?'Piano completo':'Azienda');button.dataset.tenant=item.id;
+   companyCount++;const button=document.createElement('button');const t=tenant.data();
+   button.textContent=(t.name||item.id)+' · '+subscriptionLabel(t);button.dataset.tenant=item.id;
    button.onclick=async()=>{closeRuntime();const attempt=revision;status('Verifica azienda…');try{const session=await entry.enter(item.id);if(attempt!==revision)return;const approval=await session.approval.verify(auth.currentUser);if(!approval.allowed||attempt!==revision)throw Error('Accesso non autorizzato');if(isLive){present(session);status('Azienda caricata: '+session.session.company.name+' — '+session.session.context.role+'.');return;}present(session);status('Azienda locale: '+session.session.company.name);}catch(err){if(attempt===revision){closeRuntime();status('Accesso aziendale non disponibile.');}}};
-   $('companies').append(button);if(item.data().role==='admin'){const manage=document.createElement('button');manage.textContent='Gestisci codice e richieste';manage.onclick=e=>{e.stopPropagation();showCompanyAdmin(item.id,tenant.data());};$('companies').append(manage);if(t.plan==='trial'&&t.ownerUid===user.uid){const upgrade=document.createElement('button');upgrade.textContent=t.upgradeRequested?'Richiesta piano completo inviata':'Richiedi piano completo';upgrade.disabled=t.upgradeRequested===true;upgrade.onclick=async()=>{if(auth.currentUser?.uid!==user.uid)return;upgrade.disabled=true;try{await tenant.ref.update({upgradeRequested:true,upgradeRequestedAt:statics.FieldValue.serverTimestamp()});upgrade.textContent='Richiesta piano completo inviata';}catch(err){upgrade.disabled=false;status(userError(err));}};$('companies').append(upgrade);}}
+   $('companies').append(button);if(item.data().role==='admin'){const manage=document.createElement('button');manage.textContent='Gestisci codice e richieste';manage.onclick=e=>{e.stopPropagation();showCompanyAdmin(item.id,tenant.data());};$('companies').append(manage);if(['trial','full'].includes(t.plan)&&t.ownerUid===user.uid){
+    const billing=document.createElement('section');billing.className='trial-box';
+    const title=document.createElement('strong');title.textContent='Abbonamento aziendale';billing.append(title);
+    const select=document.createElement('select');select.setAttribute('aria-label','Piano abbonamento');
+    for(const [key,p] of Object.entries(SUBSCRIPTION_PLANS)){const opt=document.createElement('option');opt.value=key;opt.textContent=p.name+' · '+formatPrice(p.priceCents)+' / 30 giorni';select.append(opt);}
+    select.value=t.requestedTier||t.billing?.tier||'starter';
+    const detail=document.createElement('p');const showDetails=()=>{const p=SUBSCRIPTION_PLANS[select.value],l=p.limits;detail.textContent=l.commesse+' commesse · '+l.impianti+' impianti · '+l.admin+' amministratori · '+l.operatori+' operatori · '+l.mezzi+' mezzi · '+l.squadre+' squadre · '+l.storageBytes/1000000000+' GB previsti. Attivazione previa conferma amministrativa.';};select.onchange=showDetails;showDetails();
+    const upgrade=document.createElement('button');upgrade.textContent=t.upgradeRequested?'Aggiorna richiesta abbonamento':'Richiedi abbonamento';upgrade.onclick=async()=>{if(auth.currentUser?.uid!==user.uid)return;upgrade.disabled=true;try{await tenant.ref.update({upgradeRequested:true,requestedTier:select.value,upgradeRequestedAt:statics.FieldValue.serverTimestamp()});upgrade.textContent='Richiesta abbonamento inviata';}catch(err){status(userError(err));}finally{upgrade.disabled=false;}};
+    billing.append(select,detail,upgrade);$('companies').append(billing);
+   }}
   }
   const intent=readIntent(user.uid);
   if(intent?.type==='join'){ $('join-code').value=intent.code;$('join-panel').hidden=false;$('company-panel').hidden=true;try{const state=await requestJoin(intent.code,$('join-status'));if(request!==revision||auth.currentUser?.uid!==user.uid)return;if(state==='accepted'&&companyCount){clearIntent(user.uid);$('join-panel').hidden=true;}}catch(err){if(request!==revision)return;$('join-status').textContent=joinError(err);} }

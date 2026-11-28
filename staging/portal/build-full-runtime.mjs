@@ -23,6 +23,13 @@ let html=original.replace(oldCsp,newCsp).replace(/<script\b[^>]*\bsrc=["']https:
 html=html.replace(/<script\b[^>]*\bsrc=["']https?:\/\/[^"']+["'][^>]*><\/script>/gi,'').replace(/<link\b[^>]*\bhref=["']https?:\/\/[^"']+["'][^>]*>/gi,'');
 html=html.replace(/<script\b/i,'<script src="runtime-bootstrap.js"></script>\n<script');
 if(!html.includes('runtime-bootstrap.js'))throw Error('Bootstrap missing');
+// The standalone PWA resets origin-wide caches and navigates itself on startup.
+// The embedded V2 runtime has its own verified session and no service worker;
+// running that legacy reset here can destroy the active frame during a write.
+const resetAnchor='      const PWA_EMERGENCY_CACHE_RESET_VERSION = ';
+if(html.split(resetAnchor).length!==2)throw Error('Legacy PWA reset anchor changed');
+html=html.replace(resetAnchor,()=> '      if (window.parent !== window && window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__) return;\n'+resetAnchor);
+
 for(const e of readdirSync(root,{withFileTypes:true})){
  if(!e.isFile()||e.name.startsWith('apple-review-')||!['.js','.css','.webmanifest'].includes(extname(e.name))||e.name==='app.js'||e.name==='sw.js')continue;
  cpSync(resolve(root,e.name),resolve(out,e.name));

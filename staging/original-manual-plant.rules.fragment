@@ -45,7 +45,7 @@ match /commesse/{commessaId} {
  && request.resource.data.nextImpiantoNumber>=resource.data.nextImpiantoNumber
  && request.resource.data.nextImpiantoNumber<=resource.data.nextImpiantoNumber+1;
  match /impianti/{impiantoId} {
-  allow create: if commessaId!='sfalcio-cobo' && manualPlantCreate(commessaId);
+  allow create: if commessaId!='sfalcio-cobo' && quotaCreate('impianti','commesse',impiantoId,commessaId) && manualPlantCreate(commessaId);
   allow update: if commessaId!='sfalcio-cobo' && manualPlantMerge();
  }
 }

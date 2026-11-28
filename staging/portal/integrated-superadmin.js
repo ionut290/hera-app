@@ -33,7 +33,8 @@ export function createAdminPanel({host,auth,db,statics,readOnly=false}){
       const select=el('select');select.setAttribute('aria-label','Ruolo aziendale');
       for(const role of ['admin','supervisor','employee']){const o=el('option',role);o.value=role;select.append(o);}select.value=m.role;
       const patch=changes=>{const batch=db.batch();batch.update(item.ref,changes);batch.update(db.doc('users/'+item.id+'/memberships/'+t.id),changes);return batch.commit();};
-      r.append(select,button('Salva ruolo',()=>{if(select.value!==m.role)mutate(()=>patch({role:select.value}),()=>showMembers(t));}),button(m.status==='active'?'Sospendi utente':'Riattiva utente',()=>mutate(()=>patch({status:m.status==='active'?'suspended':'active'}),()=>showMembers(t))));
+      if(!['trial','full'].includes(t.plan))r.append(select,button('Salva ruolo',()=>{if(select.value!==m.role)mutate(()=>patch({role:select.value}),()=>showMembers(t));}));else r.append(el('p','Modifica ruolo non disponibile per aziende con quote.'));
+      r.append(button(m.status==='active'?'Sospendi utente':'Riattiva utente',()=>mutate(()=>patch({status:m.status==='active'?'suspended':'active'}),()=>showMembers(t))));
      }
      memberList.append(r);
     }

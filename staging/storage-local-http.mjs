@@ -1,7 +1,7 @@
 // Local emulator HTTP adapter only; must never be mounted on a live web server.
 import {MAX_FILE_BYTES} from './storage-quota-service.mjs';
 const cap=Math.ceil(MAX_FILE_BYTES/3)*4+4096;
-const allowed=new Set(['list','upload','download','remove']);
+const allowed=new Set(['list','upload','download','remove','share']);
 export function createLocalStorageHandler(service){
  if(process.env.FIREBASE_STORAGE_EMULATOR_HOST!=='127.0.0.1:9199')throw Error('EMULATORS_REQUIRED');
  return async(req,res)=>{

@@ -9,15 +9,15 @@ function originalRegistryAdmin() {
   && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role=='admin';
 }
 match /{registry}/{recordId} {
- allow create: if originalRegistryAdmin() && originalRegistryArchive(registry) && quotaCreate(registry in ['mezzi','neve_mezzi']?'mezzi':'personale',registry,recordId,'');
- allow update: if originalRegistryAdmin() && originalRegistryArchive(registry);
- allow delete: if originalRegistryAdmin() && originalRegistryArchive(registry) && !managedPlan(get(/databases/$(database)/documents/tenants/$(tenantId)).data);
+ allow create: if originalRegistryArchive(registry) && originalRegistryAdmin() && quotaCreate(registry in ['mezzi','neve_mezzi']?'mezzi':'personale',registry,recordId,'');
+ allow update: if originalRegistryArchive(registry) && originalRegistryAdmin();
+ allow delete: if originalRegistryArchive(registry) && originalRegistryAdmin() && !managedPlan(get(/databases/$(database)/documents/tenants/$(tenantId)).data);
 }
 // These tenant-scoped helper archives are written by the original management
 // screen when importing or linking records. They never grant access outside
 // the current tenant and remain administrator-only.
 match /{helper}/{recordId} {
- allow create, update, delete: if originalRegistryAdmin() && helper in [
+ allow create, update, delete: if helper in [
   'registryImportBackups','operatorCommessaHistory','operatorUserLinkHistory','userOperatorLinks'
- ];
+ ] && originalRegistryAdmin();
 }

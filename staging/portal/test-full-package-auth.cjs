@@ -220,6 +220,30 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   assert.equal(renewed.billing.periods,2);assert.equal(renewed.billing.periodStart.toMillis(),upgraded.billing.periodStart.toMillis());
   assert.equal((await created.docs[0].ref.collection('billingReceipts').get()).size,2);
   console.log('COMMERCIAL BILLING: manual confirmation required, professional activated, duplicate receipt denied, renewal preserves paid period.');
+  // Synthetic operator memberships; Professional permits three admins total.
+  for(const id of ['local-paid-role-1','local-paid-role-2','local-paid-role-3']){
+   await created.docs[0].ref.collection('members').doc(id).set({uid:id,role:'employee',status:'active',demo:true});
+   await db.doc('users/'+id+'/memberships/'+activation.tenantId).set({tenantId:activation.tenantId,role:'employee',status:'active',demo:true});
+  }
+  await created.docs[0].ref.update({'usage.operatori':3});
+  await trialRow.getByRole('button',{name:'Utenti',exact:true}).click();
+  for(const id of ['local-paid-role-1','local-paid-role-2']){
+   const m=page.locator('[data-member="'+id+'"]');
+   await m.getByRole('combobox').selectOption('admin');
+   await m.getByRole('button',{name:'Salva ruolo'}).click();
+   await page.waitForFunction(()=>document.getElementById('admin-status')?.textContent==='Modifica salvata.');
+   assert.equal((await created.docs[0].ref.collection('members').doc(id).get()).data().role,'admin');
+   assert.equal((await db.doc('users/'+id+'/memberships/'+activation.tenantId).get()).data().role,'admin');
+  }
+  const extra=page.locator('[data-member="local-paid-role-3"]');
+  await extra.getByRole('combobox').selectOption('admin');
+  await extra.getByRole('button',{name:'Salva ruolo'}).click();
+  await page.locator('#admin-status').filter({hasText:'Operazione non riuscita'}).waitFor();
+  assert.equal((await created.docs[0].ref.collection('members').doc('local-paid-role-3').get()).data().role,'employee');
+  assert.equal((await created.docs[0].ref.get()).data().usage.admin,3);
+  assert.equal((await created.docs[0].ref.get()).data().usage.operatori,1);
+  console.log('PAID ADMIN QUOTA: Professional allows three admins; fourth denied, mirror and counters consistent.');
+
   await page.locator('#admin-new-company-name').fill('Nuova azienda collaudo');
   await page.getByRole('button',{name:'Nuova azienda',exact:true}).click();
   await page.locator('[data-admin-tenant]').filter({hasText:'Nuova azienda collaudo'}).waitFor();
@@ -270,6 +294,21 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await page.locator('#open-login').click();await page.locator('#email').fill(joinEmail);await page.locator('#password').fill(password);await page.locator('#login button[type=submit]').click();
   await page.locator('[data-tenant="demo-b"]').waitFor({state:'visible'});
   await page.locator('#logout').click();await page.locator('#auth-options').waitFor({state:'visible'});
+  await page.locator('#open-login').click();await page.locator('#email').fill(newEmail);await page.locator('#password').fill(password);await page.locator('#login button[type=submit]').click();
+  await page.locator('[data-tenant="'+activation.tenantId+'"]').click();
+  await page.waitForFunction(()=>{try{return window.__vargaLocalRuntime().session.session.context.tenantId.startsWith('demo-9e43');}catch{return false;}});
+  const paidFrame=await (await page.locator('#runtime').elementHandle()).contentFrame();
+  await paidFrame.waitForFunction(()=>Boolean(window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__?.isActive()));
+  const updatePaid=()=>paidFrame.evaluate(()=>window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore.collection('mezzi').doc('seed-0').update({nome:'Paid vehicle'}));
+  await updatePaid();
+  // Only test administrator simulates passage of time, never actual client.
+  await created.docs[0].ref.update({'billing.periodStart':new Date(Date.now()-61*86400000)});
+  await assert.rejects(updatePaid);
+  assert.equal(await paidFrame.evaluate(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('mezzi').doc('seed-0').get({source:'server'})).exists;}),true);
+  await page.locator('#company-return').click();await page.locator('#back').click();
+  await page.locator('[data-tenant="'+activation.tenantId+'"]').filter({hasText:'scaduto'}).waitFor();
+  await page.locator('#logout').click();await page.locator('#auth-options').waitFor({state:'visible'});
+  console.log('PAID EXPIRY: valid period permits writes; expired renewal denied, data readable.');
   assert.equal(external.length,0,'Unexpected external requests: '+external.join(','));
   console.log('INTEGRATED SUPER ADMIN UI: real Auth claim, tenant creation, mirrored role change, other company unchanged, historical ID preserved, logout.');
   console.log('FULL PACKAGE REAL AUTH E2E: login, verified membership, original UI, frame write, tenant switch, old scope closed, logout.');

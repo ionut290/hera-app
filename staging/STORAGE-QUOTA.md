@@ -8,7 +8,7 @@ Direct client access is denied by the candidate Storage rules. Download goes thr
 
 ## Not ready to deploy
 
-- No deployed callable/HTTP endpoint, original photo/document UI integration, file list, or sharing UI.
-- No deletion, reservation cleanup, migration of legacy data, malware scanning, rate limiting, or verified retention process. Reconcile reservations and inventory before changing any counter.
+- Local emulator-only HTTP adapter, document list and panel reached through the original Documents menu; upload/download/deletion implemented. Not connected to live Firebase, legacy shared/global documents, plant photo attachment forms or POS/notifications.
+- Deletion of ready files is generation-bound and releases quota only after verified absence; tombstones prevent duplicate release or ID reuse. Expired plans remain read-only. Pending upload reconciliation, migration, malware scanning, rate limiting and real retention/soft-delete costs remain unresolved. Reconcile reservations and inventory before changing any counter.
 - Verify a dedicated private V2 bucket, IAM, object generation preconditions, no unintended public ACL/token links, versioning/soft-delete costs and service identity. Do not reuse the original app bucket or its production Storage rules.
 - Gate real deployment behind project-specific configuration, verified tests, cost review and explicit release procedure. The current workflow uses local Firebase emulators only.

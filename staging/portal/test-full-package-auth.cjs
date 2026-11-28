@@ -154,6 +154,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await trialFrame.locator('#management-page').waitFor({state:'hidden'});
   await openMenu();
   await trialFrame.locator('#open-panel-mezzi').click();
+  console.log('FIRST USER MEZZI UI STATE '+JSON.stringify(await trialFrame.evaluate(()=>({menu:document.getElementById('side-menu')?.className,management:document.getElementById('management-page')?.className,managementAria:document.getElementById('management-page')?.getAttribute('aria-hidden'),panel:document.getElementById('panel-mezzi')?.className,vehicles:document.getElementById('vehicles-v2')?.className,admin:typeof canManageData==='function'?canManageData():null}))));
   await trialFrame.locator('#vehicles-v2').waitFor({state:'visible'});
   await trialFrame.locator('#vehicles-v2 [data-new="mezzi"]').click();
   await trialFrame.locator('#registry-editor').waitFor({state:'visible'});

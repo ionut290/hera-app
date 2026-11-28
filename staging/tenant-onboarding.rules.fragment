@@ -6,14 +6,17 @@ function canCreateTrialTenant() {
   && request.resource.data.demo == true
   && request.resource.data.status == 'active'
   && request.resource.data.plan == 'trial'
-  && request.resource.data.limits.commesse == 1
-  && request.resource.data.limits.impianti == 10
-  && request.resource.data.limits.admin == 1
-  && request.resource.data.limits.operatori == 3
-  && request.resource.data.usage.commesse == 0
-  && request.resource.data.usage.impianti == 0
-  && request.resource.data.usage.admin == 1
-  && request.resource.data.usage.operatori == 0;
+  && request.resource.data.trial == true
+  && request.resource.data.trialStartedAt == request.time
+  && request.resource.data.trialDays == 30
+  && request.resource.data.limits == {'commesse':5,'impianti':102,'admin':1,'operatori':11,'mezzi':11,'squadre':2,'storageBytes':100000000,'personale':11}
+  && request.resource.data.usage == {'commesse':0,'impianti':0,'admin':1,'operatori':0,'mezzi':0,'squadre':0,'storageBytes':0,'personale':0}
+  && request.resource.data.keys().hasOnly(['name','status','demo','ownerUid','joinCode','plan','trial','trialStartedAt','trialDays','limits','usage','originalCreateEnabled','originalManualEnabled','originalArchivesEnabled','commesseWriteEnabled','snowCreateEnabled','fattoMode','createdAt','createdBy'])
+  && request.resource.data.name is string && request.resource.data.name.size()>=2 && request.resource.data.name.size()<=120
+  && request.resource.data.createdAt == request.time && request.resource.data.createdBy == request.auth.uid
+  && request.resource.data.joinCode.matches('VC-[A-Z0-9]{8}')
+  && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin'
+  && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == 'admin';
 }
 allow create: if canCreateTrialTenant();
 // Each acceptance must atomically consume exactly one slot and create both membership records.
@@ -25,6 +28,7 @@ function validOperatorApproval(uid) {
  let approved = getAfter(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data;
  return companyAdmin(tenantId)
   && before.plan in ['trial','full']
+  && planWritable(tenantId)
   && before.usage.operatori is int && before.usage.operatori >= 0
   && before.limits.operatori is int && before.usage.operatori < before.limits.operatori
   && after.usage.operatori == before.usage.operatori + 1
@@ -64,6 +68,7 @@ match /joinRequests/{uid} {
  allow create: if eligible()
   && uid == request.auth.uid
   && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active'
+  && planWritable(tenantId)
   && request.resource.data.uid == request.auth.uid
   && request.resource.data.status == 'pending'
   && request.resource.data.email == request.auth.token.email
@@ -73,7 +78,7 @@ match /joinRequests/{uid} {
   && get(/databases/$(database)/documents/tenantJoinCodes/$(request.resource.data.joinCode)).data.status == 'active';
  allow get: if eligible() && (uid == request.auth.uid || companyAdmin(tenantId));
  allow list: if companyAdmin(tenantId);
- allow update: if companyAdmin(tenantId)
+ allow update: if companyAdmin(tenantId) && planWritable(tenantId)
   && resource.data.status == 'pending'
   && request.resource.data.uid == resource.data.uid
   && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewedAt','reviewedBy'])

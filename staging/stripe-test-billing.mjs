@@ -9,7 +9,7 @@ const tenantIdOk=v=>typeof v==='string'&&/^demo-[a-z0-9-]{3,59}$/.test(v);
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 const plans=Object.keys(SUBSCRIPTION_PLANS);
 const usageFits=(u,l)=>Object.entries(l).every(([k,v])=>Number.isSafeInteger(u?.[k])&&u[k]>=0&&u[k]<=v);
-export function createStripeTestBilling({app,webhookSecret,priceIds}){
+export function createStripeTestBilling({app,webhookSecret,priceIds,authoritativeProvider=null}){
  if(app?.options?.projectId!==PROJECT||process.env.FIRESTORE_EMULATOR_HOST!=='127.0.0.1:8080')fail('EMULATORS_REQUIRED');
  if(typeof webhookSecret!=='string'||!webhookSecret.startsWith('whsec_')||webhookSecret.length<20)fail('INVALID_CONFIG');
  if(!plans.every(t=>id(priceIds?.[t],'price_'))||new Set(plans.map(t=>priceIds[t])).size!==plans.length)fail('INVALID_CONFIG');
@@ -43,6 +43,10 @@ export function createStripeTestBilling({app,webhookSecret,priceIds}){
  async function handleWebhook(rawBody,signature){
   if(!Buffer.isBuffer(rawBody)||rawBody.length>1024*1024||typeof signature!=='string')fail('INVALID_SIGNATURE');
   let event;try{event=stripe.webhooks.constructEvent(rawBody,signature,webhookSecret,300);}catch{fail('INVALID_SIGNATURE');}
+  return applyVerifiedEvent(event);
+ }
+ // Internal ledger entry point. Never accepts an event from an HTTP caller.
+ async function applyVerifiedEvent(event){
   if(event.livemode!==false||event.api_version!==VERSION||event.account||!id(event.id,'evt_'))fail('INVALID_EVENT');
   if(!['invoice.paid','invoice.payment_failed','customer.subscription.deleted'].includes(event.type))return {status:'ignored'};
   const i=event.data?.object,subId=event.type==='customer.subscription.deleted'?i?.id:i?.subscription;
@@ -85,5 +89,15 @@ export function createStripeTestBilling({app,webhookSecret,priceIds}){
    return {status:'applied',tier:b.tier,periods};
   });
  }
- return Object.freeze({bindTestSubscription,handleWebhook});
+ async function reconcileInitialInvoice(subscriptionId){
+  // The trusted server provider retrieves the invoice and succeeded PaymentIntent.
+  // Caller supplies only a previously bound subscription identifier, not a payment.
+  if(!id(subscriptionId,'sub_')||typeof authoritativeProvider?.initialPaidInvoice!=='function')fail('RECONCILIATION_UNAVAILABLE');
+  const bound=(await db.doc('stripeTestSubscriptions/'+subscriptionId).get()).data();
+  if(!bound||bound.status==='canceled')fail('UNBOUND_SUBSCRIPTION');
+  const invoice=await authoritativeProvider.initialPaidInvoice(subscriptionId);
+  if(!invoice||invoice.subscription!==subscriptionId||invoice.customer!==bound.customerId||invoice.billing_reason!=='subscription_create'||!id(invoice.id,'in_'))fail('INVOICE_MISMATCH');
+  return applyVerifiedEvent({id:'evt_reconcile_'+invoice.id,api_version:VERSION,livemode:false,type:'invoice.paid',data:{object:invoice}});
+ }
+ return Object.freeze({bindTestSubscription,handleWebhook,reconcileInitialInvoice});
 }

@@ -150,6 +150,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await trialFrame.locator('#registry-editor').locator('button.btn-primary').click();
   await trialFrame.waitForFunction(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('personale').where('nome','==','Operatore').where('cognome','==','Collaudo').get()).size===1;});
   console.log('FIRST USER PERSONALE PASS: Operatore Collaudo saved from the Personale v2 form.');
+  await trialFrame.locator('#management-close-btn').click();
   await openMenu();
   await trialFrame.locator('#open-panel-mezzi').click();
   await trialFrame.locator('#vehicles-v2').waitFor({state:'visible'});
@@ -161,6 +162,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await trialFrame.locator('#registry-editor').locator('button.btn-primary').click();
   await trialFrame.waitForFunction(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('mezzi').where('codiceMezzo','==','MEZZO-COLLAUDO-01').get()).size===1;});
   console.log('FIRST USER MEZZO PASS: MEZZO-COLLAUDO-01 saved from the Mezzi v2 form.');
+  await trialFrame.locator('#management-close-btn').click();
   await openMenu();
   await trialFrame.locator('#open-panel-commesse').click();
   await trialFrame.locator('#open-new-commessa-btn').click();

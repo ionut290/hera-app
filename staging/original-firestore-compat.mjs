@@ -1,5 +1,6 @@
 // Narrow Firestore compat boundary. Not installed in app.js; server rules remain mandatory.
 // Route original collection names (including the normal/snow selectors) to the authenticated company.
+import {quotaKind} from './trial-plan.mjs';
 export function createOriginalFirestoreCompat({db,router}){
  const projectId=db?.app?.options?.projectId;
  if(!projectId || projectId!==router?.projectId || (projectId!=='varga-cantieri-v2-staging' && !projectId.startsWith('demo-varga-')))throw Error('Project mismatch');
@@ -33,6 +34,22 @@ export function createOriginalFirestoreCompat({db,router}){
  // Return actual compat SDK references. Their native query, batch and transaction
  // behavior is preserved; references already issued are governed by server rules.
  return Object.freeze({
+  async writeQuotaDocument(ref,data,options){
+   open();checkRef(ref);
+   const p=ref.path.slice(prefix.length),kind=quotaKind(p);
+   if(!kind||!['trial','full'].includes(router.company?.plan))return options===undefined?ref.set(data):ref.set(data,options);
+   const parts=p.split('/'),tenant=db.doc('tenants/'+tenantId);
+   return db.runTransaction(async tx=>{
+    open();const snapshot=await tx.get(ref);
+    if(!snapshot.exists){
+     const t=(await tx.get(tenant)).data();
+     open();
+     if(!t||!Number.isSafeInteger(t.usage?.[kind])||!Number.isSafeInteger(t.limits?.[kind])||t.usage[kind]>=t.limits[kind])throw Error('Limite piano raggiunto: '+kind);
+     tx.update(tenant,{['usage.'+kind]:t.usage[kind]+1,lastQuotaWrite:{kind,archive:parts[0],id:parts.at(-1),parent:parts.length===4?parts[1]:''}});
+    }
+    open();if(options===undefined)tx.set(ref,data);else tx.set(ref,data,options);
+   });
+  },
   collection(path){return db.collection(resolve(path));},
   doc(path){return db.doc(resolve(path,true));},
   batch(){open();return writes(db.batch()).facade;},

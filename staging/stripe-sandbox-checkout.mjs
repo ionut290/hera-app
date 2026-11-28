@@ -29,6 +29,7 @@ export function createSandboxStripeProvider({app,secretKey}){
   price:id=>stripe.prices.retrieve(id),
   create:(params,key)=>stripe.checkout.sessions.create(params,{idempotencyKey:key}),
   session:id=>stripe.checkout.sessions.retrieve(id,{expand:['subscription','line_items.data.price']}),
+  expire:id=>stripe.checkout.sessions.expire(id,{}, {idempotencyKey:'varga-expire-'+id}),
  });
 }
 export function createSandboxCheckout({app,provider,priceIds}){
@@ -133,5 +134,38 @@ export function createSandboxCheckout({app,provider,priceIds}){
    return {status:'requested',tier,testMode:true};
   });
  }
- return Object.freeze({createCheckout,finalizeCheckout,companies,requestPlan});
+ // Only release a known, verified, terminal unpaid session. Never clear a
+ // creating attempt that may have an unknown live session at the provider.
+ async function cancelCheckout({token,tenantId}){
+  const uid=await uidFor(token),r=refs(tenantId,uid);
+  if(typeof provider.expire!=='function')fail('CANCEL_UNAVAILABLE');
+  const a=await db.runTransaction(async tx=>{
+   const t=await owner(tx,r,uid,tenantId),d=(await tx.get(r.attempt)).data();
+   if(!d&&!t.stripeSandboxCheckoutId&&!t.stripeTestSubscriptionId&&t.plan==='trial'&&!t.billing)return null;
+   if(t.plan!=='trial'||t.billing||t.stripeTestSubscriptionId||!d||d.ownerUid!==uid||t.stripeSandboxCheckoutId!==d.attemptId||d.status!=='open'||!id(d.sessionId,'cs_test_'))fail('CHECKOUT_RECONCILIATION_REQUIRED');
+   return d;
+  });
+  if(!a)return {status:'already-cleared',testMode:true};
+  const matches=s=>s?.livemode===false&&s.id===a.sessionId&&s.mode==='subscription'&&s.client_reference_id===a.attemptId&&s.metadata?.tenantId===tenantId&&s.metadata?.attemptId===a.attemptId&&s.metadata?.tier===a.tier;
+  const unpaid=s=>s.payment_status==='unpaid'&&s.subscription===null;
+  let session=await provider.session(a.sessionId);
+  if(!matches(session)||!unpaid(session)||!['open','expired'].includes(session.status))fail('CHECKOUT_RECONCILIATION_REQUIRED');
+  if(session.status==='open'){
+   // An expire request can race payment or return an ambiguous error. A new
+   // authoritative read is mandatory; a failed call alone never releases it.
+   try{await provider.expire(a.sessionId);}catch{}
+   session=await provider.session(a.sessionId);
+  }
+  if(!matches(session)||!unpaid(session)||session.status!=='expired')fail('CHECKOUT_RECONCILIATION_REQUIRED');
+  return db.runTransaction(async tx=>{
+   const t=await owner(tx,r,uid,tenantId),d=(await tx.get(r.attempt)).data();
+   if(!d&&!t.stripeSandboxCheckoutId&&!t.stripeTestSubscriptionId&&t.plan==='trial'&&!t.billing)return {status:'already-cleared',testMode:true};
+   if(t.plan!=='trial'||t.billing||t.stripeTestSubscriptionId||t.stripeSandboxCheckoutId!==a.attemptId||d?.attemptId!==a.attemptId||d.ownerUid!==uid||d.sessionId!==a.sessionId||d.status!=='open')fail('CHECKOUT_CONFLICT');
+   const audit=db.doc('stripeSandboxExpiredAttempts/'+a.attemptId);
+   tx.create(audit,{tenantId,ownerUid:uid,tier:a.tier,sessionId:a.sessionId,status:'expired-unpaid',recordedAt:stamp(),testMode:true});
+   tx.delete(r.attempt);tx.update(r.tenant,{stripeSandboxCheckoutId:FieldValue.delete(),requestedTier:null,upgradeRequested:false});
+   return {status:'cleared',testMode:true};
+  });
+ }
+ return Object.freeze({createCheckout,finalizeCheckout,companies,requestPlan,cancelCheckout});
 }

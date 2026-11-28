@@ -54,5 +54,21 @@ try{
  await err('SUBSCRIPTION_CANCELED',()=>send(event('late_b',{...invoice('late_b'),subscription:subB,customer:customerB})));
  assert.equal((await db.doc('tenants/'+B).get()).data().plan,'trial');
  await err('PERIOD_ALREADY_PAID',()=>send(event('cancel_duplicate_period',invoice('cancel_duplicate_period',end,'subscription_cycle'))));
+ // Trusted provider reconciliation uses the same ledger as signed events.
+ const C='demo-stripe-reconcile',subC='sub_fixture_reconcile',customerC='cus_fixture_reconcile';
+ await db.doc('tenants/'+C).set(trial);
+ let supplied={...invoice('reconciled'),subscription:subC,customer:customerC,paid:false,status:'open'};
+ const reconciler=createStripeTestBilling({app,webhookSecret:secret,priceIds,authoritativeProvider:{initialPaidInvoice:async id=>{assert.equal(id,subC);return supplied;}}});
+ await err('RECONCILIATION_UNAVAILABLE',()=>service.reconcileInitialInvoice(subC));
+ await err('UNBOUND_SUBSCRIPTION',()=>reconciler.reconcileInitialInvoice(subC));
+ await reconciler.bindTestSubscription({tenantId:C,subscriptionId:subC,customerId:customerC,tier:'professional'});
+ await err('INVOICE_MISMATCH',()=>reconciler.reconcileInitialInvoice(subC));
+ assert.equal((await db.doc('tenants/'+C).get()).data().plan,'trial');
+ supplied={...supplied,paid:true,status:'paid'};
+ assert.equal((await reconciler.reconcileInitialInvoice(subC)).status,'applied');
+ assert.equal((await reconciler.reconcileInitialInvoice(subC)).status,'duplicate-event');
+ assert.equal((await send(event('reconcile_webhook',supplied))).status,'duplicate-invoice');
+ assert.equal((await db.doc('tenants/'+C).collection('billingReceipts').get()).size,1);
+ console.log('STRIPE RECONCILIATION PASS: authoritative provider required, unpaid rejected, shared invoice ledger deduplicates later webhook.');
  console.log('STRIPE TEST PASS: official SDK signature, live events rejected, verified binding, exact paid amount, duplicate event/invoice/period protection, automatic renewal, failure without entitlement, cancellation retaining paid period, company isolation.');
 }finally{await deleteApp(app);}

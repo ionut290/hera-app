@@ -42,6 +42,36 @@ try{
  await err('FORBIDDEN',()=>service.upload(make(other,A,'local-storage-file-0002')));
  await err('INVALID_FILE_TYPE',()=>service.upload(make(worker,A,'local-storage-file-0003',Buffer.from('not pdf').toString('base64'))));
  await err('FILE_ID_CONFLICT',()=>service.upload({...first,name:'other.pdf'}));
+ // Explicit sharing: a colleague may read shared documents, but cannot edit or remove them.
+ const peer=await user('storage-peer');await member(A,'storage-peer','employee');
+ await err('FORBIDDEN',()=>service.download({token:peer,tenantId:A,fileId:first.fileId}));
+ await service.share({token:worker,tenantId:A,fileId:first.fileId,visibility:'company'});
+ assert.equal((await service.download({token:peer,tenantId:A,fileId:first.fileId})).base64,payload);
+ const shared=(await service.list({token:peer,tenantId:A})).files.find(f=>f.id===first.fileId);
+ assert.equal(shared.visibility,'company');assert.equal(shared.canManage,false);
+ await err('FORBIDDEN',()=>service.share({token:peer,tenantId:A,fileId:first.fileId,visibility:'private'}));
+ await err('FORBIDDEN',()=>service.remove({token:peer,tenantId:A,fileId:first.fileId}));
+ await err('FORBIDDEN',()=>service.download({token:other,tenantId:A,fileId:first.fileId}));
+ await service.share({token:admin,tenantId:A,fileId:first.fileId,visibility:'private'});
+ await err('FORBIDDEN',()=>service.download({token:peer,tenantId:A,fileId:first.fileId}));
+ assert.equal((await service.list({token:peer,tenantId:A})).files.some(f=>f.id===first.fileId),false);
+ assert.equal((await db.doc('tenants/'+A).get()).data().usage.storageBytes,pdf.length);
+ // Plant photo associations are tenant-scoped and bound to actual documents.
+ const plant={archive:'commesse',jobId:'photo-job',plantId:'plant-1'};
+ for(const t of [A,B]){await db.doc('tenants/'+t+'/commesse/photo-job').set({nome:'Synthetic job'});await db.doc('tenants/'+t+'/commesse/photo-job/impianti/plant-1').set({nome:'Synthetic plant'});}
+ const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0i0AAAAASUVORK5CYII=';
+ const photo={token:worker,tenantId:A,fileId:'local-plant-photo-0001',name:'plant.png',type:'image/png',base64:png,plant,visibility:'company'};
+ await err('INVALID_PLANT',()=>service.upload({...photo,fileId:'local-plant-photo-0002',plant:{...plant,plantId:'not-present'}}));
+ await err('INVALID_FILE_TYPE',()=>service.upload({...make(worker,A,'local-plant-photo-0003'),plant}));
+ const saved=await service.upload(photo);assert.deepEqual(saved.plant,plant);
+ assert.equal((await service.list({token:peer,tenantId:A,plant})).files.length,1);
+ assert.equal((await service.list({token:other,tenantId:B,plant})).files.length,0);
+ assert.equal((await service.download({token:peer,tenantId:A,fileId:photo.fileId})).base64,png);
+ await err('FORBIDDEN',()=>service.download({token:other,tenantId:B,fileId:photo.fileId}));
+ assert.equal((await db.doc('tenants/'+A).get()).data().usage.storageBytes,pdf.length+Buffer.from(png,'base64').length);
+ await service.remove({token:worker,tenantId:A,fileId:photo.fileId});
+ assert.equal((await db.doc('tenants/'+A).get()).data().usage.storageBytes,pdf.length);
+ console.log('STORAGE SHARING AND PLANT PASS: private default, company access, revocation, no cross-company access or peer deletion, verified plant link and shared quota.');
  // Counter fixture represents previous reservations; exact byte boundary and concurrent requests.
  await db.doc('tenants/'+A).update({'usage.storageBytes':100000000-pdf.length});
  const pair=await Promise.allSettled([service.upload(make(worker,A,'local-storage-file-0004')),service.upload(make(admin,A,'local-storage-file-0005'))]);

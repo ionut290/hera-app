@@ -41,7 +41,7 @@ try{
   }
   console.log('MANUAL CHECKOUT READY: open the GitHub Actions summary link; no URL printed in logs.');
   stage='manual-provider-payment-confirmation';
-  for(let i=0;i<180;i++){const fresh=await provider.session(session.sessionId);if(fresh.status==='complete'&&fresh.payment_status==='paid'){completed=true;break;}await new Promise(r=>setTimeout(r,2000));}
+  for(let i=0;i<900;i++){const fresh=await provider.session(session.sessionId);if(fresh.status==='complete'&&fresh.payment_status==='paid'){completed=true;break;}await new Promise(r=>setTimeout(r,2000));}
   if(!completed)throw Error('MANUAL_PAYMENT_NOT_CONFIRMED');
  } else {
  stage='hosted-checkout-browser';

@@ -38,6 +38,8 @@ try{
  const page=await browser.newPage({locale:'en-US'});page.setDefaultTimeout(45000);
  await page.goto(session.url,{waitUntil:'domcontentloaded',timeout:60000});
  assert.equal(new URL(page.url()).hostname,'checkout.stripe.com');
+ await page.locator('iframe[title="Secure embedded form frame"]').waitFor({state:'attached',timeout:45000});
+ await page.waitForTimeout(1200);
  // Stripe Checkout hosts payment inputs in cross-origin frames. Search the page
  // and its frames, but keep all entered data synthetic and test-only.
  const describeCheckoutFields=async()=>{
@@ -87,20 +89,28 @@ try{
  const region=page.locator('#billingAdministrativeArea, select[name=billingAdministrativeArea]').first();
  if(await region.isVisible()){const options=await region.locator('option').evaluateAll(ns=>ns.map(n=>({v:n.value,t:n.textContent})));const b=options.find(o=>o.v==='BO'||o.t==='Bologna');if(b)await region.selectOption(b.v);}
  stage='hosted-checkout-submit';
- const visibleButtonInfo=await page.locator('button').evaluateAll(ns=>ns.filter(n=>!!(n.offsetWidth||n.offsetHeight)).map(n=>({text:(n.innerText||'').trim().slice(0,80),type:n.getAttribute('type'),ariaLabel:n.getAttribute('aria-label'),disabled:!!n.disabled})).slice(0,20));
- console.log('CHECKOUT_SUBMIT_OPTIONS '+JSON.stringify(visibleButtonInfo));
- const submitSpecific=page.locator('button[type=submit]').filter({hasText:/subscribe|pay/i}).first();
- const byRole=page.getByRole('button',{name:/subscribe|pay|complete|confirm|continue/i}).last();
- const visibleButtons=page.locator('button').filter({visible:true});
- const visibleButtonCount=await visibleButtons.count();
- const submit=await submitSpecific.count()?submitSpecific:await byRole.count()?byRole:visibleButtonCount===1?visibleButtons.first():null;
- if(!submit)throw new Error('CHECKOUT_SUBMIT_AMBIGUOUS');
- await submit.waitFor({state:'visible'});await submit.click();
- await page.waitForTimeout(2000);
+ const contexts=[page,...page.frames().filter(f=>f!==page.mainFrame())];
+ const submitCandidates=[];
+ for(const [frameIndex,context] of contexts.entries()){
+  let details=[];
+  try{details=await context.locator('button,[role=button]').evaluateAll(ns=>ns.filter(n=>!!(n.offsetWidth||n.offsetHeight)).map(n=>({text:(n.innerText||'').trim().slice(0,80),type:n.getAttribute('type'),ariaLabel:n.getAttribute('aria-label'),title:n.getAttribute('title'),className:String(n.className||'').slice(0,100),disabled:!!n.disabled})).slice(0,20));}catch{}
+  const host=frameIndex===0?'checkout.stripe.com':(()=>{try{return new URL(context.url()).hostname}catch{return 'unknown'}})();
+  console.log('CHECKOUT_FRAME_BUTTONS '+JSON.stringify({frameIndex,host,details}));
+  for(const detail of details){
+   const label=(detail.text+' '+detail.ariaLabel+' '+detail.title).trim();
+   if(!detail.disabled&&!/ExpandableText-button/.test(detail.className)&&(/submit/i.test(detail.type||'')||/subscribe|pay|complete|confirm|continue/i.test(label)))
+    submitCandidates.push({frameIndex,label,type:detail.type});
+  }
+ }
+ if(submitCandidates.length!==1)throw new Error('CHECKOUT_SUBMIT_NOT_UNIQUE');
+ const submitContext=contexts[submitCandidates[0].frameIndex];
+ const submitSelector=submitCandidates[0].type==='submit'?'button[type=submit],[role=button][type=submit]':'button,[role=button]';
+ const submit=submitContext.locator(submitSelector).filter({visible:true}).last();
+ await submit.waitFor({state:'visible'});
+ await submit.click();
+ await page.waitForTimeout(1500);
  const postText=(await page.locator('body').innerText().catch(()=>'' )).split(/\\r?\\n/).map(x=>x.trim()).filter(x=>x&&x.length<140&&!/@|https?:|[0-9]{4,}/.test(x)).slice(0,30);
- const postButtons=await page.locator('button').evaluateAll(ns=>ns.filter(n=>!!(n.offsetWidth||n.offsetHeight)).map(n=>({text:(n.innerText||'').trim().slice(0,80),type:n.getAttribute('type'),ariaLabel:n.getAttribute('aria-label'),id:n.id,disabled:!!n.disabled})).slice(0,12));
- const domDiag=await page.locator('body').evaluate(el=>({htmlLength:el.innerHTML.length,frames:[...document.querySelectorAll('iframe')].map(n=>({title:n.title,role:n.getAttribute('role')})),elements:[...el.querySelectorAll('form,button,input,iframe,[role],stripe-payment-element,stripe-buy-button')].slice(0,40).map(n=>({tag:n.tagName.toLowerCase(),id:n.id,role:n.getAttribute('role'),type:n.getAttribute('type'),name:n.getAttribute('name'),ariaLabel:n.getAttribute('aria-label'),className:String(n.className||'').slice(0,100),disabled:!!n.disabled,childCount:n.children?.length||0}))}));
- console.log('CHECKOUT_AFTER_SUBMIT '+JSON.stringify({title:await page.title(),host:new URL(page.url()).hostname,text:postText,buttons:postButtons,dom:domDiag}));
+ console.log('CHECKOUT_AFTER_SUBMIT '+JSON.stringify({title:await page.title(),host:new URL(page.url()).hostname,text:postText}));
  stage='provider-payment-confirmation';
  // Poll the authoritative API, not the redirect URL. Never submit twice.
  for(let i=0;i<30;i++){const fresh=await provider.session(session.sessionId);if(fresh.status==='complete'&&fresh.payment_status==='paid'){completed=true;break;}await new Promise(r=>setTimeout(r,2000));}

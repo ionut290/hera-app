@@ -4,6 +4,11 @@ on:
     branches: [varga-cantieri-v2-staging, v2/fix-registration-session, v2/social-auth-onboarding]
     paths: ['staging/**', '.github/workflows/staging-integrated-package.yml']
   workflow_dispatch:
+    inputs:
+      audit_stripe_sandbox:
+        description: 'Read-only Stripe Sandbox catalog audit (restricted test key)'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -121,3 +126,25 @@ jobs:
           node assemble-candidate-rules.mjs
           printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}' > emulator-stripe.json
           npx --no-install firebase emulators:exec --config emulator-stripe.json --only firestore,auth --project varga-cantieri-v2-staging 'node test-stripe-sandbox-catalog.mjs && node test-stripe-test-billing.mjs && node test-stripe-sandbox-checkout.mjs && node billing-web/test-local-web.mjs'
+  stripe-sandbox-catalog-audit:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging' && github.event_name == 'workflow_dispatch' && inputs.audit_stripe_sandbox == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: stripe-sandbox-readonly
+    defaults:
+      run:
+        working-directory: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          printf '%s' '{"name":"varga-stripe-catalog-audit","version":"1.0.0","private":true}' > package.json
+          npm install --ignore-scripts --no-save --no-audit --no-fund stripe@17.7.0
+      - name: Read-only test price verification
+        env:
+          VARGA_STRIPE_SANDBOX_READ_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_READ_KEY }}
+        run: node audit-stripe-sandbox-catalog.mjs

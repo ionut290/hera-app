@@ -121,6 +121,30 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await vehicle();await assert.rejects(vehicle);
   assert.equal((await created.docs[0].ref.get()).data().usage.impianti,102);
   assert.equal((await created.docs[0].ref.get()).data().usage.mezzi,11);
+  // Actual original squad payload: one current document per job with multiple rows,
+  // plus date-keyed history. The quota counts rows across all current documents.
+  const secondJob=(await created.docs[0].ref.collection('commesse').get()).docs.find(d=>d.id!==firstJob).id;
+  const squad=(job,date,count)=>trialFrame.evaluate(async({job,date,count})=>{
+   const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__,f=s.session.firestore;
+   const current=f.collection('squadreCommesse').doc(job),history=f.collection('squadreStorico').doc(date+'__'+job);
+   const payload={commessaId:job,commessaNome:'Quota test',riferimentoData:date,squadre:Array.from({length:count},(_,i)=>({caposquadra:'Synthetic lead '+i,personale:'Synthetic operator '+i})),updatedAt:window.firebase.firestore.FieldValue.serverTimestamp(),updatedBy:s.auth.currentUser.email};
+   await f.runTransaction(async tx=>{const h=await tx.get(history),next={...payload,existingSquadreCountBeforeSave:h.exists?h.data().squadre.length:0};tx.set(current,next,{merge:true});tx.set(history,{...next,dateKey:date},{merge:true});});
+  },{job,date,count});
+  await squad(firstJob,'2026-11-28',2);
+  assert.equal((await created.docs[0].ref.get()).data().usage.squadre,2);
+  await assert.rejects(()=>squad(secondJob,'2026-11-28',1));
+  assert.equal((await created.docs[0].ref.collection('squadreCommesse').doc(secondJob).get()).exists,false);
+  await squad(firstJob,'2026-11-29',1);
+  await squad(secondJob,'2026-11-29',1);
+  assert.equal((await created.docs[0].ref.get()).data().usage.squadre,2);
+  assert.equal((await created.docs[0].ref.collection('squadreStorico').get()).size,3);
+  assert.equal((await created.docs[0].ref.collection('squadreStorico').doc('2026-11-28__'+firstJob).get()).data().squadre.length,2);
+  await assert.rejects(()=>trialFrame.evaluate(async job=>{
+   const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__,f=s.session.firestore;
+   await f.collection('squadreCommesse').doc(job).update({squadre:[{caposquadra:'Uno'},{caposquadra:'Due'},{caposquadra:'Tre'}],updatedAt:window.firebase.firestore.FieldValue.serverTimestamp()});
+  },firstJob));
+  assert.equal((await created.docs[0].ref.get()).data().usage.squadre,2);
+  console.log('SQUAD QUOTA: actual rows across jobs, historical days excluded, replacement releases one slot, unpaired update denied.');
   // Expiry denies writes while read access remains intact.
   await created.docs[0].ref.update({trialStartedAt:new Date(Date.now()-31*86400000)});
   await assert.rejects(()=>trialFrame.evaluate(()=>window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore.collection('mezzi').doc('seed-0').update({nome:'Denied after expiry'})));

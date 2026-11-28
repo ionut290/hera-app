@@ -91,8 +91,10 @@ try{
  console.log('CHECKOUT_SUBMIT_OPTIONS '+JSON.stringify(visibleButtons));
  const submitSpecific=page.locator('button[type=submit]').filter({hasText:/subscribe|pay/i}).first();
  const byRole=page.getByRole('button',{name:/subscribe|pay|complete|confirm|continue/i}).last();
- const formButton=page.locator('form button').last();
- const submit=await submitSpecific.count()?submitSpecific:await byRole.count()?byRole:formButton;
+ const visibleButtons=page.locator('button').filter({visible:true});
+ const visibleButtonCount=await visibleButtons.count();
+ const submit=await submitSpecific.count()?submitSpecific:await byRole.count()?byRole:visibleButtonCount===1?visibleButtons.first():null;
+ if(!submit)throw new Error('CHECKOUT_SUBMIT_AMBIGUOUS');
  await submit.waitFor({state:'visible'});await submit.click();
  stage='provider-payment-confirmation';
  // Poll the authoritative API, not the redirect URL. Never submit twice.

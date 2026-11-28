@@ -164,7 +164,11 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   const joinUid='local-join',joinEmail='local-join@example.test',code='VC-AB12CD34';
   await auth.createUser({uid:joinUid,email:joinEmail,password,emailVerified:true,displayName:'Local join employee'});
   await db.doc('tenantJoinCodes/'+code).set({tenantId:'demo-b',companyName:'demo-b',status:'active'});
-  await db.doc('tenants/demo-b').update({joinCode:code});
+  await db.doc('tenants/demo-b').update({joinCode:code,plan:'trial',limits:{commesse:1,impianti:10,admin:1,operatori:3},usage:{commesse:1,impianti:0,admin:1,operatori:2}});
+  for(const reserved of ['local-reserved-1','local-reserved-2']){
+   await db.doc('tenants/demo-b/members/'+reserved).set({uid:reserved,role:'employee',status:'active',demo:true});
+   await db.doc('users/'+reserved+'/memberships/demo-b').set({tenantId:'demo-b',role:'employee',status:'active',demo:true});
+  }
   await page.locator('#open-join').click();await page.locator('#join-code').fill(code);await page.locator('#join-existing').click();
   await page.locator('#email').fill(joinEmail);await page.locator('#password').fill(password);await page.locator('#login button[type=submit]').click();
   await page.waitForFunction(()=>document.getElementById('join-status')?.textContent.includes('Richiesta inviata'));
@@ -179,6 +183,17 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
    await approvingPage.getByRole('button',{name:'Accetta',exact:true}).click();
    await approvingPage.waitForFunction(()=>document.getElementById('company-admin-status')?.textContent.includes('nessuna richiesta'));
    assert.equal((await db.doc('tenants/demo-b/members/'+joinUid).get()).data().role,'employee');
+   assert.equal((await db.doc('tenants/demo-b').get()).data().usage.operatori,3);
+   const fourth='local-fourth-operator';
+   await db.doc('tenants/demo-b/joinRequests/'+fourth).set({uid:fourth,email:'local-fourth@example.test',displayName:'Quarto operatore',status:'pending',joinCode:code,requestedAt:new Date()});
+   await approvingPage.locator('[data-tenant="demo-b"] + button').click();
+   await approvingPage.getByRole('button',{name:'Accetta',exact:true}).click();
+   await approvingPage.locator('#company-admin-status').filter({hasText:'Accettazione non consentita'}).waitFor();
+   assert.equal((await db.doc('tenants/demo-b/members/'+fourth).get()).exists,false);
+   assert.equal((await db.doc('users/'+fourth+'/memberships/demo-b').get()).exists,false);
+   assert.equal((await db.doc('tenants/demo-b/joinRequests/'+fourth).get()).data().status,'pending');
+   assert.equal((await db.doc('tenants/demo-b').get()).data().usage.operatori,3);
+   console.log('TRIAL OPERATOR QUOTA: third accepted atomically, fourth denied, all records unchanged.');
   }finally{await approvingPage.close();}
   await page.locator('#back').click();
   await page.locator('[data-tenant="demo-b"]').waitFor({state:'visible'});

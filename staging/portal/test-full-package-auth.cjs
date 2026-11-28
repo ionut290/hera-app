@@ -216,6 +216,8 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   console.log('REGISTRATION SESSION: unverified gate, verified activation, same page, owner membership and repeat login.');
   await page.locator('#open-login').click();
   await page.locator('#email').fill(email);await page.locator('#password').fill(password);await page.locator('#login button[type=submit]').click();
+  await page.locator('[data-tenant="demo-a"]').waitFor({state:'visible'});
+  assert.equal(await page.locator('[data-tenant="demo-b"]').count(),1,'Verified company list must be published atomically before selection');
   await page.locator('[data-tenant="demo-a"]').click();
   const frame=page.frameLocator('#runtime');
   await frame.locator('#side-menu').waitFor({state:'attached'});

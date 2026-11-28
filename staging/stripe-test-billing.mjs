@@ -22,7 +22,7 @@ export function createStripeTestBilling({app,webhookSecret,priceIds}){
   return db.runTransaction(async tx=>{
    const [ts,bs]=await Promise.all([tx.get(tenant),tx.get(binding)]),t=ts.data(),b=bs.data();
    if(b){if(b.tenantId===tenantId&&b.customerId===customerId&&b.tier===tier&&t?.stripeTestSubscriptionId===subscriptionId)return {status:'already-bound'};fail('BINDING_CONFLICT');}
-   if(!t||t.demo!==true||t.status!=='active'||t.plan!=='trial'||t.billing||t.stripeTestSubscriptionId||t.requestedTier!==tier||t.upgradeRequested!==true)fail('BINDING_CONFLICT');
+   if(!t||t.demo!==true||t.status!=='active'||t.plan!=='trial'||t.billing||t.stripeTestSubscriptionId||t.stripeSandboxCheckoutId||t.requestedTier!==tier||t.upgradeRequested!==true)fail('BINDING_CONFLICT');
    if(!usageFits(t.usage,SUBSCRIPTION_PLANS[tier].limits))fail('USAGE_EXCEEDS_PLAN');
    tx.create(binding,{tenantId,customerId,tier,subscriptionId,createdAt:stamp(),status:'pending'});
    tx.update(tenant,{stripeTestSubscriptionId:subscriptionId});

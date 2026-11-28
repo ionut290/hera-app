@@ -156,7 +156,7 @@ jobs:
   hosted-checkout:
     if: github.ref == 'refs/heads/varga-cantieri-v2-staging' && github.event_name == 'workflow_dispatch' && inputs.confirm_test_only == true
     concurrency:
-      group: varga-stripe-sandbox-hosted-checkout
+      group: varga-stripe-sandbox-hosted-checkout-split
       cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -199,7 +199,7 @@ jobs:
     needs: hosted-checkout
     if: github.ref == 'refs/heads/varga-cantieri-v2-staging' && github.event_name == 'workflow_dispatch' && inputs.confirm_test_only == true
     concurrency:
-      group: varga-stripe-sandbox-hosted-checkout
+      group: varga-stripe-sandbox-hosted-checkout-split
       cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 40

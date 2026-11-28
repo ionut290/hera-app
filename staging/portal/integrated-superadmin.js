@@ -34,7 +34,22 @@ export function createAdminPanel({host,auth,db,statics,readOnly=false}){
       const select=el('select');select.setAttribute('aria-label','Ruolo aziendale');
       for(const role of ['admin','supervisor','employee']){const o=el('option',role);o.value=role;select.append(o);}select.value=m.role;
       const patch=changes=>{const batch=db.batch();batch.update(item.ref,changes);batch.update(db.doc('users/'+item.id+'/memberships/'+t.id),changes);return batch.commit();};
-      if(!['trial','full'].includes(t.plan))r.append(select,button('Salva ruolo',()=>{if(select.value!==m.role)mutate(()=>patch({role:select.value}),()=>showMembers(t));}));else r.append(el('p','Modifica ruolo non disponibile per aziende con quote.'));
+      if(!['trial','full'].includes(t.plan))r.append(select,button('Salva ruolo',()=>{if(select.value!==m.role)mutate(()=>patch({role:select.value}),()=>showMembers(t));}));
+      else if(t.billing&&periodEnd(t)>Date.now()&&m.status==='active'&&item.id!==t.ownerUid&&['admin','employee'].includes(m.role)){
+       select.querySelector('option[value="supervisor"]')?.remove();
+       r.append(select,button('Salva ruolo',()=>{
+        const role=select.value;if(role===m.role)return;
+        mutate(()=>db.runTransaction(async tx=>{
+         const tref=db.doc('tenants/'+t.id),mirror=db.doc('users/'+item.id+'/memberships/'+t.id);
+         const [ts,ms,idx]=await Promise.all([tx.get(tref),tx.get(item.ref),tx.get(mirror)]);
+         const fresh=ts.data(),member=ms.data(),index=idx.data();
+         if(!current(g,u)||!fresh?.billing||member?.role!==m.role||index?.role!==m.role||!['admin','employee'].includes(role))throw Error('Stato utente modificato: aggiorna la lista.');
+         const admin=fresh.usage.admin+(role==='admin'?1:-1),operatori=fresh.usage.operatori+(role==='employee'?1:-1);
+         if(admin<1||admin>fresh.limits.admin||operatori<0||operatori>fresh.limits.operatori)throw Error('Limite dei ruoli raggiunto.');
+         tx.update(tref,{'usage.admin':admin,'usage.operatori':operatori,lastRoleUid:item.id});tx.update(item.ref,{role});tx.update(mirror,{role});
+        }),()=>showMembers(t));
+       }));
+      }else r.append(el('p','Modifica ruolo non disponibile per questa azienda o questo utente.'));
       r.append(button(m.status==='active'?'Sospendi utente':'Riattiva utente',()=>mutate(()=>patch({status:m.status==='active'?'suspended':'active'}),()=>showMembers(t))));
      }
      memberList.append(r);

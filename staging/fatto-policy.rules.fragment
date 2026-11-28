@@ -9,7 +9,7 @@ function canReadDemoFatto() {
  && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role;
 }
 function canConfigureDemoFatto() {
- return canReadDemoFatto() && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin';
+ return canReadDemoFatto() && planWritable(tenantId) && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin';
 }
 function validFattoPolicy() {
  let d = request.resource.data;

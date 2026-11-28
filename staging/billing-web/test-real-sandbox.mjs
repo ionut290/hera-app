@@ -99,7 +99,8 @@ try{
  await page.waitForTimeout(2000);
  const postText=(await page.locator('body').innerText().catch(()=>'' )).split(/\\r?\\n/).map(x=>x.trim()).filter(x=>x&&x.length<140&&!/@|https?:|[0-9]{4,}/.test(x)).slice(0,30);
  const postButtons=await page.locator('button').evaluateAll(ns=>ns.filter(n=>!!(n.offsetWidth||n.offsetHeight)).map(n=>({text:(n.innerText||'').trim().slice(0,80),type:n.getAttribute('type'),ariaLabel:n.getAttribute('aria-label'),id:n.id,disabled:!!n.disabled})).slice(0,12));
- console.log('CHECKOUT_AFTER_SUBMIT '+JSON.stringify({title:await page.title(),host:new URL(page.url()).hostname,text:postText,buttons:postButtons}));
+ const domDiag=await page.locator('body').evaluate(el=>({htmlLength:el.innerHTML.length,frames:[...document.querySelectorAll('iframe')].map(n=>({title:n.title,role:n.getAttribute('role')})),elements:[...el.querySelectorAll('form,button,input,iframe,[role],stripe-payment-element,stripe-buy-button')].slice(0,40).map(n=>({tag:n.tagName.toLowerCase(),id:n.id,role:n.getAttribute('role'),type:n.getAttribute('type'),name:n.getAttribute('name'),ariaLabel:n.getAttribute('aria-label'),className:String(n.className||'').slice(0,100),disabled:!!n.disabled,childCount:n.children?.length||0}))}));
+ console.log('CHECKOUT_AFTER_SUBMIT '+JSON.stringify({title:await page.title(),host:new URL(page.url()).hostname,text:postText,buttons:postButtons,dom:domDiag}));
  stage='provider-payment-confirmation';
  // Poll the authoritative API, not the redirect URL. Never submit twice.
  for(let i=0;i<30;i++){const fresh=await provider.session(session.sessionId);if(fresh.status==='complete'&&fresh.payment_status==='paid'){completed=true;break;}await new Promise(r=>setTimeout(r,2000));}

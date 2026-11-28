@@ -96,6 +96,36 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await page.getByRole('button',{name:'Richiedi piano completo',exact:true}).click();
   await page.getByRole('button',{name:'Richiesta piano completo inviata',exact:true}).waitFor();
   assert.equal((await created.docs[0].ref.get()).data().upgradeRequested,true);
+  // Exercise actual tenant-scoped client writes with Auth/Firestore emulators.
+  await page.locator('[data-tenant="'+activation.tenantId+'"]').click();
+  await page.waitForFunction(()=>{try{return window.__vargaLocalRuntime().session.session.context.tenantId.startsWith('demo-9e43');}catch{return false;}});
+  const trialFrame=await (await page.locator('#runtime').elementHandle()).contentFrame();
+  await trialFrame.waitForFunction(()=>Boolean(window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__?.isActive()));
+  const createTrialJob=async()=>trialFrame.evaluate(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__,stamp=window.firebase.firestore.FieldValue.serverTimestamp();const ref=await s.session.firestore.collection('commesse').add({nome:'Quota test',codice:'',excelModelVersion:2,priceListVersion:2,workItemsModelVersion:2,percentualeRibassoGenerale:0.01,excelModelActivatedAt:stamp,excelModelActivatedBy:s.auth.currentUser.email,nextImpiantoNumber:1,parentCommessaId:null,creatoDa:s.auth.currentUser.email,createdAt:stamp});return ref.id;});
+  let firstJob;
+  for(let i=0;i<5;i++){const id=await createTrialJob();if(i===0)firstJob=id;}
+  await assert.rejects(createTrialJob);
+  assert.equal((await created.docs[0].ref.collection('commesse').get()).size,5);
+  assert.equal((await created.docs[0].ref.get()).data().usage.commesse,5);
+  // Seed 101 synthetic plant documents and 10 vehicles to exercise the exact boundary.
+  const seeded=db.batch();
+  for(let i=0;i<101;i++)seeded.set(created.docs[0].ref.collection('commesse').doc(firstJob).collection('impianti').doc('seed-'+i),{denominazione:'Synthetic '+i});
+  for(let i=0;i<10;i++)seeded.set(created.docs[0].ref.collection('mezzi').doc('seed-'+i),{nome:'Synthetic vehicle '+i});
+  seeded.update(created.docs[0].ref,{'usage.impianti':101,'usage.mezzi':10});
+  await seeded.commit();
+  const plant=()=>trialFrame.evaluate(async job=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__,stamp=window.firebase.firestore.FieldValue.serverTimestamp(),ref=s.session.firestore.collection('commesse').doc(job).collection('impianti').doc();await ref.set({id:ref.id,commessaId:job,nome:'Quota plant',createdAt:stamp,createdBy:s.auth.currentUser.uid});},firstJob);
+  await plant();await assert.rejects(plant);
+  const vehicle=()=>trialFrame.evaluate(()=>window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore.collection('mezzi').add({nome:'Quota vehicle'}).then(()=>true));
+  await vehicle();await assert.rejects(vehicle);
+  assert.equal((await created.docs[0].ref.get()).data().usage.impianti,102);
+  assert.equal((await created.docs[0].ref.get()).data().usage.mezzi,11);
+  // Expiry denies writes while read access remains intact.
+  await created.docs[0].ref.update({trialStartedAt:new Date(Date.now()-31*86400000)});
+  await assert.rejects(()=>trialFrame.evaluate(()=>window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore.collection('mezzi').doc('seed-0').update({nome:'Denied after expiry'})));
+  assert.equal(await trialFrame.evaluate(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('mezzi').doc('seed-0').get({source:'server'})).exists;}),true);
+  await page.locator('#company-return').click();
+  console.log('TRIAL RESOURCE QUOTAS: 5 jobs, 102 plants, 11 vehicles, expired update denied, reads retained.');
+
   assert.equal((await db.doc('tenants/'+created.docs[0].id+'/members/'+fresh.uid).get()).data().role,'admin');
   assert.equal((await db.doc('users/'+fresh.uid+'/memberships/'+created.docs[0].id).get()).data().status,'active');
   await page.locator('#logout').click();await page.locator('#auth-options').waitFor({state:'visible'});

@@ -5,12 +5,13 @@ function originalRegistryArchive(name) {
  return name in ['personale','mezzi','neve_personale','neve_mezzi'];
 }
 function originalRegistryAdmin() {
- return canReadOriginalArchives()
+ return canReadOriginalArchives() && planWritable(tenantId)
   && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role=='admin';
 }
 match /{registry}/{recordId} {
- allow create, update: if originalRegistryAdmin() && originalRegistryArchive(registry);
- allow delete: if originalRegistryAdmin() && originalRegistryArchive(registry);
+ allow create: if originalRegistryAdmin() && originalRegistryArchive(registry) && quotaCreate(registry in ['mezzi','neve_mezzi']?'mezzi':'personale',registry,recordId,'');
+ allow update: if originalRegistryAdmin() && originalRegistryArchive(registry);
+ allow delete: if originalRegistryAdmin() && originalRegistryArchive(registry) && !managedPlan(get(/databases/$(database)/documents/tenants/$(tenantId)).data);
 }
 // These tenant-scoped helper archives are written by the original management
 // screen when importing or linking records. They never grant access outside

@@ -32,7 +32,8 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   const context=await browser.newContext({serviceWorkers:'block'}),external=[];
   await context.route('**/*',route=>{const u=new URL(route.request().url());if(u.hostname==='127.0.0.1'&&['4173','8080','9099'].includes(u.port))return route.continue();external.push(u.hostname);return route.abort();});
   const page=await context.newPage();page.setDefaultTimeout(20000);
-  page.on('framenavigated',frame=>{if(frame===page.mainFrame())return;try{const u=new URL(frame.url());console.log('FRAME NAVIGATION:',u.pathname,u.searchParams.has('firestoreRecovery')?'recovery':'normal');}catch{}});
+  const runtimeNavigations=[];
+  page.on('framenavigated',frame=>{if(frame.parentFrame()!==page.mainFrame())return;try{const u=new URL(frame.url());runtimeNavigations.push({path:u.pathname,legacyReset:u.searchParams.has('cacheReset'),recovery:u.searchParams.has('firestoreRecovery')});console.log('FRAME NAVIGATION:',u.pathname,u.searchParams.has('cacheReset')?'legacy-cache-reset':u.searchParams.has('firestoreRecovery')?'recovery':'normal');}catch{}});
   // Capture only transport metadata from the synthetic localhost Firestore.
   // Never log auth headers, request bodies, passwords or token/query parameters.
   const writeTrace=[];
@@ -338,6 +339,9 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await page.locator('[data-tenant="'+activation.tenantId+'"]').filter({hasText:'scaduto'}).waitFor();
   await page.locator('#logout').click();await page.locator('#auth-options').waitFor({state:'visible'});
   console.log('PAID EXPIRY: valid period permits writes; expired renewal denied, data readable.');
+  assert.ok(runtimeNavigations.some(n=>n.path==='/original.html'),'Company runtime actually navigated');
+  assert.equal(runtimeNavigations.some(n=>n.legacyReset),false,'Legacy standalone PWA cache reset must not navigate embedded runtime');
+  console.log('V2 FRAME REGRESSION: company runtime loaded without legacy cache-reset navigation.');
   assert.equal(external.length,0,'Unexpected external requests: '+external.join(','));
   console.log('INTEGRATED SUPER ADMIN UI: real Auth claim, tenant creation, mirrored role change, other company unchanged, historical ID preserved, logout.');
   console.log('FULL PACKAGE REAL AUTH E2E: login, verified membership, original UI, frame write, tenant switch, old scope closed, logout.');

@@ -1,6 +1,6 @@
 // Candidate only; requires explicit trusted demo capability and emulator tests.
 function canWriteCobo() {
- return canReadDemoCommesse()
+ return canReadDemoCommesse() && planWritable(tenantId)
  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('coboWriteEnabled',false) == true;
 }
 function coboFields() {
@@ -14,14 +14,14 @@ match /commesse/sfalcio-cobo/impianti/{plantId} {
   && d.updatedByUid==request.auth.uid && d.updatedAt==request.time
   && existsAfter(/databases/$(database)/documents/tenants/$(tenantId)/commesse/sfalcio-cobo);
  }
- allow create: if validCobo() && request.resource.data.keys().hasOnly(coboFields().concat(['stato','done','doneAt','doneBy','createdAt']))
+ allow create: if quotaCreate('impianti','commesse',plantId,'sfalcio-cobo') && validCobo() && request.resource.data.keys().hasOnly(coboFields().concat(['stato','done','doneAt','doneBy','createdAt']))
  && request.resource.data.stato=='da_fare' && request.resource.data.done==false
  && request.resource.data.doneAt==null && request.resource.data.doneBy=='' && request.resource.data.createdAt==request.time;
  allow update: if validCobo() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(coboFields());
  allow delete: if false;
 }
 match /commesse/sfalcio-cobo {
- allow create: if canWriteCobo()
+ allow create: if quotaCreate('commesse','commesse','sfalcio-cobo','') && canWriteCobo()
  && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role=='admin'
  && request.resource.data == {'nome':'Sfalcio COBO','codice':'COBO-SFALCIO','speciale':true,'tipoSpeciale':'SFALCIO_COBO','verdeBologna':true,'parchiGiardini':true,'attiva':true,'parentCommessaId':null,'excelModelVersion':2,'priceListVersion':2,'workItemsModelVersion':2,'percentualeRibassoGenerale':0.01,'nextImpiantoNumber':1,'creatoDa':request.auth.token.email,'createdAt':request.time};
  allow update, delete: if false;

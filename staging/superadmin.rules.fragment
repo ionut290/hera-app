@@ -20,6 +20,24 @@ function validMemberChange(uid,tid) {
 function sameMembership(a,b) {
  return a.role==b.role && a.status==b.status;
 }
+function planLimit(l,u,k,max) {
+ return l[k] is int && l[k]>=u[k] && l[k]>=0 && l[k]<=max;
+}
+function validFullPlan() {
+ let d=request.resource.data; let l=d.limits; let u=resource.data.usage;
+ return resource.data.get('plan','') in ['trial','full']
+  && d.plan=='full' && d.trial==false
+  && d.diff(resource.data).affectedKeys().hasOnly(['plan','trial','limits','planUpdatedAt','planUpdatedBy','upgradeRequested'])
+  && l.keys().hasAll(['commesse','impianti','admin','operatori','mezzi','squadre','storageBytes','personale'])
+  && l.keys().hasOnly(['commesse','impianti','admin','operatori','mezzi','squadre','storageBytes','personale'])
+  && l.admin==1 && u.admin==1
+  && planLimit(l,u,'commesse',100000) && l.commesse>=1
+  && planLimit(l,u,'impianti',1000000) && l.impianti>=1
+  && planLimit(l,u,'operatori',10000) && planLimit(l,u,'mezzi',10000)
+  && planLimit(l,u,'squadre',10000) && planLimit(l,u,'personale',10000)
+  && planLimit(l,u,'storageBytes',1000000000000)
+  && d.planUpdatedAt==request.time && d.planUpdatedBy==request.auth.uid && d.upgradeRequested==false;
+}
 match /tenants/{tid} {
  allow get,list: if verifiedSuperAdmin();
  allow create: if verifiedSuperAdmin() && tid.matches('demo-[a-z0-9-]{3,59}')
@@ -27,6 +45,7 @@ match /tenants/{tid} {
  && request.resource.data.keys().hasOnly(['name','status','demo','createdAt'])
  && request.resource.data.demo==true && request.resource.data.status=='active'
  && validTenantStatus(request.resource.data) && request.resource.data.createdAt==request.time;
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true && validFullPlan();
  allow update: if verifiedSuperAdmin() && resource.data.demo==true
  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','status'])
  && validTenantStatus(request.resource.data);

@@ -32,6 +32,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   const context=await browser.newContext({serviceWorkers:'block'}),external=[];
   await context.route('**/*',route=>{const u=new URL(route.request().url());if(u.hostname==='127.0.0.1'&&['4173','8080','9099'].includes(u.port))return route.continue();external.push(u.hostname);return route.abort();});
   const page=await context.newPage();page.setDefaultTimeout(20000);
+  page.on('framenavigated',frame=>{if(frame===page.mainFrame())return;try{const u=new URL(frame.url());console.log('FRAME NAVIGATION:',u.pathname,u.searchParams.has('firestoreRecovery')?'recovery':'normal');}catch{}});
   // Capture only transport metadata from the synthetic localhost Firestore.
   // Never log auth headers, request bodies, passwords or token/query parameters.
   const writeTrace=[];
@@ -101,8 +102,10 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   // Exercise actual tenant-scoped client writes with Auth/Firestore emulators.
   await page.locator('[data-tenant="'+activation.tenantId+'"]').click();
   await page.waitForFunction(()=>{try{return window.__vargaLocalRuntime().session.session.context.tenantId.startsWith('demo-9e43');}catch{return false;}});
+  await page.frameLocator('#runtime').locator('#side-menu').waitFor({state:'attached'});
   const trialFrame=await (await page.locator('#runtime').elementHandle()).contentFrame();
-  await trialFrame.waitForFunction(()=>Boolean(window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__?.isActive()));
+  await trialFrame.waitForURL('**/original.html');
+  await trialFrame.waitForFunction(()=>document.readyState==='complete'&&Boolean(window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__?.isActive()));
   const createTrialJob=async()=>trialFrame.evaluate(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__,stamp=window.firebase.firestore.FieldValue.serverTimestamp();const ref=await s.session.firestore.collection('commesse').add({nome:'Quota test',codice:'',excelModelVersion:2,priceListVersion:2,workItemsModelVersion:2,percentualeRibassoGenerale:0.01,excelModelActivatedAt:stamp,excelModelActivatedBy:s.auth.currentUser.email,nextImpiantoNumber:1,parentCommessaId:null,creatoDa:s.auth.currentUser.email,createdAt:stamp});return ref.id;});
   let firstJob;
   for(let i=0;i<5;i++){const id=await createTrialJob();if(i===0)firstJob=id;}
@@ -321,8 +324,10 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await page.locator('#open-login').click();await page.locator('#email').fill(newEmail);await page.locator('#password').fill(password);await page.locator('#login button[type=submit]').click();
   await page.locator('[data-tenant="'+activation.tenantId+'"]').click();
   await page.waitForFunction(()=>{try{return window.__vargaLocalRuntime().session.session.context.tenantId.startsWith('demo-9e43');}catch{return false;}});
+  await page.frameLocator('#runtime').locator('#side-menu').waitFor({state:'attached'});
   const paidFrame=await (await page.locator('#runtime').elementHandle()).contentFrame();
-  await paidFrame.waitForFunction(()=>Boolean(window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__?.isActive()));
+  await paidFrame.waitForURL('**/original.html');
+  await paidFrame.waitForFunction(()=>document.readyState==='complete'&&Boolean(window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__?.isActive()));
   const updatePaid=()=>paidFrame.evaluate(()=>window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore.collection('mezzi').doc('seed-0').update({nome:'Paid vehicle'}));
   await updatePaid();
   // Only test administrator simulates passage of time, never actual client.

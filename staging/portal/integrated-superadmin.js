@@ -1,3 +1,4 @@
+import {SUBSCRIPTION_PLANS,subscriptionLabel,formatPrice,periodEnd} from '../subscription-plans.mjs';
 // Super Admin UI within the integrated app, not a replacement for the original company UI.
 // Only verified claims + restrictive server rules grant privileges. Live staging writes remain disabled.
 export function createAdminPanel({host,auth,db,statics,readOnly=false}){
@@ -12,7 +13,7 @@ export function createAdminPanel({host,auth,db,statics,readOnly=false}){
  }
  async function open(user){
   clear();uid=user.uid;const g=generation,u=uid;host.hidden=false;
-  const title=el('h2','Super Admin'),feedback=el('p','Caricamento aziende…'),list=el('div'),memberList=el('div');
+  const title=el('h2','Super Admin · Abbonamenti e fatturazione'),feedback=el('p','Caricamento aziende…'),list=el('div'),memberList=el('div');
   feedback.setAttribute('role','status');feedback.id='admin-status';host.append(title,feedback,list,memberList);
   const button=(name,action)=>{const b=el('button',name);b.type='button';b.onclick=action;return b;};
   async function mutate(action,refresh){
@@ -51,12 +52,12 @@ export function createAdminPanel({host,auth,db,statics,readOnly=false}){
    for(const item of rows.docs){
     const t={...item.data(),id:item.id},r=el('div');r.dataset.adminTenant=t.id;r.append(el('strong',t.name||t.id),el('p',t.status),button('Utenti',()=>showMembers(t)));
     if(['trial','full'].includes(t.plan)){
-     r.append(el('p',(t.plan==='trial'?'Piano prova · 30 giorni':'Piano completo')+(t.upgradeRequested?' · Richiesta attivazione ricevuta':'')));
+     r.append(el('p',subscriptionLabel(t)+(t.upgradeRequested?' · Richiesta: '+(SUBSCRIPTION_PLANS[t.requestedTier]?.name||'da verificare'):'')));
      const fields=[['commesse','Commesse'],['impianti','Impianti'],['operatori','Operatori'],['personale','Anagrafica personale'],['mezzi','Mezzi'],['squadre','Squadre'],['storageBytes','Archiviazione (byte)']];
      const inputs=new Map();
      for(const [key,label] of fields){
       r.append(el('p',label+': '+(t.usage?.[key]??'non verificato')+' / '+(t.limits?.[key]??'non configurato')));
-      if(!readOnly&&t.demo===true&&Number.isSafeInteger(t.usage?.[key])&&Number.isSafeInteger(t.limits?.[key])){
+      if(!readOnly&&t.demo===true&&t.plan==='full'&&!t.billing&&Number.isSafeInteger(t.usage?.[key])&&Number.isSafeInteger(t.limits?.[key])){
        const input=el('input');input.type='number';input.min=String(Math.max(['commesse','impianti'].includes(key)?1:0,t.usage[key]));input.step='1';input.value=String(t.limits[key]);input.setAttribute('aria-label',label+' limite');inputs.set(key,input);r.append(input);
       }
      }
@@ -64,6 +65,33 @@ export function createAdminPanel({host,auth,db,statics,readOnly=false}){
       r.append(button(t.plan==='trial'?'Attiva piano completo':'Salva limiti piano completo',()=>{
        const limits={admin:1};for(const [key,input] of inputs){const n=Number(input.value);if(!input.value.trim()||!Number.isSafeInteger(n)||n<Number(input.min)){feedback.textContent='Limite non valido: '+key;return;}limits[key]=n;}
        mutate(()=>item.ref.update({plan:'full',trial:false,limits,upgradeRequested:false,planUpdatedAt:statics.FieldValue.serverTimestamp(),planUpdatedBy:u}),refresh);
+      }));
+     }
+     if(t.billing)r.append(el('p','Ultima conferma: '+t.billing.reference+' · '+formatPrice(t.billing.amountCents)));
+     if(!readOnly&&t.demo===true){
+      const tier=el('select');tier.setAttribute('aria-label','Abbonamento da attivare');
+      for(const [key,p] of Object.entries(SUBSCRIPTION_PLANS)){const opt=el('option',p.name+' · '+formatPrice(p.priceCents)+' / 30 giorni');opt.value=key;tier.append(opt);}
+      tier.value=t.billing&&periodEnd(t)>Date.now()?t.billing.tier:t.requestedTier||t.billing?.tier||'starter';
+      const reference=el('input');reference.setAttribute('aria-label','Riferimento pagamento');reference.placeholder='Riferimento fattura/incasso';reference.maxLength=80;
+      const confirmed=el('input');confirmed.type='checkbox';const label=el('label','Confermo di aver verificato l’incasso fuori dall’app.');label.prepend(confirmed);
+      r.append(tier,reference,label,button(t.billing?'Registra rinnovo':'Registra pagamento e attiva',()=>{
+       const p=SUBSCRIPTION_PLANS[tier.value],ref=reference.value.trim();
+       if(!confirmed.checked||!p||!/^[A-Za-z0-9_-]{6,80}$/.test(ref)){feedback.textContent='Verifica l’incasso e inserisci un riferimento univoco valido.';return;}
+       mutate(()=>db.runTransaction(async tx=>{
+        const currentDoc=await tx.get(item.ref),fresh=currentDoc.data();
+        if(!current(g,u))throw Error('Sessione amministrativa chiusa');
+        if(!fresh||!['trial','full'].includes(fresh.plan))throw Error('Piano non valido');
+        for(const [k,v] of Object.entries(p.limits))if(!Number.isSafeInteger(fresh.usage?.[k])||fresh.usage[k]>v)throw Error('Consumo oltre il limite: '+k);
+        const old=fresh.billing,active=old&&periodEnd(fresh)>Date.now();
+        if(active&&old.tier!==tier.value)throw Error('Cambio piano disponibile a scadenza; nessuna modifica al periodo pagato.');
+        const stamp=statics.FieldValue.serverTimestamp();
+        const b={tier:tier.value,amountCents:p.priceCents,currency:'EUR',periodStart:active?old.periodStart:stamp,periods:active?old.periods+1:1,reference:ref,recordedAt:stamp,recordedBy:u,source:'manual-confirmation'};
+        const receipt=item.ref.collection('billingReceipts').doc(ref);
+        tx.set(receipt,b);tx.update(item.ref,{plan:'full',trial:false,limits:{...p.limits},billing:b,planUpdatedAt:stamp,planUpdatedBy:u,upgradeRequested:false,requestedTier:null});
+       }),refresh);
+      }));
+      r.append(button('Storico conferme incasso',async()=>{
+       try{await authorize(g,u);const receipts=await item.ref.collection('billingReceipts').orderBy('recordedAt','desc').limit(50).get({source:'server'});if(!current(g,u))return;memberList.replaceChildren(el('h3','Incassi registrati — '+t.name));for(const doc of receipts.docs){const b=doc.data();memberList.append(el('p',doc.id+' · '+(SUBSCRIPTION_PLANS[b.tier]?.name||b.tier)+' · '+formatPrice(b.amountCents)));}if(!receipts.size)memberList.append(el('p','Nessun incasso registrato.'));}catch(e){if(current(g,u))feedback.textContent='Storico non disponibile.';}
       }));
      }
     }

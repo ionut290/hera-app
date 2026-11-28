@@ -19,5 +19,5 @@ export async function createOriginalArchiveRouter({db,user,tenantId,sdk,getCurre
   if(!operational.has(name))throw Error('Collection not approved');
   return 'tenants/'+context.tenantId+'/'+name;
  }
- return Object.freeze({projectId:db.app.options.projectId,context,company:Object.freeze({id:tenantId,name:typeof tenant.name==='string'?tenant.name:tenantId,status:tenant.status,role:context.role,demo:tenant.demo,fattoMode:tenant.fattoMode,whatsappConfigured:tenant.whatsappConfigured===true,sheetConfigured:tenant.sheetConfigured===true}),path,close(){closed=true;}});
+ return Object.freeze({projectId:db.app.options.projectId,context,company:Object.freeze({id:tenantId,name:typeof tenant.name==='string'?tenant.name:tenantId,status:tenant.status,role:context.role,plan:tenant.plan,demo:tenant.demo,fattoMode:tenant.fattoMode,whatsappConfigured:tenant.whatsappConfigured===true,sheetConfigured:tenant.sheetConfigured===true}),path,close(){closed=true;}});
 }

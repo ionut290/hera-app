@@ -4,8 +4,7 @@ function quotaArchive(q) {
  return (q.kind=='commesse' && q.archive in ['commesse','neve_commesse','globalCommesse'])
   || (q.kind=='impianti' && q.archive in ['commesse','neve_commesse','globalCommesse'])
   || (q.kind=='mezzi' && q.archive in ['mezzi','neve_mezzi'])
-  || (q.kind=='personale' && q.archive in ['personale','neve_personale'])
-  || (q.kind=='squadre' && q.archive in ['squadreCommesse','neve_squadre']);
+  || (q.kind=='personale' && q.archive in ['personale','neve_personale']);
 }
 function quotaNewDocument(q) {
  return q.kind=='impianti'

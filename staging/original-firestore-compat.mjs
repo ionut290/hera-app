@@ -46,7 +46,7 @@ export function createOriginalFirestoreCompat({db,router}){
     if(!Array.isArray(old)||!Number.isSafeInteger(t?.usage?.squadre)||!Number.isSafeInteger(t?.limits?.squadre))throw Error('Conteggio squadre da verificare');
     const count=t.usage.squadre-old.length+payload.squadre.length;
     if(count<0||count>t.limits.squadre)throw Error('Limite squadre operative raggiunto');
-    native.update(tenant,{'usage.squadre':count,lastSquadraWrite:{archive,id,at:payload.updatedAt}});
+    native.update(tenant,{'usage.squadre':count,lastSquadraWrite:{archive,id,date:payload.riferimentoData,at:payload.updatedAt}});
    }
    for(const op of queued){guard();native[op.method](op.ref,...op.args);}
   }

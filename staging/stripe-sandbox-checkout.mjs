@@ -22,13 +22,22 @@ function checkedUrl(value){
 // Real provider construction is deliberately opt-in. No live key or connected account.
 export function createSandboxStripeProvider({app,secretKey}){
  guard(app);
- if(process.env.VARGA_ENABLE_STRIPE_SANDBOX!=='yes'||typeof secretKey!=='string'||!/^sk_test_[A-Za-z0-9]+$/.test(secretKey))fail('SANDBOX_DISABLED');
+ if(process.env.VARGA_ENABLE_STRIPE_SANDBOX!=='yes'||typeof secretKey!=='string'||!/^rk_test_[A-Za-z0-9]+$/.test(secretKey))fail('SANDBOX_DISABLED');
  const stripe=new Stripe(secretKey,{apiVersion:VERSION,maxNetworkRetries:2,timeout:15000});
  return Object.freeze({
   price:id=>stripe.prices.retrieve(id),
   create:(params,key)=>stripe.checkout.sessions.create(params,{idempotencyKey:key}),
   session:id=>stripe.checkout.sessions.retrieve(id,{expand:['subscription','line_items.data.price']}),
   expire:id=>stripe.checkout.sessions.expire(id,{}, {idempotencyKey:'varga-expire-'+id}),
+  async initialPaidInvoice(subscriptionId){
+   const sub=await stripe.subscriptions.retrieve(subscriptionId);
+   if(sub.livemode!==false||sub.status!=='active'||sub.id!==subscriptionId||!id(sub.latest_invoice,'in_'))fail('CHECKOUT_NOT_VERIFIED');
+   const invoice=await stripe.invoices.retrieve(sub.latest_invoice);
+   if(invoice.livemode!==false||invoice.subscription!==sub.id||invoice.customer!==sub.customer||invoice.billing_reason!=='subscription_create'||!id(invoice.payment_intent,'pi_'))fail('CHECKOUT_NOT_VERIFIED');
+   const pi=await stripe.paymentIntents.retrieve(invoice.payment_intent);
+   if(pi.livemode!==false||pi.id!==invoice.payment_intent||pi.status!=='succeeded'||pi.amount_received!==invoice.amount_paid||pi.currency!==invoice.currency||pi.customer!==invoice.customer)fail('CHECKOUT_NOT_VERIFIED');
+   return invoice;
+  },
  });
 }
 export function createSandboxCheckout({app,provider,priceIds=SANDBOX_PRICE_IDS}){
@@ -98,13 +107,13 @@ export function createSandboxCheckout({app,provider,priceIds=SANDBOX_PRICE_IDS})
   const binding=db.doc('stripeTestSubscriptions/'+sub.id);
   return db.runTransaction(async tx=>{
    const t=await owner(tx,r,uid,tenantId),[as,bs]=await Promise.all([tx.get(r.attempt),tx.get(binding)]),d=as.data(),b=bs.data();
-   if(b&&d?.status==='bound'&&t.stripeTestSubscriptionId===sub.id&&b.tenantId===tenantId&&b.customerId===s.customer&&b.tier===a.tier)return {status:'already-bound',testMode:true};
+   if(b&&d?.status==='bound'&&t.stripeTestSubscriptionId===sub.id&&b.tenantId===tenantId&&b.customerId===s.customer&&b.tier===a.tier)return {status:'already-bound',subscriptionId:sub.id,testMode:true};
    if(b||t.plan!=='trial'||t.billing||t.stripeTestSubscriptionId||t.stripeSandboxCheckoutId!==a.attemptId||d?.sessionId!==s.id||d.status!=='open'||t.requestedTier!==a.tier||t.upgradeRequested!==true||!fits(t.usage,p.limits))fail('CHECKOUT_CONFLICT');
    tx.create(binding,{tenantId,customerId:s.customer,tier:a.tier,subscriptionId:sub.id,status:'pending',createdAt:stamp()});
    tx.update(r.tenant,{stripeTestSubscriptionId:sub.id});
    tx.update(r.attempt,{status:'bound',subscriptionId:sub.id,boundAt:stamp()});
    // Binding does NOT grant access. A separately verified paid invoice is required.
-   return {status:'bound-awaiting-invoice',testMode:true};
+   return {status:'bound-awaiting-invoice',subscriptionId:sub.id,testMode:true};
   });
  }
  async function companies({token}){

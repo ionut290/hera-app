@@ -1,0 +1,64 @@
+// Candidate only. Count actual squad rows, not documents or historical days.
+function squadArchive(a) { return a in ['squadreCommesse','neve_squadre']; }
+function squadHistory(a) { return a=='squadreCommesse'?'squadreStorico':'neve_squadre_storico'; }
+function squadCurrent(a) { return a=='squadreStorico'?'squadreCommesse':'neve_squadre'; }
+function squadJob(a) { return a=='squadreCommesse'?'commesse':'neve_commesse'; }
+function squadAllowed() {
+ return companyAdmin(tenantId) && planWritable(tenantId)
+  && managedPlan(get(/databases/$(database)/documents/tenants/$(tenantId)).data)
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalArchivesEnabled',false)==true;
+}
+function squadValid(a,id,d) {
+ let job=squadJob(a);
+ return d.keys().hasAll(['commessaId','commessaNome','riferimentoData','squadre','updatedAt','updatedBy','existingSquadreCountBeforeSave'])
+  && d.keys().hasOnly(['commessaId','commessaNome','riferimentoData','squadre','updatedAt','updatedBy','existingSquadreCountBeforeSave'])
+  && d.commessaId==id && d.commessaNome is string && d.commessaNome.size()<=250
+  && d.riferimentoData is string && d.riferimentoData.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+  && d.squadre is list && d.squadre.size()>0 && d.squadre.size()<=100
+  && d.existingSquadreCountBeforeSave is int && d.existingSquadreCountBeforeSave>=0
+  && d.updatedAt==request.time && d.updatedBy==request.auth.token.email
+  && exists(/databases/$(database)/documents/tenants/$(tenantId)/$(job)/$(id));
+}
+function squadPriorCount(a,id) {
+ return exists(/databases/$(database)/documents/tenants/$(tenantId)/$(a)/$(id))
+  ? get(/databases/$(database)/documents/tenants/$(tenantId)/$(a)/$(id)).data.squadre.size() : 0;
+}
+function squadCounterStep(a,id,d,before,after) {
+ return before.usage.squadre is int && before.usage.squadre>=0 && before.limits.squadre is int
+  && after.usage.squadre==before.usage.squadre-squadPriorCount(a,id)+d.squadre.size()
+  && after.usage.squadre>=0 && after.usage.squadre<=before.limits.squadre
+  && after.lastSquadraWrite=={'archive':a,'id':id,'at':request.time};
+}
+function squadHistoryMatches(a,id,d) {
+ let archive=squadHistory(a);
+ let historyId=d.riferimentoData+'__'+id;
+ let h=getAfter(/databases/$(database)/documents/tenants/$(tenantId)/$(archive)/$(historyId)).data;
+ return h.dateKey==d.riferimentoData && h.diff(d).affectedKeys().hasOnly(['dateKey']);
+}
+function squadCounterUpdate() {
+ let q=request.resource.data.lastSquadraWrite;
+ let d=getAfter(/databases/$(database)/documents/tenants/$(tenantId)/$(q.archive)/$(q.id)).data;
+ return squadAllowed() && q is map && squadArchive(q.archive) && q.id is string
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastSquadraWrite'])
+  && request.resource.data.usage.diff(resource.data.usage).affectedKeys().hasOnly(['squadre'])
+  && squadValid(q.archive,q.id,d) && squadCounterStep(q.archive,q.id,d,resource.data,request.resource.data)
+  && squadHistoryMatches(q.archive,q.id,d);
+}
+allow update: if squadCounterUpdate();
+match /{archive}/{id} {
+ allow create,update: if squadArchive(archive) && squadAllowed()
+  && squadValid(archive,id,request.resource.data)
+  && squadCounterStep(archive,id,request.resource.data,get(/databases/$(database)/documents/tenants/$(tenantId)).data,getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data)
+  && squadHistoryMatches(archive,id,request.resource.data);
+ function validHistory() {
+  let d=request.resource.data;
+  let a=squadCurrent(archive);
+  let current=getAfter(/databases/$(database)/documents/tenants/$(tenantId)/$(a)/$(d.commessaId)).data;
+  return id==d.dateKey+'__'+d.commessaId && d.dateKey==current.riferimentoData
+   && d.diff(current).affectedKeys().hasOnly(['dateKey'])
+   && squadValid(a,d.commessaId,current)
+   && squadCounterStep(a,d.commessaId,current,get(/databases/$(database)/documents/tenants/$(tenantId)).data,getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data);
+ }
+ allow create,update: if archive in ['squadreStorico','neve_squadre_storico'] && squadAllowed() && validHistory();
+ // Delete remains denied until a reviewed counter release and history policy exists.
+}

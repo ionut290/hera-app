@@ -107,5 +107,31 @@ export function createSandboxCheckout({app,provider,priceIds}){
    return {status:'bound-awaiting-invoice',testMode:true};
   });
  }
- return Object.freeze({createCheckout,finalizeCheckout});
+ async function companies({token}){
+  const uid=await uidFor(token);
+  const memberships=await db.collection('users/'+uid+'/memberships').limit(100).get();
+  const result=[];
+  for(const item of memberships.docs){
+   if(!tenantOk(item.id)||item.data().role!=='admin'||item.data().status!=='active')continue;
+   try{
+    const r=refs(item.id,uid);
+    const v=await db.runTransaction(async tx=>{const t=await owner(tx,r,uid,item.id),a=(await tx.get(r.attempt)).data();
+     return {id:item.id,name:String(t.name||item.id).slice(0,120),plan:t.plan,requestedTier:t.requestedTier||null,checkoutStatus:a?.status||null,billingTier:t.billing?.tier||null,paidThrough:t.billing?.periodStart?.toMillis?.()+t.billing?.periods*30*86400000||null,testMode:true};});
+    result.push(v);
+   }catch(e){if(e.code!=='FORBIDDEN')throw e;}
+  }
+  return {companies:result,testMode:true};
+ }
+ async function requestPlan({token,tenantId,tier}){
+  const uid=await uidFor(token),r=refs(tenantId,uid);
+  if(!Object.hasOwn(SUBSCRIPTION_PLANS,tier))fail('INVALID_REQUEST');
+  return db.runTransaction(async tx=>{
+   const t=await owner(tx,r,uid,tenantId),a=await tx.get(r.attempt);
+   if(t.plan!=='trial'||t.billing||t.stripeTestSubscriptionId||t.stripeSandboxCheckoutId||a.exists)fail('BILLING_CONFLICT');
+   if(!fits(t.usage,SUBSCRIPTION_PLANS[tier].limits))fail('USAGE_EXCEEDS_PLAN');
+   tx.update(r.tenant,{requestedTier:tier,upgradeRequested:true,upgradeRequestedAt:stamp()});
+   return {status:'requested',tier,testMode:true};
+  });
+ }
+ return Object.freeze({createCheckout,finalizeCheckout,companies,requestPlan});
 }

@@ -4,6 +4,12 @@ service cloud.firestore {
  function eligible() {
  return request.auth != null && request.auth.token.get('email_verified', false) == true && request.auth.token.get('apple_review', false) == false;
  }
+ function planWritable(tenantId) {
+  let t = get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+  return !('plan' in t) || t.plan == 'full' ||
+    (t.plan == 'trial' && t.trialStartedAt is timestamp
+     && t.trialDays == 30 && request.time < t.trialStartedAt + duration.value(30,'d'));
+ }
  function activeMember(tenantId) {
  return eligible() && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active' && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.status == 'active';
  }

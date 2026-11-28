@@ -8,5 +8,7 @@ const result=await auditSandboxCatalog({price:async id=>fixtures[id]});
 assert.deepEqual(result.map(p=>p.amountCents),[1990,3990,7990]);
 const p=fixtures[SANDBOX_PRICE_IDS.starter];
 for(const patch of [{livemode:true},{active:false},{unit_amount:1},{currency:'usd'},{recurring:{...p.recurring,interval:'month',interval_count:1}},{id:SANDBOX_PRICE_IDS.business}])assert.throws(()=>verifySandboxPrice({...p,...patch},'starter'),/PRICE_MISMATCH/);
-await assert.rejects(()=>auditSandboxCatalog({price:async id=>({...fixtures[id],lookup_key:'wrong'})}),/LOOKUP_KEY_MISMATCH/);
+const aliases=await auditSandboxCatalog({price:async id=>({...fixtures[id],lookup_key:'wrong'})});
+assert.ok(aliases.every(r=>r.warning==='LOOKUP_KEY_MISMATCH'&&r.problem===null));
+await assert.rejects(()=>auditSandboxCatalog({price:async id=>({...fixtures[id],unit_amount:1,lookup_key:'wrong'})}),/PRICE_MISMATCH/);
 console.log('SANDBOX CATALOG CONFIG PASS: three owner-supplied identifiers, exact EUR amounts, 30 days, live/monthly/mismatched prices rejected (fixtures only).');

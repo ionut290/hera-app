@@ -1,0 +1,40 @@
+// Within tenant match. One new resource per atomic reservation; no client counter resets.
+function managedPlan(t) { return t.get('plan','') in ['trial','full']; }
+function quotaArchive(q) {
+ return (q.kind=='commesse' && q.archive in ['commesse','neve_commesse','globalCommesse'])
+  || (q.kind=='impianti' && q.archive in ['commesse','neve_commesse','globalCommesse'])
+  || (q.kind=='mezzi' && q.archive in ['mezzi','neve_mezzi'])
+  || (q.kind=='personale' && q.archive in ['personale','neve_personale'])
+  || (q.kind=='squadre' && q.archive in ['squadreCommesse','neve_squadre']);
+}
+function quotaNewDocument(q) {
+ return q.kind=='impianti'
+  ? (!exists(/databases/$(database)/documents/tenants/$(tenantId)/$(q.archive)/$(q.parent)/impianti/$(q.id))
+    && existsAfter(/databases/$(database)/documents/tenants/$(tenantId)/$(q.archive)/$(q.parent)/impianti/$(q.id)))
+  : (!exists(/databases/$(database)/documents/tenants/$(tenantId)/$(q.archive)/$(q.id))
+    && existsAfter(/databases/$(database)/documents/tenants/$(tenantId)/$(q.archive)/$(q.id)));
+}
+function quotaStep(before,after,q) {
+ return before.usage[q.kind] is int && before.usage[q.kind]>=0
+  && before.limits[q.kind] is int
+  && before.usage[q.kind]<before.limits[q.kind]
+  && after.usage[q.kind]==before.usage[q.kind]+1
+  && after.lastQuotaWrite==q;
+}
+function validQuotaCounter() {
+ let q=request.resource.data.lastQuotaWrite;
+ return companyAdmin(tenantId) && planWritable(tenantId) && managedPlan(resource.data)
+  && q is map && q.keys().hasAll(['kind','archive','id','parent']) && q.keys().hasOnly(['kind','archive','id','parent'])
+  && q.id is string && q.id.size()>0 && q.parent is string
+  && quotaArchive(q) && (q.kind=='impianti' ? q.parent.size()>0 : q.parent=='')
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastQuotaWrite'])
+  && request.resource.data.usage.diff(resource.data.usage).affectedKeys().hasOnly([q.kind])
+  && quotaStep(resource.data,request.resource.data,q) && quotaNewDocument(q);
+}
+function quotaCreate(kind,archive,id,parent) {
+ let before=get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+ let q={'kind':kind,'archive':archive,'id':id,'parent':parent};
+ return planWritable(tenantId) && (!managedPlan(before) ||
+  quotaStep(before,getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data,q));
+}
+allow update: if validQuotaCounter();

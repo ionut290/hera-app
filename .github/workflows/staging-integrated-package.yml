@@ -203,11 +203,15 @@ jobs:
         env:
           VARGA_ENABLE_STRIPE_SANDBOX: 'yes'
           VARGA_STRIPE_SANDBOX_CHECKOUT_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY }}
+          FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080'
+          FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099'
         run: node billing-web/prepare-real-sandbox.mjs
       - name: Verify manual Sandbox payment and emulator entitlement
         env:
           VARGA_ENABLE_STRIPE_SANDBOX: 'yes'
           VARGA_STRIPE_SANDBOX_CHECKOUT_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY }}
+          FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080'
+          FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099'
         run: node billing-web/verify-real-sandbox.mjs
       - name: Stop Firebase emulators
         if: always()

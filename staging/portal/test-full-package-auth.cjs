@@ -120,6 +120,15 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
    await docs.getByRole('button',{name:'Carica documento',exact:true}).click();
    await docs.getByText(/prova\.pdf/).waitFor();
    assert.equal((await created.docs[0].ref.get()).data().usage.storageBytes,bytes.length);
+   await docs.getByText('prova.pdf',{exact:false}).filter({hasText:'Privato'}).waitFor();
+   page.once('dialog',d=>d.accept());
+   await docs.getByRole('button',{name:'Condividi con azienda',exact:true}).click();
+   await docs.getByRole('button',{name:'Rendi privato',exact:true}).waitFor();
+   const sharedDoc=(await created.docs[0].ref.collection('storedFiles').where('name','==','prova.pdf').get()).docs[0];
+   assert.equal(sharedDoc.data().visibility,'company');
+   await docs.getByRole('button',{name:'Rendi privato',exact:true}).click();
+   await docs.getByRole('button',{name:'Condividi con azienda',exact:true}).waitFor();
+   assert.equal((await sharedDoc.ref.get()).data().visibility,'private');
    page.once('dialog',d=>d.accept());
    await docs.getByRole('button',{name:'Elimina',exact:true}).click();
    await docs.getByText('Nessun documento disponibile.').waitFor();
@@ -139,6 +148,26 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   for(let i=0;i<10;i++)seeded.set(created.docs[0].ref.collection('mezzi').doc('seed-'+i),{nome:'Synthetic vehicle '+i});
   seeded.update(created.docs[0].ref,{'usage.impianti':101,'usage.mezzi':10});
   await seeded.commit();
+  if(withStorage){
+   // The candidate plant-card action calls this exact company-scoped bridge.
+   assert.ok(fs.readFileSync(path.join(root,'app.js'),'utf8').includes('photoButton.dataset.v2PlantPhotos'));
+   assert.equal(await trialFrame.evaluate(jobId=>window.parent.__vargaOpenCompanyDocuments({archive:'commesse',jobId,plantId:'seed-0'}),firstJob),true);
+   const docs=page.locator('#company-documents');await docs.getByRole('heading',{name:'Fotografie impianto'}).waitFor();
+   await docs.getByText('Nessun documento disponibile.').waitFor();
+   const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0i0AAAAASUVORK5CYII=','base64');
+   await docs.locator('input[type=file]').setInputFiles({name:'impianto.png',mimeType:'image/png',buffer:png});
+   await docs.getByRole('combobox',{name:'Visibilità documento'}).selectOption('company');
+   await docs.getByRole('button',{name:'Carica documento',exact:true}).click();
+   await docs.getByText(/impianto\.png/).waitFor();
+   const saved=(await created.docs[0].ref.collection('storedFiles').where('name','==','impianto.png').get()).docs[0].data();
+   assert.deepEqual(saved.plant,{archive:'commesse',jobId:firstJob,plantId:'seed-0'});assert.equal(saved.visibility,'company');
+   assert.equal((await created.docs[0].ref.get()).data().usage.storageBytes,png.length);
+   page.once('dialog',d=>d.accept());await docs.getByRole('button',{name:'Elimina',exact:true}).click();
+   await docs.getByText('Nessun documento disponibile.').waitFor();
+   assert.equal((await created.docs[0].ref.get()).data().usage.storageBytes,0);
+   await docs.getByRole('button',{name:'Torna al cantiere',exact:true}).click();
+   console.log('PLANT PHOTO UI PASS: verified company bridge, scoped image upload, shared visibility and quota release.');
+  }
   const plant=()=>trialFrame.evaluate(async job=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__,stamp=window.firebase.firestore.FieldValue.serverTimestamp(),ref=s.session.firestore.collection('commesse').doc(job).collection('impianti').doc();await ref.set({id:ref.id,commessaId:job,nome:'Quota plant',createdAt:stamp,createdBy:s.auth.currentUser.uid});},firstJob);
   await plant();await assert.rejects(plant);
   const vehicle=()=>trialFrame.evaluate(()=>window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.session.firestore.collection('mezzi').add({nome:'Quota vehicle'}).then(()=>true));

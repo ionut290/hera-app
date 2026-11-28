@@ -2,6 +2,7 @@
 // No screenshots, traces, URLs, credentials or provider error objects in logs.
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {appendFileSync} from 'node:fs';
 import {chromium} from 'playwright';
 import {initializeApp,deleteApp} from 'firebase-admin/app';
 import {getAuth} from 'firebase-admin/auth';
@@ -33,6 +34,16 @@ try{
  const remote=await provider.session(session.sessionId);assert.equal(remote.livemode,false);assert.equal(remote.status,'open');assert.equal(remote.payment_status,'unpaid');
  assert.equal((await db.doc('tenants/'+tenantId).get()).data().plan,'trial');
  console.log('REAL SANDBOX CHECKOUT CREATED: test-only Starter session, 1990 EUR cents, no entitlement granted.');
+ if(process.env.MANUAL_CHECKOUT_MODE==='yes'){
+  const summaryFile=process.env.GITHUB_STEP_SUMMARY;
+  if(summaryFile){
+   appendFileSync(summaryFile,'## Stripe Sandbox Checkout manuale\\n\\nApri [il Checkout Starter Sandbox]('+session.url+') e completa hCaptcha e la carta di prova Stripe.\\n\\nLa sessione è valida solo per questo test e verrà verificata automaticamente.\\n');
+  }
+  console.log('MANUAL CHECKOUT READY: open the GitHub Actions summary link; no URL printed in logs.');
+  stage='manual-provider-payment-confirmation';
+  for(let i=0;i<180;i++){const fresh=await provider.session(session.sessionId);if(fresh.status==='complete'&&fresh.payment_status==='paid'){completed=true;break;}await new Promise(r=>setTimeout(r,2000));}
+  if(!completed)throw Error('MANUAL_PAYMENT_NOT_CONFIRMED');
+ } else {
  stage='hosted-checkout-browser';
  browser=await chromium.launch({headless:true});
  const page=await browser.newPage({locale:'en-US'});page.setDefaultTimeout(45000);
@@ -111,6 +122,7 @@ try{
  await page.waitForTimeout(1500);
  const postText=(await page.locator('body').innerText().catch(()=>'' )).split(/\\r?\\n/).map(x=>x.trim()).filter(x=>x&&x.length<140&&!/@|https?:|[0-9]{4,}/.test(x)).slice(0,30);
  console.log('CHECKOUT_AFTER_SUBMIT '+JSON.stringify({title:await page.title(),host:new URL(page.url()).hostname,text:postText}));
+ }
  stage='provider-payment-confirmation';
  // Poll the authoritative API, not the redirect URL. Never submit twice.
  for(let i=0;i<30;i++){const fresh=await provider.session(session.sessionId);if(fresh.status==='complete'&&fresh.payment_status==='paid'){completed=true;break;}await new Promise(r=>setTimeout(r,2000));}

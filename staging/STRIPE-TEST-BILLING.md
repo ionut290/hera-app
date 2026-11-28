@@ -24,3 +24,7 @@ References: https://developer.apple.com/app-store/review/guidelines/ (3.1.1, 3.1
 ## External Stripe connection
 
 No account is currently connected or verified. The optional Stripe provider accepts only an explicitly enabled test key with the emulator running, rejects live keys, and checks exact test-mode catalog prices. The separate web portal remains fixture-only. Never pass secret keys in chat, in GitHub source, or to the browser. Confirm the sandbox and account before configuring server secrets and test price IDs.
+
+## Owner-configured Sandbox catalog
+
+The three owner-supplied 30-day price identifiers are recorded in `stripe-sandbox-catalog.mjs`. The checkout defaults to this catalog; all automatic tests still use local fixtures and never reach Stripe. The opt-in `audit_stripe_sandbox` workflow input on the staging branch enables a separate read-only audit job. Before dispatch, create the dedicated GitHub environment `stripe-sandbox-readonly`, limit deployment branches to `varga-cantieri-v2-staging`, and add its environment secret `VARGA_STRIPE_SANDBOX_READ_KEY` using a restricted `rk_test_` Stripe key with Prices read permission only (Products read only if required by Stripe). Do not use a repository-wide secret or expose the key in chat. The job checks each price ID, lookup key, EUR amount, recurrence and test-mode status; it performs no Stripe writes. No account audit has run yet. The broader checkout connection and webhook verification remain separate steps.

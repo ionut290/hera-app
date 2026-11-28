@@ -15,10 +15,11 @@ const provider={
   keys.push(key);createCalls++;
   assert.equal(params.mode,'subscription');assert.deepEqual(params.line_items,[{price:price.id,quantity:1}]);assert.equal(params.billing_address_collection,'required');assert.equal(params.client_reference_id,params.metadata.attemptId);
   assert.deepEqual(params.metadata,params.subscription_data.metadata);
-  if(!session)session={id:'cs_test_fixture_a',livemode:false,mode:'subscription',status:'open',url:'https://checkout.stripe.com/c/pay/cs_test_fixture_a',client_reference_id:params.client_reference_id,metadata:params.metadata};
+  if(!session)session={id:'cs_test_fixture_a',livemode:false,mode:'subscription',status:'open',payment_status:'unpaid',subscription:null,url:'https://checkout.stripe.com/c/pay/cs_test_fixture_a',client_reference_id:params.client_reference_id,metadata:params.metadata};
   return structuredClone(session);
  },
- session:async()=>structuredClone(session)
+ session:async()=>structuredClone(session),
+ expire:async()=>{throw Error('Ambiguous provider response');}
 };
 const service=createSandboxCheckout({app,provider,priceIds});
 async function user(uid){
@@ -44,13 +45,19 @@ try{
  await err('BILLING_CONFLICT',()=>service.createCheckout({...request,tier:'starter'}));
  priceResponse={...price,unit_amount:1};
  await err('PRICE_MISMATCH',()=>service.createCheckout(request));assert.equal(createCalls,0);
+ await err('CHECKOUT_RECONCILIATION_REQUIRED',()=>service.cancelCheckout({token:owner,tenantId:A}));
+ assert.ok((await db.doc('stripeSandboxCheckouts/'+A).get()).exists);
  priceResponse=price;
  const pair=await Promise.all([service.createCheckout(request),service.createCheckout(request)]);
  assert.equal(pair[0].sessionId,pair[1].sessionId);assert.equal(new Set(keys).size,1);assert.equal(pair[0].testMode,true);
  const calls=createCalls;assert.deepEqual(await service.createCheckout(request),pair[0]);assert.equal(createCalls,calls);
+ await err('CHECKOUT_RECONCILIATION_REQUIRED',()=>service.cancelCheckout({token:owner,tenantId:A}));
+ assert.ok((await db.doc('stripeSandboxCheckouts/'+A).get()).exists);
+ assert.equal((await db.doc('tenants/'+A).get()).data().stripeSandboxCheckoutId,(await db.doc('stripeSandboxCheckouts/'+A).get()).data().attemptId);
  await err('CHECKOUT_NOT_VERIFIED',()=>service.finalizeCheckout({token:owner,tenantId:A}));
  assert.equal((await db.doc('tenants/'+A).get()).data().plan,'trial');
  session={...session,status:'complete',payment_status:'paid',currency:'eur',amount_total:3990,customer:'cus_fixture_checkout',line_items:{has_more:false,data:[{quantity:1,amount_total:3990,price}]},subscription:{id:'sub_fixture_checkout',livemode:false,status:'active',customer:'cus_fixture_checkout',metadata:session.metadata,items:{has_more:false,data:[{quantity:1,price}]}}};
+ await err('CHECKOUT_RECONCILIATION_REQUIRED',()=>service.cancelCheckout({token:owner,tenantId:A}));
  session.payment_status='unpaid';await err('CHECKOUT_NOT_VERIFIED',()=>service.finalizeCheckout({token:owner,tenantId:A}));session.payment_status='paid';
  await err('FORBIDDEN',()=>service.finalizeCheckout({token:peer,tenantId:A}));
  assert.equal((await service.finalizeCheckout({token:owner,tenantId:A})).status,'bound-awaiting-invoice');
@@ -59,5 +66,6 @@ try{
  assert.equal(t.plan,'trial');assert.equal(t.billing,undefined);assert.equal(t.stripeTestSubscriptionId,'sub_fixture_checkout');
  assert.equal((await db.doc('stripeTestSubscriptions/sub_fixture_checkout').get()).data().tenantId,A);
  assert.equal((await db.doc('tenants/'+B).get()).data().stripeTestSubscriptionId,undefined);
+ console.log('STRIPE RECOVERY GUARDS PASS: unknown session, ambiguous provider expiration and paid checkout cannot release reservation.');
  console.log('STRIPE CHECKOUT PASS: verified owner, exact provider price, stable idempotency, same-company binding, unpaid and foreign access denied, no entitlement on checkout return.');
 }finally{await deleteApp(app);}

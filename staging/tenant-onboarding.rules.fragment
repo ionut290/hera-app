@@ -19,6 +19,12 @@ function canCreateTrialTenant() {
   && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == 'admin';
 }
 allow create: if canCreateTrialTenant();
+// Owner may request upgrade even after trial expiry. Cannot change plan or counters.
+allow update: if companyAdmin(tenantId) && resource.data.plan=='trial'
+ && resource.data.ownerUid==request.auth.uid
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upgradeRequested','upgradeRequestedAt'])
+ && request.resource.data.upgradeRequested==true
+ && request.resource.data.upgradeRequestedAt==request.time;
 // Each acceptance must atomically consume exactly one slot and create both membership records.
 // The request UID binds the counter increment to one pending request.
 function validOperatorApproval(uid) {

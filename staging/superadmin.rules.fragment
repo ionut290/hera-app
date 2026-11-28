@@ -25,7 +25,7 @@ function planLimit(l,u,k,max) {
 }
 function validFullPlan() {
  let d=request.resource.data; let l=d.limits; let u=resource.data.usage;
- return resource.data.get('plan','') in ['trial','full']
+ return resource.data.get('plan','')=='full' && !('billing' in resource.data)
   && d.plan=='full' && d.trial==false
   && d.diff(resource.data).affectedKeys().hasOnly(['plan','trial','limits','planUpdatedAt','planUpdatedBy','upgradeRequested'])
   && l.keys().hasAll(['commesse','impianti','admin','operatori','mezzi','squadre','storageBytes','personale'])
@@ -37,6 +37,77 @@ function validFullPlan() {
   && planLimit(l,u,'squadre',10000) && planLimit(l,u,'personale',10000)
   && planLimit(l,u,'storageBytes',1000000000000)
   && d.planUpdatedAt==request.time && d.planUpdatedBy==request.auth.uid && d.upgradeRequested==false;
+}
+// Fixed commercial catalog: independent of the client.
+function commercialLimits(tier) {
+ return tier=='starter' ? {'commesse':10,'impianti':300,'admin':1,'operatori':15,'personale':15,'mezzi':15,'squadre':5,'storageBytes':1000000000} :
+ tier=='professional' ? {'commesse':50,'impianti':2000,'admin':3,'operatori':50,'personale':50,'mezzi':50,'squadre':20,'storageBytes':5000000000} :
+ {'commesse':200,'impianti':10000,'admin':10,'operatori':200,'personale':200,'mezzi':200,'squadre':100,'storageBytes':20000000000};
+}
+function commercialPrice(tier) { return tier=='starter'?1990:tier=='professional'?3990:7990; }
+function commercialTier(tier) { return tier in ['starter','professional','business']; }
+function withinCommercialUsage(l,u) {
+ return l.admin>=u.admin && l.commesse>=u.commesse && l.impianti>=u.impianti
+  && l.operatori>=u.operatori && l.personale>=u.personale && l.mezzi>=u.mezzi
+  && l.squadre>=u.squadre && l.storageBytes>=u.storageBytes;
+}
+function oldPeriodActive(t) {
+ return 'billing' in t && t.billing.periodStart is timestamp && t.billing.periods is int
+  && request.time < t.billing.periodStart+duration.value(t.billing.periods*30,'d');
+}
+function validBillingPeriod(b,t) {
+ return oldPeriodActive(t) ?
+  (b.tier==t.billing.tier && b.periodStart==t.billing.periodStart && b.periods==t.billing.periods+1) :
+  (b.periodStart==request.time && b.periods==1);
+}
+function validCommercialActivation(tid) {
+ let d=request.resource.data; let b=d.billing; let t=resource.data;
+ return t.get('plan','') in ['trial','full'] && d.plan=='full' && d.trial==false
+  && d.diff(t).affectedKeys().hasOnly(['plan','trial','limits','billing','planUpdatedAt','planUpdatedBy','upgradeRequested','requestedTier'])
+  && b.keys().hasOnly(['tier','amountCents','currency','periodStart','periods','reference','recordedAt','recordedBy','source'])
+  && commercialTier(b.tier) && b.amountCents==commercialPrice(b.tier) && b.currency=='EUR'
+  && b.source=='manual-confirmation' && b.reference is string && b.reference.matches('^[A-Za-z0-9_-]{6,80}
+ allow get,list: if verifiedSuperAdmin();
+ allow create: if verifiedSuperAdmin() && tid.matches('demo-[a-z0-9-]{3,59}')
+ && request.resource.data.keys().hasAll(['name','status','demo','createdAt'])
+ && request.resource.data.keys().hasOnly(['name','status','demo','createdAt'])
+ && request.resource.data.demo==true && request.resource.data.status=='active'
+ && validTenantStatus(request.resource.data) && request.resource.data.createdAt==request.time;
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true && validFullPlan();
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true && validCommercialActivation(tid);
+ match /billingReceipts/{reference} {
+  allow get,list: if verifiedSuperAdmin();
+  allow create: if verifiedSuperAdmin() && demoTenant(tid)
+   && request.resource.data.reference==reference && request.resource.data.recordedAt==request.time
+   && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.billing==request.resource.data
+   && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.plan=='full'
+   && get(/databases/$(database)/documents/tenants/$(tid)).data.get('billing',{}).get('reference','')!=reference;
+  allow update,delete: if false;
+ }
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','status'])
+ && validTenantStatus(request.resource.data);
+ match /members/{uid} {
+  allow get,list: if verifiedSuperAdmin();
+  allow update: if validMemberChange(uid,tid) && resource.data.demo==true
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.tenantId==tid
+  && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data);
+ }
+}
+match /users/{uid}/memberships/{tid} {
+ allow get,list: if verifiedSuperAdmin();
+ allow update: if validMemberChange(uid,tid) && resource.data.tenantId==tid
+ && get(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data.demo==true
+ && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data);
+}
+)
+  && b.periods is int && b.periods>=1 && b.periods<=120 && validBillingPeriod(b,t)
+  && b.recordedAt==request.time && b.recordedBy==request.auth.uid
+  && d.limits==commercialLimits(b.tier) && withinCommercialUsage(d.limits,t.usage)
+  && d.planUpdatedAt==request.time && d.planUpdatedBy==request.auth.uid
+  && d.upgradeRequested==false && d.requestedTier==null
+  && !exists(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference))
+  && getAfter(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference)).data==b;
 }
 match /tenants/{tid} {
  allow get,list: if verifiedSuperAdmin();

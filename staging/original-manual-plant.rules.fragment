@@ -5,31 +5,6 @@ function originalManualAllowed() {
  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalCreateEnabled',false)==true
  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalManualEnabled',false)==true;
 }
-function manualPlantKeys() {
- return ['distretto','idSap','denominazione','comune','indirizzo','voceRiferimento','codicePrezzo','sfalci','areaMq','frequenzaAnnua','tipologiaIntervento','lavorazioniRichieste','gpsY','gpsX','numeroProgressivo','sortOrder','hasOrdinario','hasStraordinario','tipoManutenzione','done','doneAt','doneBy','createdAt'];
-}
-function validManualPrices(d) {
- return d.codicePrezzo is string && d.codicePrezzo.size()<=1000
- && d.voceRiferimento is string && d.voceRiferimento.size()<=2000
- && d.tipologiaIntervento is string && d.tipologiaIntervento.size()<=2000
- && d.lavorazioniRichieste is string && d.lavorazioniRichieste.size()<=2000
- && d.frequenzaAnnua is string && d.frequenzaAnnua.size()<=2000
- && d.hasOrdinario is bool && d.hasStraordinario is bool
- && d.tipoManutenzione==(d.hasOrdinario?(d.hasStraordinario?'Ordinaria + Straordinaria':'Ordinaria'):(d.hasStraordinario?'Straordinaria':'Non specificata'));
-}
-function manualPlantCreate(commessaId) {
- let d=request.resource.data;
- return originalManualAllowed()
- && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId))
- && d.keys().hasOnly(manualPlantKeys()) && d.keys().hasAll(manualPlantKeys())
- && d.denominazione is string && d.denominazione.matches('.*[^\\s].*') && d.denominazione.size()<=250
- && d.comune is string && d.comune.size()<=250 && d.indirizzo is string && d.indirizzo.size()<=500
- && d.distretto=='' && d.idSap=='' && d.voceRiferimento=='' && d.sfalci=='' && d.areaMq==null
- && d.frequenzaAnnua=='' && d.tipologiaIntervento=='' && d.lavorazioniRichieste==''
- && d.gpsY==null && d.gpsX==null && d.done==false && d.doneAt==null && d.doneBy==''
- && d.numeroProgressivo is int && d.numeroProgressivo>0 && d.sortOrder==d.numeroProgressivo
- && d.createdAt==request.time && validManualPrices(d);
-}
 function manualPlantMerge() {
  return originalManualAllowed()
  && resource.data.keys().hasOnly(manualPlantKeys()) && resource.data.keys().hasAll(manualPlantKeys())
@@ -45,7 +20,6 @@ match /commesse/{commessaId} {
  && request.resource.data.nextImpiantoNumber>=resource.data.nextImpiantoNumber
  && request.resource.data.nextImpiantoNumber<=resource.data.nextImpiantoNumber+1;
  match /impianti/{impiantoId} {
-  allow create: if commessaId!='sfalcio-cobo' && quotaCreate('impianti','commesse',impiantoId,commessaId) && manualPlantCreate(commessaId);
   allow update: if commessaId!='sfalcio-cobo' && manualPlantMerge();
  }
 }

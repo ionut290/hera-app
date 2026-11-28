@@ -14,12 +14,8 @@ function originalCommessaCreate(archive) {
  && d.creatoDa==request.auth.token.email && d.excelModelActivatedBy==request.auth.token.email
  && (d.parentCommessaId==null || (d.parentCommessaId is string && exists(/databases/$(database)/documents/tenants/$(tenantId)/$(archive)/$(d.parentCommessaId))));
 }
-function originalImpiantoCreate(commessaId) {
- let d=request.resource.data;
- return canManageCommesse()
- && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalCreateEnabled',false)==true
- && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId))
- && d.keys().hasOnly(['denominazione','idSap','tipologiaImpianto','comune','indirizzo','gpsY','gpsX','codicePrezzo','area','dittaEsecutrice','note','stato','done','doneAt','doneBy','numeroProgressivo','commessaId','createdAt','updatedAt','updatedByUid','updatedByName'])
+function validOriginalImpianto(d,commessaId) {
+ return d.keys().hasOnly(['denominazione','idSap','tipologiaImpianto','comune','indirizzo','gpsY','gpsX','codicePrezzo','area','dittaEsecutrice','note','stato','done','doneAt','doneBy','numeroProgressivo','commessaId','createdAt','updatedAt','updatedByUid','updatedByName'])
  && d.keys().hasAll(['denominazione','idSap','tipologiaImpianto','comune','indirizzo','gpsY','gpsX','codicePrezzo','area','dittaEsecutrice','note','stato','done','doneAt','doneBy','numeroProgressivo','commessaId','createdAt','updatedAt','updatedByUid','updatedByName'])
  && d.denominazione is string && d.denominazione.matches('.*[^\\s].*') && d.denominazione.size()<=250
  && d.idSap is string && d.idSap.size()<=200
@@ -30,10 +26,42 @@ function originalImpiantoCreate(commessaId) {
  && d.commessaId==commessaId && d.createdAt==request.time && d.updatedAt==request.time
  && d.updatedByUid==request.auth.uid && d.updatedByName is string && d.updatedByName.size()<=250;
 }
+function manualPlantKeys() {
+ return ['distretto','idSap','denominazione','comune','indirizzo','voceRiferimento','codicePrezzo','sfalci','areaMq','frequenzaAnnua','tipologiaIntervento','lavorazioniRichieste','gpsY','gpsX','numeroProgressivo','sortOrder','hasOrdinario','hasStraordinario','tipoManutenzione','done','doneAt','doneBy','createdAt'];
+}
+function validManualPrices(d) {
+ return d.codicePrezzo is string && d.codicePrezzo.size()<=1000
+ && d.voceRiferimento is string && d.voceRiferimento.size()<=2000
+ && d.tipologiaIntervento is string && d.tipologiaIntervento.size()<=2000
+ && d.lavorazioniRichieste is string && d.lavorazioniRichieste.size()<=2000
+ && d.frequenzaAnnua is string && d.frequenzaAnnua.size()<=2000
+ && d.hasOrdinario is bool && d.hasStraordinario is bool
+ && d.tipoManutenzione==(d.hasOrdinario?(d.hasStraordinario?'Ordinaria + Straordinaria':'Ordinaria'):(d.hasStraordinario?'Straordinaria':'Non specificata'));
+}
+function validManualPlant(d) {
+ return d.keys().hasOnly(manualPlantKeys()) && d.keys().hasAll(manualPlantKeys())
+ && d.denominazione is string && d.denominazione.matches('.*[^\\s].*') && d.denominazione.size()<=250
+ && d.comune is string && d.comune.size()<=250 && d.indirizzo is string && d.indirizzo.size()<=500
+ && d.distretto=='' && d.idSap=='' && d.voceRiferimento=='' && d.sfalci=='' && d.areaMq==null
+ && d.frequenzaAnnua=='' && d.tipologiaIntervento=='' && d.lavorazioniRichieste==''
+ && d.gpsY==null && d.gpsX==null && d.done==false && d.doneAt==null && d.doneBy==''
+ && d.numeroProgressivo is int && d.numeroProgressivo>0 && d.sortOrder==d.numeroProgressivo
+ && d.createdAt==request.time && validManualPrices(d);
+}
+function originalPlantCreate(commessaId,impiantoId) {
+ let tenant=get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+ let d=request.resource.data;
+ return commessaId!='sfalcio-cobo' && quotaCreate('impianti','commesse',impiantoId,commessaId)
+ && canManageCommesse()
+ && tenant.get('originalCreateEnabled',false)==true
+ && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId))
+ && (validOriginalImpianto(d,commessaId)
+   || (tenant.get('originalManualEnabled',false)==true && validManualPlant(d)));
+}
 match /commesse/{commessaId} {
  allow create: if commessaId!='sfalcio-cobo' && quotaCreate('commesse','commesse',commessaId,'') && originalCommessaCreate('commesse');
  match /impianti/{impiantoId} {
-  allow create: if commessaId!='sfalcio-cobo' && quotaCreate('impianti','commesse',impiantoId,commessaId) && originalImpiantoCreate(commessaId);
+  allow create: if originalPlantCreate(commessaId,impiantoId);
  }
 }
 

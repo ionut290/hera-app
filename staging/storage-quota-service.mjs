@@ -1,7 +1,7 @@
 // Candidate backend only. No live deployment or public download URLs.
 // All writes use an Admin SDK identity; client Storage rules must deny direct access.
 import {createHash} from 'node:crypto';
-import {getFirestore,FieldValue} from 'firebase-admin/firestore';
+import {getFirestore,FieldValue,Filter} from 'firebase-admin/firestore';
 import {getAuth} from 'firebase-admin/auth';
 import {getStorage} from 'firebase-admin/storage';
 export const MAX_FILE_BYTES=15*1024*1024;
@@ -49,22 +49,30 @@ export function createStorageQuotaService({app}){
   if(!t||t.demo!==true||t.status!=='active'||!m||m.status!=='active'||!i||i.status!=='active'||i.tenantId!==tenantId||m.role!==i.role||!['admin','supervisor','employee'].includes(m.role))fail('FORBIDDEN');
   return {t,m};
  }
- function view(d,id){return {id,name:d.name,type:d.type,size:d.size,status:d.status};}
- async function upload({token,tenantId,fileId,name,type,base64}){
+ function view(d,id){return {id,name:d.name,type:d.type,size:d.size,status:d.status,visibility:d.visibility||'private',plant:d.plant||null};}
+ const canManage=(d,m,uid)=>d.ownerUid===uid||m.role==='admin';
+ const canRead=(d,m,uid)=>canManage(d,m,uid)||d.visibility==='company';
+ function normalizePlant(p){if(p===null||p===undefined)return null;if(!p||!['commesse','neve_commesse'].includes(p.archive)||![p.jobId,p.plantId].every(v=>typeof v==='string'&&v.length>0&&v.length<=200&&!/[\/\\\x00-\x1f]/.test(v)&&v!=='.'&&v!=='..'))fail('INVALID_PLANT');return {archive:p.archive,jobId:p.jobId,plantId:p.plantId};}
+ function plantKey(p){return p?JSON.stringify([p.archive,p.jobId,p.plantId]):null;}
+ async function verifyPlant(tx,r,t,p){if(!p)return;if(p.archive==='neve_commesse'&&t.originalArchivesEnabled!==true)fail('FORBIDDEN');const job=r.tenant.collection(p.archive).doc(p.jobId),plant=job.collection('impianti').doc(p.plantId);const [j,d]=await Promise.all([tx.get(job),tx.get(plant)]);if(!j.exists||!d.exists)fail('INVALID_PLANT');}
+ function checkVisibility(v){if(!['private','company'].includes(v))fail('INVALID_VISIBILITY');return v;}
+ async function upload({token,tenantId,fileId,name,type,base64,visibility='private',plant=null}){
   const uid=await identity(token),r=refs(tenantId,uid,fileId),{bytes,sha256}=validateFile({name,type,base64});
+  plant=normalizePlant(plant);checkVisibility(visibility);if(plant&&!type.startsWith('image/'))fail('INVALID_FILE_TYPE');
   const result=await db.runTransaction(async tx=>{
    const {t}=await membership(tx,r,tenantId);
    if(!writable(t,Date.now()))fail('PLAN_EXPIRED');
+   await verifyPlant(tx,r,t,plant);
    const existing=(await tx.get(r.meta)).data();
    if(existing){
-    if(existing.ownerUid!==uid||existing.sha256!==sha256||existing.name!==name||existing.type!==type||existing.size!==bytes.length)fail('FILE_ID_CONFLICT');
+    if(existing.ownerUid!==uid||existing.sha256!==sha256||existing.name!==name||existing.type!==type||existing.size!==bytes.length||plantKey(existing.plant||null)!==plantKey(plant))fail('FILE_ID_CONFLICT');
     if(existing.status!=='ready')fail('FILE_PENDING_RECONCILIATION');
     return {existing:true,view:view(existing,fileId)};
    }
    const used=t.usage?.storageBytes,limit=t.limits?.storageBytes;
    if(!Number.isSafeInteger(used)||used<0||!Number.isSafeInteger(limit)||limit<0||used>limit)fail('QUOTA_UNVERIFIED');
    if(bytes.length>limit-used)fail('STORAGE_LIMIT');
-   const data={ownerUid:uid,name,type,size:bytes.length,sha256,status:'reserved',createdAt:serverTimestamp()};
+   const data={ownerUid:uid,name,type,size:bytes.length,sha256,visibility,plant,plantKey:plantKey(plant),status:'reserved',createdAt:serverTimestamp()};
    tx.update(r.tenant,{'usage.storageBytes':used+bytes.length});
    tx.create(r.meta,data);
    return {existing:false,view:view(data,fileId)};
@@ -92,25 +100,28 @@ export function createStorageQuotaService({app}){
  async function download({token,tenantId,fileId}){
   const uid=await identity(token),r=refs(tenantId,uid,fileId);
   const d=await db.runTransaction(async tx=>{
-   const {m}=await membership(tx,r,tenantId),d=(await tx.get(r.meta)).data();
-   if(!d||d.status!=='ready'||(d.ownerUid!==uid&&m.role!=='admin'))fail('FORBIDDEN');
+   const {t,m}=await membership(tx,r,tenantId),d=(await tx.get(r.meta)).data();
+   if(!d||d.status!=='ready'||!canRead(d,m,uid))fail('FORBIDDEN');
+   await verifyPlant(tx,r,t,d.plant||null);
    return d;
   });
   const [bytes]=await bucket.file(r.path,{generation:d.generation}).download();
   if(bytes.length!==d.size||createHash('sha256').update(bytes).digest('hex')!==d.sha256)fail('BLOB_MISMATCH');
   return {...view(d,fileId),base64:bytes.toString('base64')};
  }
- async function list({token,tenantId,cursor=null}){
+ async function list({token,tenantId,cursor=null,plant=null}){
   const uid=await identity(token),r=refs(tenantId,uid,'list-placeholder-0000');
-  if(cursor!==null&&!idOk(cursor))fail('INVALID_PATH');
+  if(cursor!==null&&!idOk(cursor))fail('INVALID_PATH');plant=normalizePlant(plant);
   return db.runTransaction(async tx=>{
    const {t,m}=await membership(tx,r,tenantId);
    let q=r.tenant.collection('storedFiles');
-   if(m.role!=='admin')q=q.where('ownerUid','==',uid);
+   await verifyPlant(tx,r,t,plant);
+   if(m.role!=='admin')q=q.where(Filter.or(Filter.where('ownerUid','==',uid),Filter.where('visibility','==','company')));
+   if(plant)q=q.where('plantKey','==',plantKey(plant));
    q=q.orderBy('__name__').limit(101);
    if(cursor)q=q.startAfter(r.tenant.collection('storedFiles').doc(cursor));
    const snap=await tx.get(q),page=snap.docs.slice(0,100);
-   return {files:page.filter(x=>['ready','deleting','reserved'].includes(x.data().status)).map(x=>view(x.data(),x.id)),nextCursor:snap.size>100?page.at(-1).id:null,used:t.usage?.storageBytes??null,limit:t.limits?.storageBytes??null,writable:writable(t,Date.now())};
+   return {files:page.filter(x=>{const d=x.data();return canRead(d,m,uid)&&(d.status==='ready'||(canManage(d,m,uid)&&['deleting','reserved'].includes(d.status)))&&(!d.plant||d.plant.archive!=='neve_commesse'||t.originalArchivesEnabled===true);}).map(x=>({...view(x.data(),x.id),canManage:canManage(x.data(),m,uid)})),nextCursor:snap.size>100?page.at(-1).id:null,used:t.usage?.storageBytes??null,limit:t.limits?.storageBytes??null,writable:writable(t,Date.now())};
   });
  }
  async function remove({token,tenantId,fileId}){
@@ -148,5 +159,9 @@ export function createStorageQuotaService({app}){
   });
   return {id:fileId,status:'deleted'};
  }
- return Object.freeze({upload,download,list,remove});
+ async function share({token,tenantId,fileId,visibility}){
+  const uid=await identity(token),r=refs(tenantId,uid,fileId);checkVisibility(visibility);
+  return db.runTransaction(async tx=>{const {t,m}=await membership(tx,r,tenantId),d=(await tx.get(r.meta)).data();if(!d||d.status!=='ready'||!canManage(d,m,uid))fail('FORBIDDEN');if(!writable(t,Date.now()))fail('PLAN_EXPIRED');await verifyPlant(tx,r,t,d.plant||null);tx.update(r.meta,{visibility,visibilityUpdatedAt:serverTimestamp()});return view({...d,visibility},fileId);});
+ }
+ return Object.freeze({upload,download,list,remove,share});
 }

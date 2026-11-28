@@ -31,9 +31,9 @@ function originalImpiantoCreate(commessaId) {
  && d.updatedByUid==request.auth.uid && d.updatedByName is string && d.updatedByName.size()<=250;
 }
 match /commesse/{commessaId} {
- allow create: if commessaId!='sfalcio-cobo' && originalCommessaCreate('commesse');
+ allow create: if commessaId!='sfalcio-cobo' && quotaCreate('commesse','commesse',commessaId,'') && originalCommessaCreate('commesse');
  match /impianti/{impiantoId} {
-  allow create: if commessaId!='sfalcio-cobo' && originalImpiantoCreate(commessaId);
+  allow create: if commessaId!='sfalcio-cobo' && quotaCreate('impianti','commesse',impiantoId,commessaId) && originalImpiantoCreate(commessaId);
  }
 }
 
@@ -58,8 +58,8 @@ match /commesse/{commessaId} {
    && d.createdAt==request.time && d.createdBy==request.auth.token.email;
  }
  match /neve_commesse/{commessaId} {
-  allow create: if snowCreateAllowed() && originalCommessaCreate('neve_commesse');
+  allow create: if quotaCreate('commesse','neve_commesse',commessaId,'') && snowCreateAllowed() && originalCommessaCreate('neve_commesse');
   match /impianti/{impiantoId} {
-   allow create: if originalSnowRoadCreate(commessaId);
+   allow create: if quotaCreate('impianti','neve_commesse',impiantoId,commessaId) && originalSnowRoadCreate(commessaId);
   }
  }

@@ -1,4 +1,5 @@
 import firebase from 'firebase/compat/app';
+import {TRIAL_DAYS,TRIAL_LIMITS,initialTrialUsage} from '../trial-plan.mjs';
 import {nativeProviderBridge,getProviderCredential,socialIntent} from './social-auth.mjs';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
@@ -69,7 +70,7 @@ async function createCompany(name,node){
  if(await alreadyCreated()){finish();return;}
  ensureSession();
  const batch=db.batch();
- batch.set(tenant,{name:clean,status:'active',demo:true,ownerUid:user.uid,joinCode,plan:'trial',trial:true,trialStartedAt:now,limits:{commesse:1,impianti:10,admin:1,operatori:3},usage:{commesse:0,impianti:0,admin:1,operatori:0},originalCreateEnabled:true,originalManualEnabled:true,originalArchivesEnabled:true,commesseWriteEnabled:true,snowCreateEnabled:true,fattoMode:'configurable-demo',createdAt:now,createdBy:user.uid});
+ batch.set(tenant,{name:clean,status:'active',demo:true,ownerUid:user.uid,joinCode,plan:'trial',trial:true,trialStartedAt:now,trialDays:TRIAL_DAYS,limits:{...TRIAL_LIMITS},usage:initialTrialUsage(),originalCreateEnabled:true,originalManualEnabled:true,originalArchivesEnabled:true,commesseWriteEnabled:true,snowCreateEnabled:true,fattoMode:'configurable-demo',createdAt:now,createdBy:user.uid});
  batch.set(codeDoc,{tenantId,companyName:clean,status:'active',createdAt:now,createdBy:user.uid});
  batch.set(member,{uid:user.uid,email:user.email||'',displayName:user.displayName||user.email||'Amministratore',role:'admin',status:'active',demo:true,createdAt:now});
  batch.set(membership,{tenantId,role:'admin',status:'active',demo:true,createdAt:now});

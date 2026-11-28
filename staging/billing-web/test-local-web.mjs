@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright';
+import {initializeApp,deleteApp} from 'firebase-admin/app';
+import {getAuth} from 'firebase-admin/auth';
+import {getFirestore} from 'firebase-admin/firestore';
+import {TRIAL_LIMITS,initialTrialUsage} from '../trial-plan.mjs';
+import {SUBSCRIPTION_PLANS} from '../subscription-plans.mjs';
+import {createLocalBillingServer} from './local-server.mjs';
+const app=initializeApp({projectId:'varga-cantieri-v2-staging'}),db=getFirestore(app),auth=getAuth(app);
+const owner='billing-web-owner',peer='billing-web-peer',foreign='billing-web-foreign',password='Local-Only-42',A='demo-web-billing-a',B='demo-web-billing-b';
+const origin='http://127.0.0.1:4173';
+let server,browser;
+async function makeUser(uid){await auth.createUser({uid,email:uid+'@example.test',password,emailVerified:true});}
+async function membership(t,uid,role){await db.doc('tenants/'+t+'/members/'+uid).set({role,status:'active',demo:true});await db.doc('users/'+uid+'/memberships/'+t).set({tenantId:t,role,status:'active'});}
+async function loginToken(uid){const r=await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:uid+'@example.test',password,returnSecureToken:true})});assert.equal(r.ok,true);return (await r.json()).idToken;}
+const post=(action,token,data={},requestOrigin=origin)=>fetch(origin+'/api/'+action,{method:'POST',headers:{Origin:requestOrigin,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(data)});
+try{
+ await Promise.all([owner,peer,foreign].map(makeUser));
+ const trial={demo:true,status:'active',plan:'trial',trial:true,trialDays:30,trialStartedAt:new Date(),limits:{...TRIAL_LIMITS},usage:initialTrialUsage()};
+ await db.doc('tenants/'+A).set({...trial,name:'Azienda Demo Verde',ownerUid:owner});
+ await db.doc('tenants/'+B).set({...trial,name:'Azienda Demo Estera',ownerUid:foreign});
+ await Promise.all([membership(A,owner,'admin'),membership(A,peer,'admin'),membership(B,foreign,'admin')]);
+ server=createLocalBillingServer({app});await new Promise(r=>server.listen(4173,'127.0.0.1',r));
+ const ownerToken=await loginToken(owner),peerToken=await loginToken(peer),foreignToken=await loginToken(foreign);
+ assert.equal((await post('companies',null)).status,401);
+ assert.equal((await post('companies',ownerToken,{},'https://foreign.example.test')).status,403);
+ assert.equal((await post('request-plan',foreignToken,{tenantId:A,tier:'business'})).status,403);
+ assert.equal((await post('checkout',peerToken,{tenantId:A,tier:'professional',acceptTerms:true})).status,403);
+ assert.equal((await post('simulate',peerToken,{tenantId:A})).status,403);
+ assert.equal((await (await post('companies',peerToken)).json()).companies.length,0);
+ assert.equal((await (await post('companies',ownerToken)).json()).companies.length,1);
+ browser=await chromium.launch({headless:true});
+ const context=await browser.newContext({serviceWorkers:'block'}),external=[];
+ await context.route('**/*',route=>{const u=new URL(route.request().url());if(u.hostname==='127.0.0.1'&&['4173','9099'].includes(u.port))return route.continue();external.push(u.hostname);return route.abort();});
+ const page=await context.newPage();page.setDefaultTimeout(20000);
+ await page.goto(origin);
+ await page.locator('#email').fill(owner+'@example.test');await page.locator('#password').fill(password);await page.locator('#login button').click();
+ await page.locator('#account').waitFor({state:'visible'});
+ assert.equal(await page.locator('#company option').count(),1);
+ assert.equal(await page.locator('#company').inputValue(),A);
+ await page.getByRole('radio',{name:'Professional'}).check();
+ assert.equal(await page.locator('#checkout').isDisabled(),true);
+ await page.locator('#terms').check();await page.locator('#checkout').click();
+ await page.locator('#checkout-panel').waitFor({state:'visible'});
+ assert.equal((await db.doc('tenants/'+A).get()).data().plan,'trial');
+ assert.equal((await db.doc('tenants/'+A).get()).data().billing,undefined);
+ assert.equal((await post('simulate',foreignToken,{tenantId:A})).status,403);
+ await page.locator('#simulate').click();await page.getByText('Pagamento di prova confermato. Nessun addebito reale.').waitFor();
+ const paid=(await db.doc('tenants/'+A).get()).data();
+ assert.equal(paid.plan,'full');assert.equal(paid.billing.source,'stripe-test');assert.equal(paid.billing.amountCents,3990);
+ assert.deepEqual(paid.limits,SUBSCRIPTION_PLANS.professional.limits);assert.equal(paid.billing.periods,1);
+ assert.equal((await db.doc('tenants/'+A).collection('billingReceipts').get()).size,1);
+ assert.match(await page.locator('#subscription-status').textContent(),/Piano attivo \(simulazione\): Professional/);
+ const retry=await post('simulate',ownerToken,{tenantId:A});assert.equal(retry.ok,true);
+ assert.equal((await retry.json()).status,'duplicate-event');
+ assert.equal((await db.doc('tenants/'+A).collection('billingReceipts').get()).size,1);
+ assert.equal((await db.doc('tenants/'+B).get()).data().plan,'trial');
+ await page.locator('#logout').click();await page.locator('#login-panel').waitFor({state:'visible'});assert.equal(await page.locator('#account').isHidden(),true);
+ assert.equal(external.length,0);
+ console.log('WEB BILLING PASS: standalone browser login, owner-only company, consent, simulated checkout, signed invoice entitlement, duplicate confirmation denied, foreign tenant untouched, no external traffic.');
+}finally{if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));await deleteApp(app);}

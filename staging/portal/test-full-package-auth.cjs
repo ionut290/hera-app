@@ -7,7 +7,9 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
  assert.match(process.env.FIREBASE_AUTH_EMULATOR_HOST||'',/^127\.0\.0\.1:9099$/);
  const {initializeApp,deleteApp}=require('firebase-admin/app');
  const {getAuth}=require('firebase-admin/auth'),{getFirestore}=require('firebase-admin/firestore');
- const admin=initializeApp({projectId}),db=getFirestore(admin),auth=getAuth(admin);
+ const withStorage=process.env.FIREBASE_STORAGE_EMULATOR_HOST==='127.0.0.1:9199';
+ const admin=initializeApp({projectId,...(withStorage?{storageBucket:projectId+'.appspot.com'}:{})}),db=getFirestore(admin),auth=getAuth(admin);
+ const storageHandler=withStorage?(await import('../storage-local-http.mjs')).createLocalStorageHandler((await import('../storage-quota-service.mjs')).createStorageQuotaService({app:admin})):null;
  const uid='local-admin',email='local-admin@example.test',password='Local-Test-Only-42';
  await auth.createUser({uid,email,password,emailVerified:true,displayName:'Local test admin'});
  const superUid='local-super',superEmail='local-super@example.test';
@@ -21,6 +23,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   if(id==='demo-a'){await db.doc('tenants/'+id+'/members/'+superUid).set({role:'employee',status:'active',demo:true,historicalId:'preserved-local-super'});await db.doc('users/'+superUid+'/memberships/'+id).set({tenantId:id,role:'employee',status:'active'});}
  }
  const server=http.createServer((req,res)=>{
+  if(req.url.startsWith('/__v2_documents/')){if(!storageHandler){res.writeHead(503);return res.end();}return storageHandler(req,res);}
   const rel=decodeURIComponent(new URL(req.url,'http://localhost').pathname).replace(/^\/+/,'')||'index.html',file=path.resolve(root,rel);
   if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);return res.end();}
   const types={'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'};
@@ -108,6 +111,23 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await trialFrame.waitForURL('**/original.html');
   await trialFrame.waitForFunction(()=>document.readyState==='complete'&&Boolean(window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__?.isActive()));
   const createTrialJob=async()=>trialFrame.evaluate(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__,stamp=window.firebase.firestore.FieldValue.serverTimestamp();const ref=await s.session.firestore.collection('commesse').add({nome:'Quota test',codice:'',excelModelVersion:2,priceListVersion:2,workItemsModelVersion:2,percentualeRibassoGenerale:0.01,excelModelActivatedAt:stamp,excelModelActivatedBy:s.auth.currentUser.email,nextImpiantoNumber:1,parentCommessaId:null,creatoDa:s.auth.currentUser.email,createdAt:stamp});return ref.id;});
+  if(withStorage){
+   await trialFrame.locator('#open-private-docs-btn').evaluate(b=>b.click());
+   const docs=page.locator('#company-documents');await docs.waitFor({state:'visible'});
+   await docs.getByText('Nessun documento disponibile.').waitFor();
+   const bytes=Buffer.from('%PDF-1.4\nSynthetic UI test\n%%EOF\n');
+   await docs.locator('input[type=file]').setInputFiles({name:'prova.pdf',mimeType:'application/pdf',buffer:bytes});
+   await docs.getByRole('button',{name:'Carica documento',exact:true}).click();
+   await docs.getByText(/prova\.pdf/).waitFor();
+   assert.equal((await created.docs[0].ref.get()).data().usage.storageBytes,bytes.length);
+   page.once('dialog',d=>d.accept());
+   await docs.getByRole('button',{name:'Elimina',exact:true}).click();
+   await docs.getByText('Nessun documento disponibile.').waitFor();
+   assert.equal((await created.docs[0].ref.get()).data().usage.storageBytes,0);
+   await docs.getByRole('button',{name:'Torna al cantiere',exact:true}).click();
+   await docs.waitFor({state:'hidden'});
+   console.log('DOCUMENT UI PASS: original menu, private upload, confirmed deletion and quota recovery.');
+  }
   let firstJob;
   for(let i=0;i<5;i++){const id=await createTrialJob();if(i===0)firstJob=id;}
   await assert.rejects(createTrialJob);

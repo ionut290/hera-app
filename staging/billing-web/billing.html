@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Varga Cantieri 2.0 — Abbonamenti</title>
+<link rel="stylesheet" href="/billing.css">
+<script src="/billing.js" defer></script>
+</head>
+<body>
+<main>
+<header><p class="brand">VARGA CANTIERI 2.0</p><h1>Abbonamenti aziendali</h1><p>Gestisci il piano della tua azienda.</p></header>
+<p class="notice" role="note">AMBIENTE DI COLLAUDO · Pagamenti simulati. Non inserire dati personali reali o carte di credito. Nessun addebito.</p>
+<section id="login-panel">
+<h2>Accedi come titolare</h2>
+<form id="login"><label>Email di prova<input id="email" type="email" autocomplete="username" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><button type="submit">Accedi</button></form>
+</section>
+<section id="account" hidden>
+<div class="account-row"><h2>La tua azienda</h2><button id="logout" type="button" class="secondary">Esci</button></div>
+<label>Seleziona azienda<select id="company"></select></label>
+<p id="subscription-status"></p>
+<h2>Scegli il piano</h2>
+<div id="plans" class="plans" aria-label="Piani disponibili"></div>
+<label class="consent"><input id="terms" type="checkbox">Confermo di voler simulare un abbonamento di 30 giorni con rinnovo automatico di prova. Nessun pagamento reale.</label>
+<button id="checkout" disabled>Avvia checkout di prova</button>
+<section id="checkout-panel" hidden><h2>Checkout simulato</h2><p id="checkout-summary"></p><p>Non sono richiesti numeri di carta o indirizzi reali.</p><button id="simulate">Simula pagamento riuscito</button><button id="verify" class="secondary">Verifica stato pagamento</button></section>
+</section>
+<p id="status" role="status" aria-live="polite"></p>
+</main>
+</body></html>

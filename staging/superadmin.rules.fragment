@@ -86,7 +86,16 @@ function validCommercialActivation(tid) {
   && d.diff(t).affectedKeys().hasOnly(['plan','trial','limits','billing','planUpdatedAt','planUpdatedBy','upgradeRequested','requestedTier'])
   && b.keys().hasOnly(['tier','amountCents','currency','periodStart','periods','reference','recordedAt','recordedBy','source'])
   && commercialTier(b.tier) && b.amountCents==commercialPrice(b.tier) && b.currency=='EUR'
-  && b.source=='manual-confirmation' && b.reference is string && b.reference.matches('^[A-Za-z0-9_-]{6,80}
+   && b.source=='manual-confirmation' && b.reference is string && b.reference.matches('^[A-Za-z0-9_-]{6,80}$')
+  && b.periods is int && b.periods>=1 && b.periods<=120 && validBillingPeriod(b,t)
+  && b.recordedAt==request.time && b.recordedBy==request.auth.uid
+  && d.limits==commercialLimits(b.tier) && withinCommercialUsage(d.limits,t.usage)
+  && d.planUpdatedAt==request.time && d.planUpdatedBy==request.auth.uid
+  && d.upgradeRequested==false && d.requestedTier==null
+  && !exists(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference))
+  && getAfter(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference)).data==b;
+}
+match /tenants/{tid} {
  allow get,list: if verifiedSuperAdmin();
  allow create: if verifiedSuperAdmin() && tid.matches('demo-[a-z0-9-]{3,59}')
  && request.resource.data.keys().hasAll(['name','status','demo','createdAt'])
@@ -108,39 +117,6 @@ function validCommercialActivation(tid) {
    && get(/databases/$(database)/documents/tenants/$(tid)).data.get('billing',{}).get('reference','')!=reference;
   allow update,delete: if false;
  }
- allow update: if verifiedSuperAdmin() && resource.data.demo==true
- && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','status'])
- && validTenantStatus(request.resource.data);
- match /members/{uid} {
-  allow get,list: if verifiedSuperAdmin();
-  allow update: if validMemberChange(uid,tid) && resource.data.demo==true
-  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.tenantId==tid
-  && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data);
- }
-}
-match /users/{uid}/memberships/{tid} {
- allow get,list: if verifiedSuperAdmin();
- allow update: if validMemberChange(uid,tid) && resource.data.tenantId==tid
- && get(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data.demo==true
- && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data);
-}
-)
-  && b.periods is int && b.periods>=1 && b.periods<=120 && validBillingPeriod(b,t)
-  && b.recordedAt==request.time && b.recordedBy==request.auth.uid
-  && d.limits==commercialLimits(b.tier) && withinCommercialUsage(d.limits,t.usage)
-  && d.planUpdatedAt==request.time && d.planUpdatedBy==request.auth.uid
-  && d.upgradeRequested==false && d.requestedTier==null
-  && !exists(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference))
-  && getAfter(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference)).data==b;
-}
-match /tenants/{tid} {
- allow get,list: if verifiedSuperAdmin();
- allow create: if verifiedSuperAdmin() && tid.matches('demo-[a-z0-9-]{3,59}')
- && request.resource.data.keys().hasAll(['name','status','demo','createdAt'])
- && request.resource.data.keys().hasOnly(['name','status','demo','createdAt'])
- && request.resource.data.demo==true && request.resource.data.status=='active'
- && validTenantStatus(request.resource.data) && request.resource.data.createdAt==request.time;
- allow update: if verifiedSuperAdmin() && resource.data.demo==true && validFullPlan();
  allow update: if verifiedSuperAdmin() && resource.data.demo==true
  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','status'])
  && validTenantStatus(request.resource.data);

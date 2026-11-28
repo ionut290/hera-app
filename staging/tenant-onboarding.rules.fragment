@@ -23,6 +23,7 @@ allow create: if canCreateTrialTenant();
 allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upgradeRequested','upgradeRequestedAt','requestedTier'])
  && companyAdmin(tenantId) && resource.data.plan in ['trial','full']
  && resource.data.ownerUid==request.auth.uid
+ && !('stripeSandboxCheckoutId' in resource.data) && !('stripeTestSubscriptionId' in resource.data)
  && request.resource.data.requestedTier in ['starter','professional','business']
  && request.resource.data.upgradeRequested==true
  && request.resource.data.upgradeRequestedAt==request.time;

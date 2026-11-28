@@ -1,0 +1,40 @@
+name: Clean up verified Stripe Sandbox test subscription
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Completed GitHub Actions run that created the test checkout'
+        required: true
+        type: string
+permissions:
+  actions: read
+  contents: read
+jobs:
+  cancel-sandbox-test-subscription:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: stripe-sandbox-checkout
+    defaults:
+      run:
+        working-directory: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: stripe-sandbox-emulator-state
+          path: staging/.sandbox-state
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Stripe Sandbox cleanup dependency
+        run: npm install --no-save --no-audit --no-fund stripe@17.7.0
+      - name: Verify and cancel only the source run's synthetic subscription
+        env:
+          VARGA_STRIPE_SANDBOX_CHECKOUT_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY }}
+        run: node billing-web/cancel-real-sandbox.mjs

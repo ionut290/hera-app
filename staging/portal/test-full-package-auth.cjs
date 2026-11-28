@@ -147,7 +147,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await trialFrame.locator('#registry-editor input[name="nome"]').fill('Operatore');
   await trialFrame.locator('#registry-editor input[name="cognome"]').fill('Collaudo');
   await trialFrame.locator('#registry-editor input[name="mansione"]').fill('Operatore cantiere');
-  await trialFrame.locator('#registry-editor').locator('button[type="submit"]').click();
+  await trialFrame.locator('#registry-editor').locator('button.btn-primary').click();
   await trialFrame.waitForFunction(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('personale').where('nome','==','Operatore').where('cognome','==','Collaudo').get()).size===1;});
   console.log('FIRST USER PERSONALE PASS: Operatore Collaudo saved from the Personale v2 form.');
   await openMenu();
@@ -158,7 +158,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await trialFrame.locator('#registry-editor input[name="codiceMezzo"]').fill('MEZZO-COLLAUDO-01');
   await trialFrame.locator('#registry-editor input[name="marca"]').fill('Varga');
   await trialFrame.locator('#registry-editor input[name="modello"]').fill('Furgone');
-  await trialFrame.locator('#registry-editor').locator('button[type="submit"]').click();
+  await trialFrame.locator('#registry-editor').locator('button.btn-primary').click();
   await trialFrame.waitForFunction(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('mezzi').where('codiceMezzo','==','MEZZO-COLLAUDO-01').get()).size===1;});
   console.log('FIRST USER MEZZO PASS: MEZZO-COLLAUDO-01 saved from the Mezzi v2 form.');
   await openMenu();

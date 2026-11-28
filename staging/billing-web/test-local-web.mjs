@@ -45,6 +45,14 @@ try{
  assert.equal((await db.doc('tenants/'+A).get()).data().plan,'trial');
  assert.equal((await db.doc('tenants/'+A).get()).data().billing,undefined);
  assert.equal((await post('simulate',foreignToken,{tenantId:A})).status,403);
+ assert.equal((await post('cancel',foreignToken,{tenantId:A})).status,403);
+ const oldAttempt=(await db.doc('stripeSandboxCheckouts/'+A).get()).data();
+ page.once('dialog',d=>d.accept());await page.locator('#cancel').click();await page.getByText('Checkout annullato. Puoi scegliere un nuovo piano.').waitFor();
+ assert.equal((await db.doc('stripeSandboxCheckouts/'+A).get()).exists,false);
+ assert.equal((await db.doc('stripeSandboxExpiredAttempts/'+oldAttempt.attemptId).get()).data().status,'expired-unpaid');
+ assert.equal((await db.doc('tenants/'+A).get()).data().stripeSandboxCheckoutId,undefined);
+ await page.getByRole('radio',{name:'Professional'}).check();await page.locator('#terms').check();await page.locator('#checkout').click();await page.locator('#checkout-panel').waitFor({state:'visible'});
+ assert.notEqual((await db.doc('stripeSandboxCheckouts/'+A).get()).data().sessionId,oldAttempt.sessionId);
  await page.locator('#simulate').click();await page.getByText('Pagamento di prova confermato. Nessun addebito reale.').waitFor();
  const paid=(await db.doc('tenants/'+A).get()).data();
  assert.equal(paid.plan,'full');assert.equal(paid.billing.source,'stripe-test');assert.equal(paid.billing.amountCents,3990);
@@ -53,6 +61,8 @@ try{
  assert.match(await page.locator('#subscription-status').textContent(),/Piano attivo \(simulazione\): Professional/);
  const retry=await post('simulate',ownerToken,{tenantId:A});assert.equal(retry.ok,true);
  assert.equal((await retry.json()).status,'duplicate-event');
+ assert.equal((await post('cancel',ownerToken,{tenantId:A})).status,400);
+ console.log('WEB CHECKOUT RECOVERY PASS: unpaid cancellation, durable audit, new session, paid cancellation denied.');
  assert.equal((await db.doc('tenants/'+A).collection('billingReceipts').get()).size,1);
  assert.equal((await db.doc('tenants/'+B).get()).data().plan,'trial');
  await page.locator('#logout').click();await page.locator('#login-panel').waitFor({state:'visible'});assert.equal(await page.locator('#account').isHidden(),true);

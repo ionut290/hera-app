@@ -82,7 +82,7 @@ function validBillingPeriod(b,t) {
 }
 function validCommercialActivation(tid) {
  let d=request.resource.data; let b=d.billing; let t=resource.data;
- return t.get('plan','') in ['trial','full'] && d.plan=='full' && d.trial==false
+ return !('stripeTestSubscriptionId' in t) && t.get('plan','') in ['trial','full'] && d.plan=='full' && d.trial==false
   && d.diff(t).affectedKeys().hasOnly(['plan','trial','limits','billing','planUpdatedAt','planUpdatedBy','upgradeRequested','requestedTier'])
   && b.keys().hasOnly(['tier','amountCents','currency','periodStart','periods','reference','recordedAt','recordedBy','source'])
   && commercialTier(b.tier) && b.amountCents==commercialPrice(b.tier) && b.currency=='EUR'

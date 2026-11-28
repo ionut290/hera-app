@@ -40,20 +40,34 @@ try{
  assert.equal(new URL(page.url()).hostname,'checkout.stripe.com');
  // Stripe Checkout hosts payment inputs in cross-origin frames. Search the page
  // and its frames, but keep all entered data synthetic and test-only.
+ const describeCheckoutFields=async()=>{
+  const summary=[];
+  for(const [index,frame] of page.frames().entries()){
+   let inputs=[];try{inputs=await frame.locator('input').evaluateAll(ns=>ns.slice(0,20).map(n=>({type:n.type,name:n.getAttribute('name'),id:n.id,autocomplete:n.getAttribute('autocomplete'),ariaLabel:n.getAttribute('aria-label'),placeholder:n.getAttribute('placeholder')})));}catch{}
+   let host='unknown';try{host=new URL(frame.url()).hostname;}catch{}
+   summary.push({frame:index,host,inputs});
+  }
+  console.log('CHECKOUT_FIELDS '+JSON.stringify(summary));
+ };
  const fill=async(sel,value,required=true)=>{
-  const selectors=sel.split(',').map(s=>s.trim()).filter(Boolean),deadline=Date.now()+(required?45000:0);
+  const selectors=sel.split(',').map(s=>s.trim()).filter(Boolean),deadline=Date.now()+(required?45000:6000);
   do{
    for(const context of [page,...page.frames().filter(f=>f!==page.mainFrame())]){
     for(const selector of selectors){const el=context.locator(selector).first();try{if(await el.isVisible()){await el.fill(value,{timeout:5000});return true;}}catch{}}
    }
-   if(!required)return false;
    await page.waitForTimeout(400);
   }while(Date.now()<deadline);
+  if(!required)return false;
+  await describeCheckoutFields();
   throw new Error('CHECKOUT_FIELD_UNAVAILABLE');
  };
- await fill('#email, input[name=email], input[type=email], input[autocomplete=email]',email);
- await fill('#cardNumber, input[name=cardNumber], input[name=cardnumber], input[autocomplete=cc-number], input[aria-label*="card number" i]','4242424242424242');
+ stage='hosted-checkout-email';
+ await fill('#email, input[name=email], input[type=email], input[autocomplete=email], input[placeholder*="email" i]',email,false);
+ stage='hosted-checkout-card-number';
+ await fill('#cardNumber, input[name=cardNumber], input[name=cardnumber], input[autocomplete=cc-number], input[aria-label*="card number" i], input[placeholder*="1234" i]','4242424242424242');
+ stage='hosted-checkout-card-expiry';
  await fill('#cardExpiry, input[name=cardExpiry], input[autocomplete=cc-exp], input[aria-label*="expiration" i]','1230');
+ stage='hosted-checkout-card-cvc';
  await fill('#cardCvc, input[name=cardCvc], input[autocomplete=cc-csc], input[aria-label*="security code" i]','123');
  await fill('#billingName, input[name=billingName], input[autocomplete=cc-name]','Varga Sandbox QA',false);
  const country=page.locator('#billingCountry, select[name=billingCountry]').first();if(await country.isVisible())await country.selectOption('IT');

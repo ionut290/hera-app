@@ -22,8 +22,9 @@ export async function inspectSandboxCatalog(provider){
    const price=await provider.price(SANDBOX_PRICE_IDS[tier]);
    let problem=null;
    try{verifySandboxPrice(price,tier);}catch{problem='PRICE_MISMATCH';}
-   if(!problem&&price.lookup_key!==SANDBOX_LOOKUP_KEYS[tier])problem='LOOKUP_KEY_MISMATCH';
-   results.push({tier,amountCents:price?.unit_amount??null,currency:price?.currency??null,interval:price?.recurring?.interval??null,intervalCount:price?.recurring?.interval_count??null,testMode:price?.livemode===false,active:price?.active===true,lookupKeyMatches:price?.lookup_key===SANDBOX_LOOKUP_KEYS[tier],lookupKeyPresent:Boolean(price?.lookup_key),expectedLookupKey:SANDBOX_LOOKUP_KEYS[tier],problem});
+   // Checkout uses the immutable configured price ID, never a lookup key.
+   const warning=price?.lookup_key===SANDBOX_LOOKUP_KEYS[tier]?null:'LOOKUP_KEY_MISMATCH';
+   results.push({tier,amountCents:price?.unit_amount??null,currency:price?.currency??null,interval:price?.recurring?.interval??null,intervalCount:price?.recurring?.interval_count??null,testMode:price?.livemode===false,active:price?.active===true,lookupKeyMatches:price?.lookup_key===SANDBOX_LOOKUP_KEYS[tier],lookupKeyPresent:Boolean(price?.lookup_key),expectedLookupKey:SANDBOX_LOOKUP_KEYS[tier],warning,problem});
   }catch{results.push({tier,problem:'PROVIDER_READ_FAILED'});}
  }
  return results;

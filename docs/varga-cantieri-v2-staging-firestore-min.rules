@@ -1,0 +1,930 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+ function eligible() {
+ return request.auth != null && request.auth.token.get('email_verified', false) == true && request.auth.token.get('apple_review', false) == false;
+ }
+ function planWritable(tenantId) {
+  let t = get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+  return !('plan' in t) || (t.plan == 'full' && (!('billing' in t) ||
+    (t.billing.periodStart is timestamp && t.billing.periods is int
+     && t.billing.periods>0 && t.billing.periods<=120
+     && request.time < t.billing.periodStart + duration.value(t.billing.periods*30,'d')))) ||
+    (t.plan == 'trial' && t.trialStartedAt is timestamp
+     && t.trialDays == 30 && request.time < t.trialStartedAt + duration.value(30,'d'));
+ }
+ function activeMember(tenantId) {
+ return eligible() && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active' && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.status == 'active';
+ }
+ function companyAdmin(tenantId) {
+ return eligible()
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.demo == true
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active'
+  && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin'
+  && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.status == 'active';
+ }
+ match /tenantJoinCodes/{code} {
+  allow get: if eligible();
+  allow create: if eligible()
+    && getAfter(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)).data.ownerUid == request.auth.uid
+    && request.resource.data.status == 'active'
+    && request.resource.data.createdBy == request.auth.uid;
+ }
+function verifiedSuperAdmin() {
+ return eligible() && request.auth.token.get('superAdmin',false)==true;
+}
+function validTenantStatus(d) {
+ return d.status in ['active','suspended'] && d.name is string && d.name.size()>=2 && d.name.size()<=120;
+}
+function demoTenant(tid) {
+ return exists(/databases/$(database)/documents/tenants/$(tid))
+ && get(/databases/$(database)/documents/tenants/$(tid)).data.demo==true;
+}
+function paidRoleTransition(uid,tid) {
+ let t=get(/databases/$(database)/documents/tenants/$(tid)).data;
+ let next=getAfter(/databases/$(database)/documents/tenants/$(tid)).data;
+ let m=get(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data;
+ let n=getAfter(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data;
+ return t.plan=='full' && 'billing' in t && planWritable(tid)
+  && uid!=t.ownerUid && uid!=request.auth.uid && t.status=='active'
+  && m.status=='active' && n.status=='active' && m.demo==true && n.demo==true
+  && m.role in ['admin','employee'] && n.role in ['admin','employee'] && m.role!=n.role
+  && n.diff(m).affectedKeys().hasOnly(['role'])
+  && next.lastRoleUid==uid
+  && next.usage.diff(t.usage).affectedKeys().hasOnly(['admin','operatori'])
+  && next.usage.admin==t.usage.admin+(n.role=='admin'?1:-1)
+  && next.usage.operatori==t.usage.operatori+(n.role=='employee'?1:-1)
+  && next.usage.admin>=1 && next.usage.admin<=t.limits.admin
+  && next.usage.operatori>=0 && next.usage.operatori<=t.limits.operatori
+  && get(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.role==m.role
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.role==n.role
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.status=='active';
+}
+function validMemberChange(uid,tid) {
+ return verifiedSuperAdmin() && request.auth.uid!=uid && demoTenant(tid)
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role','status'])
+ && (!(get(/databases/$(database)/documents/tenants/$(tid)).data.get('plan','') in ['trial','full']) || request.resource.data.role==resource.data.role || paidRoleTransition(uid,tid))
+ && request.resource.data.role in ['admin','supervisor','employee']
+ && request.resource.data.status in ['active','suspended'];
+}
+function sameMembership(a,b) {
+ return a.role==b.role && a.status==b.status;
+}
+function planLimit(l,u,k,max) {
+ return l[k] is int && l[k]>=u[k] && l[k]>=0 && l[k]<=max;
+}
+function validFullPlan() {
+ let d=request.resource.data; let l=d.limits; let u=resource.data.usage;
+ return resource.data.get('plan','')=='full' && !('billing' in resource.data)
+  && d.plan=='full' && d.trial==false
+  && d.diff(resource.data).affectedKeys().hasOnly(['plan','trial','limits','planUpdatedAt','planUpdatedBy','upgradeRequested'])
+  && l.keys().hasAll(['commesse','impianti','admin','operatori','mezzi','squadre','storageBytes','personale'])
+  && l.keys().hasOnly(['commesse','impianti','admin','operatori','mezzi','squadre','storageBytes','personale'])
+  && l.admin==1 && u.admin==1
+  && planLimit(l,u,'commesse',100000) && l.commesse>=1
+  && planLimit(l,u,'impianti',1000000) && l.impianti>=1
+  && planLimit(l,u,'operatori',10000) && planLimit(l,u,'mezzi',10000)
+  && planLimit(l,u,'squadre',10000) && planLimit(l,u,'personale',10000)
+  && planLimit(l,u,'storageBytes',1000000000000)
+  && d.planUpdatedAt==request.time && d.planUpdatedBy==request.auth.uid && d.upgradeRequested==false;
+}
+function commercialLimits(tier) {
+ return tier=='starter' ? {'commesse':10,'impianti':300,'admin':1,'operatori':15,'personale':15,'mezzi':15,'squadre':5,'storageBytes':1000000000} :
+ tier=='professional' ? {'commesse':50,'impianti':2000,'admin':3,'operatori':50,'personale':50,'mezzi':50,'squadre':20,'storageBytes':5000000000} :
+ {'commesse':200,'impianti':10000,'admin':10,'operatori':200,'personale':200,'mezzi':200,'squadre':100,'storageBytes':20000000000};
+}
+function commercialPrice(tier) { return tier=='starter'?1990:tier=='professional'?3990:7990; }
+function commercialTier(tier) { return tier in ['starter','professional','business']; }
+function withinCommercialUsage(l,u) {
+ return l.admin>=u.admin && l.commesse>=u.commesse && l.impianti>=u.impianti
+  && l.operatori>=u.operatori && l.personale>=u.personale && l.mezzi>=u.mezzi
+  && l.squadre>=u.squadre && l.storageBytes>=u.storageBytes;
+}
+function oldPeriodActive(t) {
+ return 'billing' in t && t.billing.periodStart is timestamp && t.billing.periods is int
+  && request.time < t.billing.periodStart+duration.value(t.billing.periods*30,'d');
+}
+function validBillingPeriod(b,t) {
+ return oldPeriodActive(t) ?
+  (b.tier==t.billing.tier && b.periodStart==t.billing.periodStart && b.periods==t.billing.periods+1) :
+  (b.periodStart==request.time && b.periods==1);
+}
+function validCommercialActivation(tid) {
+ let d=request.resource.data; let b=d.billing; let t=resource.data;
+ return !('stripeTestSubscriptionId' in t) && !('stripeSandboxCheckoutId' in t) && t.get('plan','') in ['trial','full'] && d.plan=='full' && d.trial==false
+  && d.diff(t).affectedKeys().hasOnly(['plan','trial','limits','billing','planUpdatedAt','planUpdatedBy','upgradeRequested','requestedTier'])
+  && b.keys().hasOnly(['tier','amountCents','currency','periodStart','periods','reference','recordedAt','recordedBy','source'])
+  && commercialTier(b.tier) && b.amountCents==commercialPrice(b.tier) && b.currency=='EUR'
+   && b.source=='manual-confirmation' && b.reference is string && b.reference.matches('^[A-Za-z0-9_-]{6,80}
+ match /users/{uid}/memberships/{tenantId} {
+  allow get,list: if eligible() && request.auth.uid==uid;
+  allow create: if eligible()
+    && request.auth.uid == uid
+    && !exists(/databases/$(database)/documents/tenants/$(tenantId))
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid
+    && request.resource.data.tenantId == tenantId
+    && request.resource.data.role == 'admin'
+    && request.resource.data.status == 'active'
+    && request.resource.data.demo == true;
+  allow create: if companyAdmin(tenantId)
+    && get(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'pending'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'accepted'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.lastOperatorUid == uid
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.usage.operatori == get(/databases/$(database)/documents/tenants/$(tenantId)).data.usage.operatori + 1
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.role == 'employee'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.status == 'active'
+    && request.resource.data.tenantId == tenantId
+    && request.resource.data.role == 'employee'
+    && request.resource.data.status == 'active'
+    && request.resource.data.demo == true;
+ }
+ match /tenants/{tenantId} {
+  allow get: if canReadDemoCommesse();
+  match /members/{uid} {
+   allow get: if eligible() && request.auth.uid==uid && canReadDemoCommesse();
+  }
+function canCreateTrialTenant() {
+ return eligible()
+  && request.auth.uid == request.resource.data.ownerUid
+  && request.resource.data.demo == true
+  && request.resource.data.status == 'active'
+  && request.resource.data.plan == 'trial'
+  && request.resource.data.trial == true
+  && request.resource.data.trialStartedAt == request.time
+  && request.resource.data.trialDays == 30
+  && request.resource.data.limits == {'commesse':5,'impianti':100,'admin':1,'operatori':11,'mezzi':11,'squadre':2,'storageBytes':100000000,'personale':11}
+  && request.resource.data.usage == {'commesse':0,'impianti':0,'admin':1,'operatori':0,'mezzi':0,'squadre':0,'storageBytes':0,'personale':0}
+  && request.resource.data.keys().hasOnly(['name','status','demo','ownerUid','joinCode','plan','trial','trialStartedAt','trialDays','limits','usage','originalCreateEnabled','originalManualEnabled','originalArchivesEnabled','commesseWriteEnabled','snowCreateEnabled','fattoMode','createdAt','createdBy'])
+  && request.resource.data.name is string && request.resource.data.name.size()>=2 && request.resource.data.name.size()<=120
+  && request.resource.data.createdAt == request.time && request.resource.data.createdBy == request.auth.uid
+  && request.resource.data.joinCode.matches('VC-[A-Z0-9]{8}')
+  && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin'
+  && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == 'admin';
+}
+allow create: if canCreateTrialTenant();
+allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upgradeRequested','upgradeRequestedAt','requestedTier'])
+ && companyAdmin(tenantId) && resource.data.plan in ['trial','full']
+ && resource.data.ownerUid==request.auth.uid
+ && !('stripeSandboxCheckoutId' in resource.data) && !('stripeTestSubscriptionId' in resource.data)
+ && request.resource.data.requestedTier in ['starter','professional','business']
+ && request.resource.data.upgradeRequested==true
+ && request.resource.data.upgradeRequestedAt==request.time;
+function validOperatorApproval(uid) {
+ let before = get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+ let after = getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data;
+ let req = get(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data;
+ let approved = getAfter(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data;
+ return companyAdmin(tenantId)
+  && before.plan in ['trial','full']
+  && planWritable(tenantId)
+  && before.usage.operatori is int && before.usage.operatori >= 0
+  && before.limits.operatori is int && before.usage.operatori < before.limits.operatori
+  && after.usage.operatori == before.usage.operatori + 1
+  && after.lastOperatorUid == uid
+  && req.status == 'pending' && approved.status == 'accepted';
+}
+function validOperatorCounter() {
+ let uid = request.resource.data.lastOperatorUid;
+ return uid is string && uid.size()>0 && uid.size()<=128
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastOperatorUid'])
+  && request.resource.data.usage.diff(resource.data.usage).affectedKeys().hasOnly(['operatori'])
+  && validOperatorApproval(uid)
+  && !exists(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid))
+  && !exists(/databases/$(database)/documents/users/$(uid)/memberships/$(tenantId))
+  && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.role == 'employee'
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tenantId)).data.role == 'employee';
+}
+allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastOperatorUid']) && validOperatorCounter();
+match /members/{uid} {
+ allow create: if eligible()
+  && uid == request.auth.uid
+  && !exists(/databases/$(database)/documents/tenants/$(tenantId))
+  && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid
+  && request.resource.data.uid == request.auth.uid
+  && request.resource.data.role == 'admin'
+  && request.resource.data.status == 'active'
+  && request.resource.data.demo == true;
+ allow create: if validOperatorApproval(uid)
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tenantId)).data.role == 'employee'
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tenantId)).data.status == 'active'
+  && request.resource.data.uid == uid
+  && request.resource.data.role == 'employee'
+  && request.resource.data.status == 'active'
+  && request.resource.data.demo == true;
+}
+match /joinRequests/{uid} {
+ allow create: if eligible()
+  && uid == request.auth.uid
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active'
+  && planWritable(tenantId)
+  && request.resource.data.uid == request.auth.uid
+  && request.resource.data.status == 'pending'
+  && request.resource.data.email == request.auth.token.email
+  && request.resource.data.joinCode is string
+  && request.resource.data.joinCode.matches('VC-[A-Z0-9]{8}')
+  && get(/databases/$(database)/documents/tenantJoinCodes/$(request.resource.data.joinCode)).data.tenantId == tenantId
+  && get(/databases/$(database)/documents/tenantJoinCodes/$(request.resource.data.joinCode)).data.status == 'active';
+ allow get: if eligible() && (uid == request.auth.uid || companyAdmin(tenantId));
+ allow list: if companyAdmin(tenantId);
+ allow update: if companyAdmin(tenantId) && planWritable(tenantId)
+  && resource.data.status == 'pending'
+  && request.resource.data.uid == resource.data.uid
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewedAt','reviewedBy'])
+  && (request.resource.data.status == 'rejected' || (request.resource.data.status == 'accepted' && validOperatorApproval(uid)))
+  && request.resource.data.reviewedBy == request.auth.uid
+  && request.resource.data.reviewedAt == request.time;
+ allow delete: if false;
+}
+function managedPlan(t) { return t.get('plan','') in ['trial','full']; }
+function quotaArchive(q) {
+ return (q.kind=='commesse' && q.archive in ['commesse','neve_commesse','globalCommesse'])
+  || (q.kind=='impianti' && q.archive in ['commesse','neve_commesse','globalCommesse'])
+  || (q.kind=='mezzi' && q.archive in ['mezzi','neve_mezzi'])
+  || (q.kind=='personale' && q.archive in ['personale','neve_personale']);
+}
+function quotaNewDocument(q) {
+ return q.kind=='impianti'
+  ? (!exists(/databases/$(database)/documents/tenants/$(tenantId)/$(q.archive)/$(q.parent)/impianti/$(q.id))
+    && existsAfter(/databases/$(database)/documents/tenants/$(tenantId)/$(q.archive)/$(q.parent)/impianti/$(q.id)))
+  : (!exists(/databases/$(database)/documents/tenants/$(tenantId)/$(q.archive)/$(q.id))
+    && existsAfter(/databases/$(database)/documents/tenants/$(tenantId)/$(q.archive)/$(q.id)));
+}
+function quotaStep(before,after,q) {
+ return before.usage[q.kind] is int && before.usage[q.kind]>=0
+  && before.limits[q.kind] is int
+  && before.usage[q.kind]<before.limits[q.kind]
+  && after.usage[q.kind]==before.usage[q.kind]+1
+  && after.lastQuotaWrite==q;
+}
+function validQuotaCounter() {
+ let q=request.resource.data.lastQuotaWrite;
+ return companyAdmin(tenantId) && planWritable(tenantId) && managedPlan(resource.data)
+  && q is map && q.keys().hasAll(['kind','archive','id','parent']) && q.keys().hasOnly(['kind','archive','id','parent'])
+  && q.id is string && q.id.size()>0 && q.parent is string
+  && quotaArchive(q) && (q.kind=='impianti' ? q.parent.size()>0 : q.parent=='')
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastQuotaWrite'])
+  && request.resource.data.usage.diff(resource.data.usage).affectedKeys().hasOnly([q.kind])
+  && quotaStep(resource.data,request.resource.data,q) && quotaNewDocument(q);
+}
+function quotaCreate(kind,archive,id,parent) {
+ let before=get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+ let q={'kind':kind,'archive':archive,'id':id,'parent':parent};
+ return planWritable(tenantId) && (!managedPlan(before) ||
+  quotaStep(before,getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data,q));
+}
+allow update: if request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastQuotaWrite']) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastQuotaWrite']) && validQuotaCounter();
+match /{verdeCollection}/{documentId} {
+  allow get, list: if verdeCollection in [
+    'verdeLevatoRecords', 'verdeLevatoCommesse', 'verdeLevatoConfig'
+  ]
+  && activeMember(tenantId)
+  && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['admin', 'supervisor', 'employee']
+  && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.status == 'active'
+  && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.tenantId == tenantId
+  && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.demo == true;
+  allow create, update, delete: if false;
+}
+function canReadDemoCommesse() {
+ return activeMember(tenantId)
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.demo == true
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['admin','supervisor','employee']
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.status == 'active'
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.tenantId == tenantId
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role;
+}
+match /commesse/{commessaId} {
+ allow get, list: if canReadDemoCommesse();
+ allow create, update, delete: if false;
+ match /impianti/{impiantoId} {
+  allow get, list: if canReadDemoCommesse();
+  allow create, update, delete: if false;
+ }
+}
+function canManageCommesse() {
+ return canReadDemoCommesse() && planWritable(tenantId)
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin';
+}
+function canManagePrototypeCommesse() {
+ return canManageCommesse() && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('commesseWriteEnabled',false)==true;
+}
+function canManageCantieri() {
+ return canManagePrototypeCommesse();
+}
+function commessaKeys() {
+ return ['nome','codice','descrizione','cliente','committente','comune','indirizzo','attiva','tipo','createdAt','updatedAt','createdBy','updatedBy'];
+}
+function cantiereKeys() {
+ return ['id','commessaId','nome','denominazione','comune','indirizzo','descrizione','coordinate','latitudine','longitudine','gpsX','gpsY','tipologia','note','stato','createdAt','updatedAt','createdBy','updatedBy'];
+}
+match /commesse/{commessaId} {
+ allow create: if commessaId != 'sfalcio-cobo' && canManagePrototypeCommesse() && quotaCreate('commesse','commesse',commessaId,'')
+ && request.resource.data.keys().hasOnly(commessaKeys())
+ && request.resource.data.keys().hasAll(['nome','createdAt','createdBy'])
+ && request.resource.data.nome is string && request.resource.data.nome.size()>0
+ && request.resource.data.createdBy==request.auth.uid
+ && request.resource.data.createdAt==request.time;
+ allow update: if commessaId != 'sfalcio-cobo' && canManagePrototypeCommesse()
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(commessaKeys().toSet().difference(['createdAt','createdBy'].toSet()))
+ && request.resource.data.createdBy==resource.data.createdBy
+ && request.resource.data.createdAt==resource.data.createdAt
+ && request.resource.data.updatedBy==request.auth.uid
+ && request.resource.data.updatedAt==request.time;
+ allow get,list: if canReadDemoCommesse();
+ allow delete: if false;
+ match /impianti/{impiantoId} {
+  allow create: if commessaId != 'sfalcio-cobo' && quotaCreate('impianti','commesse',impiantoId,commessaId) && canManageCantieri()
+  && request.resource.data.keys().hasOnly(cantiereKeys())
+  && request.resource.data.keys().hasAll(['id','commessaId','createdAt','createdBy'])
+  && request.resource.data.id==impiantoId
+  && request.resource.data.commessaId==commessaId
+  && request.resource.data.createdBy==request.auth.uid
+  && request.resource.data.createdAt==request.time
+  && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId))
+  && (!('stato' in request.resource.data) || request.resource.data.stato in ['da_fare','in_lavorazione']);
+  allow update: if commessaId != 'sfalcio-cobo' && canManageCantieri()
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(cantiereKeys().toSet().difference(['id','commessaId','createdAt','createdBy','stato'].toSet()))
+  && request.resource.data.id==resource.data.id
+  && request.resource.data.commessaId==resource.data.commessaId
+  && request.resource.data.createdAt==resource.data.createdAt
+  && request.resource.data.createdBy==resource.data.createdBy;
+  allow get,list: if canReadDemoCommesse();
+  allow delete: if false;
+ }
+}
+function originalCommessaCreate(archive) {
+ let d=request.resource.data;
+ return canManageCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalCreateEnabled',false)==true
+ && d.keys().hasOnly(['nome','codice','excelModelVersion','priceListVersion','workItemsModelVersion','percentualeRibassoGenerale','excelModelActivatedAt','excelModelActivatedBy','nextImpiantoNumber','parentCommessaId','creatoDa','createdAt'])
+ && d.keys().hasAll(['nome','codice','excelModelVersion','priceListVersion','workItemsModelVersion','percentualeRibassoGenerale','excelModelActivatedAt','excelModelActivatedBy','nextImpiantoNumber','parentCommessaId','creatoDa','createdAt'])
+ && d.nome is string && d.nome.matches('.*[^\\s].*') && d.nome.size()<=200
+ && d.codice is string && d.codice.size()<=200
+ && d.excelModelVersion==2 && d.priceListVersion==2 && d.workItemsModelVersion==2
+ && d.percentualeRibassoGenerale==0.01 && d.nextImpiantoNumber==1
+ && d.excelModelActivatedAt==request.time && d.createdAt==request.time
+ && d.creatoDa==request.auth.token.email && d.excelModelActivatedBy==request.auth.token.email
+ && (d.parentCommessaId==null || (d.parentCommessaId is string && exists(/databases/$(database)/documents/tenants/$(tenantId)/$(archive)/$(d.parentCommessaId))));
+}
+function validOriginalImpianto(d,commessaId) {
+ return d.keys().hasOnly(['denominazione','idSap','tipologiaImpianto','comune','indirizzo','gpsY','gpsX','codicePrezzo','area','dittaEsecutrice','note','stato','done','doneAt','doneBy','numeroProgressivo','commessaId','createdAt','updatedAt','updatedByUid','updatedByName'])
+ && d.keys().hasAll(['denominazione','idSap','tipologiaImpianto','comune','indirizzo','gpsY','gpsX','codicePrezzo','area','dittaEsecutrice','note','stato','done','doneAt','doneBy','numeroProgressivo','commessaId','createdAt','updatedAt','updatedByUid','updatedByName'])
+ && d.denominazione is string && d.denominazione.matches('.*[^\\s].*') && d.denominazione.size()<=250
+ && d.idSap is string && d.idSap.size()<=200
+ && d.tipologiaImpianto=='' && d.comune=='' && d.indirizzo=='' && d.gpsY==null && d.gpsX==null
+ && d.codicePrezzo=='' && d.area=='' && d.dittaEsecutrice=='' && d.note==''
+ && d.stato=='DA FARE' && d.done==false && d.doneAt==null && d.doneBy==''
+ && (d.numeroProgressivo==null || (d.numeroProgressivo is int && d.numeroProgressivo>0))
+ && d.commessaId==commessaId && d.createdAt==request.time && d.updatedAt==request.time
+ && d.updatedByUid==request.auth.uid && d.updatedByName is string && d.updatedByName.size()<=250;
+}
+function manualPlantKeys() {
+ return ['distretto','idSap','denominazione','comune','indirizzo','voceRiferimento','codicePrezzo','sfalci','areaMq','frequenzaAnnua','tipologiaIntervento','lavorazioniRichieste','gpsY','gpsX','numeroProgressivo','sortOrder','hasOrdinario','hasStraordinario','tipoManutenzione','done','doneAt','doneBy','createdAt'];
+}
+function validManualPrices(d) {
+ return d.codicePrezzo is string && d.codicePrezzo.size()<=1000
+ && d.voceRiferimento is string && d.voceRiferimento.size()<=2000
+ && d.tipologiaIntervento is string && d.tipologiaIntervento.size()<=2000
+ && d.lavorazioniRichieste is string && d.lavorazioniRichieste.size()<=2000
+ && d.frequenzaAnnua is string && d.frequenzaAnnua.size()<=2000
+ && d.hasOrdinario is bool && d.hasStraordinario is bool
+ && d.tipoManutenzione==(d.hasOrdinario?(d.hasStraordinario?'Ordinaria + Straordinaria':'Ordinaria'):(d.hasStraordinario?'Straordinaria':'Non specificata'));
+}
+function validManualPlant(d) {
+ return d.keys().hasOnly(manualPlantKeys()) && d.keys().hasAll(manualPlantKeys())
+ && d.denominazione is string && d.denominazione.matches('.*[^\\s].*') && d.denominazione.size()<=250
+ && d.comune is string && d.comune.size()<=250 && d.indirizzo is string && d.indirizzo.size()<=500
+ && d.distretto=='' && d.idSap=='' && d.voceRiferimento=='' && d.sfalci=='' && d.areaMq==null
+ && d.frequenzaAnnua=='' && d.tipologiaIntervento=='' && d.lavorazioniRichieste==''
+ && d.gpsY==null && d.gpsX==null && d.done==false && d.doneAt==null && d.doneBy==''
+ && d.numeroProgressivo is int && d.numeroProgressivo>0 && d.sortOrder==d.numeroProgressivo
+ && d.createdAt==request.time && validManualPrices(d);
+}
+function originalPlantCreate(commessaId,impiantoId) {
+ let tenant=get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+ let d=request.resource.data;
+ return commessaId!='sfalcio-cobo' && quotaCreate('impianti','commesse',impiantoId,commessaId)
+ && canManageCommesse()
+ && tenant.get('originalCreateEnabled',false)==true
+ && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId))
+ && (validOriginalImpianto(d,commessaId)
+   || (tenant.get('originalManualEnabled',false)==true && validManualPlant(d)));
+}
+match /commesse/{commessaId} {
+ allow create: if commessaId!='sfalcio-cobo' && originalCommessaCreate('commesse') && quotaCreate('commesse','commesse',commessaId,'');
+ match /impianti/{impiantoId} {
+  allow create: if originalPlantCreate(commessaId,impiantoId);
+ }
+}
+ function snowCreateAllowed() {
+  return canManageCommesse()
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalArchivesEnabled',false)==true
+  && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('snowCreateEnabled',false)==true;
+ }
+ function originalSnowRoadCreate(commessaId) {
+  let d=request.resource.data;
+  let keys=['denominazione','indirizzo','descrizioneVia','tipologiaImpianto','codicePrezzo','snowRoad','roadStatus','routePath','done','doneAt','doneBy','sortOrder','createdAt','createdBy'];
+  return snowCreateAllowed()
+   && exists(/databases/$(database)/documents/tenants/$(tenantId)/neve_commesse/$(commessaId))
+   && d.keys().hasAll(keys) && d.keys().hasOnly(keys)
+   && d.denominazione is string && d.denominazione.size()>0 && d.denominazione.size()<=500
+   && d.indirizzo==d.denominazione && d.descrizioneVia==d.denominazione
+   && d.tipologiaImpianto=='Via neve' && d.codicePrezzo=='NEVE-STRADA'
+   && d.snowRoad==true && d.roadStatus=='todo' && d.routePath==[]
+   && d.done==false && d.doneAt==null && d.doneBy==''
+   && d.sortOrder is int && d.sortOrder>0
+   && d.createdAt==request.time && d.createdBy==request.auth.token.email;
+ }
+ match /neve_commesse/{commessaId} {
+  allow create: if quotaCreate('commesse','neve_commesse',commessaId,'') && snowCreateAllowed() && originalCommessaCreate('neve_commesse');
+  match /impianti/{impiantoId} {
+   allow create: if quotaCreate('impianti','neve_commesse',impiantoId,commessaId) && originalSnowRoadCreate(commessaId);
+  }
+ }
+function originalManualAllowed() {
+ return canManageCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalCreateEnabled',false)==true
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalManualEnabled',false)==true;
+}
+function manualPlantMerge() {
+ return originalManualAllowed()
+ && resource.data.keys().hasOnly(manualPlantKeys()) && resource.data.keys().hasAll(manualPlantKeys())
+ && resource.data.done==false
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['codicePrezzo','voceRiferimento','tipologiaIntervento','lavorazioniRichieste','frequenzaAnnua','hasOrdinario','hasStraordinario','tipoManutenzione'])
+ && validManualPrices(request.resource.data);
+}
+match /commesse/{commessaId} {
+ allow update: if commessaId!='sfalcio-cobo' && originalManualAllowed()
+ && resource.data.get('excelModelVersion',0)==2
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nextImpiantoNumber'])
+ && request.resource.data.nextImpiantoNumber is int
+ && request.resource.data.nextImpiantoNumber>=resource.data.nextImpiantoNumber
+ && request.resource.data.nextImpiantoNumber<=resource.data.nextImpiantoNumber+1;
+ match /impianti/{impiantoId} {
+  allow update: if commessaId!='sfalcio-cobo' && manualPlantMerge();
+ }
+}
+function priceListReadable(commessaId) {
+ return canReadDemoCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('priceListEnabled',false)==true
+ && exists(/databases/$(database)/documents/tenants/$(tenantId)/commesse/$(commessaId));
+}
+function priceListWritable(commessaId) {
+ return priceListReadable(commessaId) && canManageCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('priceListWriteEnabled',false)==true;
+}
+function priceFields() {
+ return ['commessaId','numeroProgressivo','codiceVoce','descrizione','unitaMisura','prezzoBase','percentualeRibasso','prezzoRibassato','note','createdAt','createdBy','updatedAt','updatedBy','updatedByName'];
+}
+function priceValid(commessaId) {
+ let d=request.resource.data;
+ return d.keys().hasAll(priceFields()) && d.keys().hasOnly(priceFields())
+ && d.commessaId==commessaId && d.numeroProgressivo is int && d.numeroProgressivo>0
+ && d.codiceVoce is string && d.codiceVoce.size()<=150
+ && d.descrizione is string && d.descrizione.size()<=2000
+ && d.unitaMisura is string && d.unitaMisura.size()<=100
+ && d.note is string && d.note.size()<=3000
+ && (d.prezzoBase==null || (d.prezzoBase is number && d.prezzoBase>=0 && d.prezzoBase<=100000000))
+ && (d.percentualeRibasso==null || (d.percentualeRibasso is number && d.percentualeRibasso>=0 && d.percentualeRibasso<=1))
+ && (d.prezzoRibassato==null || (d.prezzoBase is number && d.prezzoRibassato is number && d.prezzoRibassato>=0 && d.prezzoRibassato<=d.prezzoBase))
+ && d.updatedAt==request.time && d.updatedBy==request.auth.uid
+ && d.updatedByName is string && d.updatedByName.size()<=250;
+}
+match /commesse/{commessaId} {
+ allow update: if priceListWritable(commessaId)
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['percentualeRibassoGenerale','updatedAt','updatedBy','updatedByName'])
+ && request.resource.data.percentualeRibassoGenerale is number
+ && request.resource.data.percentualeRibassoGenerale>=0 && request.resource.data.percentualeRibassoGenerale<=1
+ && request.resource.data.updatedAt==request.time && request.resource.data.updatedBy==request.auth.uid
+ && request.resource.data.updatedByName is string && request.resource.data.updatedByName.size()<=250;
+ match /prezziario/{priceId} {
+  allow get,list: if priceListReadable(commessaId);
+  allow create: if priceListWritable(commessaId) && priceValid(commessaId)
+  && request.resource.data.createdAt==request.time && request.resource.data.createdBy==request.auth.uid;
+  allow update: if priceListWritable(commessaId) && priceValid(commessaId)
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['codiceVoce','descrizione','unitaMisura','prezzoBase','percentualeRibasso','prezzoRibassato','note','updatedAt','updatedBy','updatedByName']);
+  allow delete: if false;
+ }
+}
+function canReadOriginalArchives() {
+ return canReadDemoCommesse()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('originalArchivesEnabled',false)==true;
+}
+function originalArchiveAdmin() {
+ return canReadOriginalArchives()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role=='admin';
+}
+match /{archive}/{id} {
+ allow get,list: if canReadOriginalArchives() && archive in [
+ 'personale','mezzi','neve_personale','neve_mezzi','squadreCommesse','squadreStorico','neve_squadre','neve_squadre_storico',
+ 'oreReports','oreApprovalRequests','neve_ore','neve_ore_richieste','commessaResources','oreLocks'];
+}
+match /neve_commesse/{id} {
+ allow get,list: if canReadOriginalArchives();
+ match /impianti/{plantId} { allow get,list: if canReadOriginalArchives(); }
+}
+match /globalCommesse/{id} {
+ allow get,list: if canReadOriginalArchives();
+ match /impianti/{plantId} { allow get,list: if canReadOriginalArchives(); }
+}
+match /programmazioni/{id} {
+ allow get,list: if originalArchiveAdmin() || (canReadOriginalArchives()
+ && resource.data.operatoriCoinvolti is list
+ && (request.auth.token.get('email','') in resource.data.operatoriCoinvolti
+ || (request.auth.token.get('name','')!='' && request.auth.token.get('name','') in resource.data.operatoriCoinvolti)));
+}
+match /calendarEvents/{id} {
+ allow get,list: if canReadOriginalArchives() && resource.data.type is string && (
+ resource.data.type!='SCADENZA_DOCUMENTO'
+ || resource.data.get('ownerUserId','')==request.auth.uid
+ || resource.data.get('sharedToAll',false)==true
+ || request.auth.uid in resource.data.get('authorizedUserIds',[]));
+}
+match /appConfig/{configId} {
+ allow get: if canReadOriginalArchives() && configId in ['activeCommesse','squadreView','neveSquadreView'];
+}
+function originalRegistryArchive(name) {
+ return name in ['personale','mezzi','neve_personale','neve_mezzi'];
+}
+function originalRegistryAdmin() {
+ return canReadOriginalArchives() && planWritable(tenantId)
+  && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role=='admin';
+}
+match /{registry}/{recordId} {
+ allow create: if originalRegistryArchive(registry) && originalRegistryAdmin() && quotaCreate(registry in ['mezzi','neve_mezzi']?'mezzi':'personale',registry,recordId,'');
+ allow update: if originalRegistryArchive(registry) && originalRegistryAdmin();
+ allow delete: if originalRegistryArchive(registry) && originalRegistryAdmin() && !managedPlan(get(/databases/$(database)/documents/tenants/$(tenantId)).data);
+}
+match /{helper}/{recordId} {
+ allow create, update, delete: if helper in [
+  'registryImportBackups','operatorCommessaHistory','operatorUserLinkHistory','userOperatorLinks'
+ ] && originalRegistryAdmin();
+}
+function squadArchive(a) { return a in ['squadreCommesse','neve_squadre']; }
+function squadHistory(a) { return a=='squadreCommesse'?'squadreStorico':'neve_squadre_storico'; }
+function squadCurrent(a) { return a=='squadreStorico'?'squadreCommesse':'neve_squadre'; }
+function squadJob(a) { return a=='squadreCommesse'?'commesse':'neve_commesse'; }
+function squadPriorCount(a,id) {
+ return exists(/databases/$(database)/documents/tenants/$(tenantId)/$(a)/$(id))
+  ? get(/databases/$(database)/documents/tenants/$(tenantId)/$(a)/$(id)).data.squadre.size() : 0;
+}
+function squadValid(a,id,d) {
+ let job=squadJob(a);
+ return d.keys().hasOnly(['commessaId','commessaNome','riferimentoData','squadre','updatedAt','updatedBy','existingSquadreCountBeforeSave'])
+  && d.commessaId==id && d.commessaNome is string && d.commessaNome.size()<=250
+  && d.riferimentoData is string && d.riferimentoData.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}
+ }
+ match /{document=**} { allow read, write: if false; }
+ }
+}
+)
+  && b.periods is int && b.periods>=1 && b.periods<=120 && validBillingPeriod(b,t)
+  && b.recordedAt==request.time && b.recordedBy==request.auth.uid
+  && d.limits==commercialLimits(b.tier) && withinCommercialUsage(d.limits,t.usage)
+  && d.planUpdatedAt==request.time && d.planUpdatedBy==request.auth.uid
+  && d.upgradeRequested==false && d.requestedTier==null
+  && !exists(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference))
+  && getAfter(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference)).data==b;
+}
+match /tenants/{tid} {
+ allow get,list: if verifiedSuperAdmin();
+ allow create: if verifiedSuperAdmin() && tid.matches('demo-[a-z0-9-]{3,59}')
+ && request.resource.data.keys().hasAll(['name','status','demo','createdAt'])
+ && request.resource.data.keys().hasOnly(['name','status','demo','createdAt'])
+ && request.resource.data.demo==true && request.resource.data.status=='active'
+ && validTenantStatus(request.resource.data) && request.resource.data.createdAt==request.time;
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true && validFullPlan();
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true && validCommercialActivation(tid);
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastRoleUid'])
+  && request.resource.data.lastRoleUid is string
+  && paidRoleTransition(request.resource.data.lastRoleUid,tid);
+ match /billingReceipts/{reference} {
+  allow get,list: if verifiedSuperAdmin();
+  allow create: if verifiedSuperAdmin() && demoTenant(tid)
+   && request.resource.data.reference==reference && request.resource.data.recordedAt==request.time
+   && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.billing==request.resource.data
+   && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.plan=='full'
+   && get(/databases/$(database)/documents/tenants/$(tid)).data.get('billing',{}).get('reference','')!=reference;
+  allow update,delete: if false;
+ }
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','status'])
+ && validTenantStatus(request.resource.data);
+ match /members/{uid} {
+  allow get,list: if verifiedSuperAdmin();
+  allow update: if validMemberChange(uid,tid) && resource.data.demo==true
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.tenantId==tid
+  && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data);
+ }
+}
+match /users/{uid}/memberships/{tid} {
+ allow get,list: if verifiedSuperAdmin();
+ allow update: if validMemberChange(uid,tid) && resource.data.tenantId==tid
+ && get(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data.demo==true
+ && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data);
+}
+ match /users/{uid}/memberships/{tenantId} {
+  allow get,list: if eligible() && request.auth.uid==uid;
+  allow create: if eligible()
+    && request.auth.uid == uid
+    && !exists(/databases/$(database)/documents/tenants/$(tenantId))
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid
+    && request.resource.data.tenantId == tenantId
+    && request.resource.data.role == 'admin'
+    && request.resource.data.status == 'active'
+    && request.resource.data.demo == true;
+  allow create: if companyAdmin(tenantId)
+    && get(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'pending'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'accepted'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.lastOperatorUid == uid
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.usage.operatori == get(/databases/$(database)/documents/tenants/$(tenantId)).data.usage.operatori + 1
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.role == 'employee'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.status == 'active'
+    && request.resource.data.tenantId == tenantId
+    && request.resource.data.role == 'employee'
+    && request.resource.data.status == 'active'
+    && request.resource.data.demo == true;
+ }
+ match /tenants/{tenantId} {
+  allow get: if canReadDemoCommesse();
+  match /members/{uid} {
+   allow get: if eligible() && request.auth.uid==uid && canReadDemoCommesse();
+  }
+ }
+ match /{document=**} { allow read, write: if false; }
+ }
+}
+)
+  && d.squadre is list && d.squadre.size()>0 && d.squadre.size()<=100
+  && d.existingSquadreCountBeforeSave is int && d.existingSquadreCountBeforeSave>=0
+  && d.updatedAt==request.time && d.updatedBy==request.auth.token.email
+  && exists(/databases/$(database)/documents/tenants/$(tenantId)/$(job)/$(id));
+}
+function squadCounterCheck(q) {
+ let d=getAfter(/databases/$(database)/documents/tenants/$(tenantId)/$(q.archive)/$(q.id)).data;
+ let a=squadHistory(q.archive);
+ let hId=q.date+'__'+q.id;
+ let h=getAfter(/databases/$(database)/documents/tenants/$(tenantId)/$(a)/$(hId)).data;
+ let old=resource.data.usage.squadre;
+ let n=request.resource.data.usage.squadre;
+ return squadValid(q.archive,q.id,d) && d.riferimentoData==q.date
+  && old is int && old>=0 && n is int
+  && n==old-squadPriorCount(q.archive,q.id)+d.squadre.size()
+  && n>=0 && n<=resource.data.limits.squadre
+  && h.dateKey==q.date && h.diff(d).affectedKeys().hasOnly(['dateKey']);
+}
+function squadCounterUpdate() {
+ let q=request.resource.data.lastSquadraWrite;
+ return q.keys().hasOnly(['archive','id','date','at']) && squadArchive(q.archive)
+  && q.id is string && q.date is string && q.at==request.time
+  && q!=resource.data.get('lastSquadraWrite',{})
+  && request.resource.data.usage.diff(resource.data.usage).affectedKeys().hasOnly(['squadre'])
+  && companyAdmin(tenantId) && planWritable(tenantId) && managedPlan(resource.data)
+  && resource.data.get('originalArchivesEnabled',false)==true && squadCounterCheck(q);
+}
+allow update: if request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastSquadraWrite'])
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastSquadraWrite'])
+ && squadCounterUpdate();
+function squadMarker(a,id,date) {
+ let b=get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('lastSquadraWrite',{});
+ let n=getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.get('lastSquadraWrite',{});
+ return n=={'archive':a,'id':id,'date':date,'at':request.time} && b!=n;
+}
+match /{archive}/{id} {
+ allow create,update: if squadArchive(archive) && eligible()
+  && request.resource.data.updatedAt==request.time
+  && squadMarker(archive,id,request.resource.data.riferimentoData);
+ allow create,update: if archive in ['squadreStorico','neve_squadre_storico'] && eligible()
+  && request.resource.data.updatedAt==request.time
+  && id==request.resource.data.dateKey+'__'+request.resource.data.commessaId
+  && squadMarker(squadCurrent(archive),request.resource.data.commessaId,request.resource.data.dateKey);
+}
+function canReadDemoFatto() {
+ return activeMember(tenantId)
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.demo == true
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.fattoMode == 'configurable-demo'
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role in ['admin','supervisor','employee']
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.status == 'active'
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.tenantId == tenantId
+ && get(/databases/$(database)/documents/users/$(request.auth.uid)/memberships/$(tenantId)).data.role == get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role;
+}
+function canConfigureDemoFatto() {
+ return canReadDemoFatto() && planWritable(tenantId) && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin';
+}
+function validFattoPolicy() {
+ let d = request.resource.data;
+ let t = get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+ return d.keys().hasAll(['version','actions','updatedAt','updatedBy'])
+ && d.keys().hasOnly(['version','actions','updatedAt','updatedBy'])
+ && d.version is int && d.version >= 1 && d.version <= 9007199254740991
+ && d.actions is list && d.actions.size() >= 1 && d.actions.size() <= 4
+ && d.actions[0] == 'saveCompletion'
+ && d.actions.toSet().size() == d.actions.size()
+ && d.actions.hasOnly(['saveCompletion','moveToCompleted','openWhatsApp','exportSheet'])
+ && (!d.actions.hasAny(['openWhatsApp']) || t.get('whatsappConfigured',false) == true)
+ && (!d.actions.hasAny(['exportSheet']) || t.get('sheetConfigured',false) == true)
+ && d.updatedAt == request.time && d.updatedBy == request.auth.uid;
+}
+match /fattoSettings/{settingId} {
+ allow get: if settingId == 'workflow' && canReadDemoFatto();
+ allow list, delete: if false;
+ allow create: if settingId == 'workflow' && canConfigureDemoFatto() && validFattoPolicy() && request.resource.data.version == 1;
+ allow update: if settingId == 'workflow' && canConfigureDemoFatto() && validFattoPolicy() && request.resource.data.version == resource.data.version + 1;
+}
+match /fattoExecutions/{operationId} {
+ allow get: if canReadDemoFatto();
+ allow list, create, update, delete: if false;
+}
+function canWriteCobo() {
+ return canReadDemoCommesse() && planWritable(tenantId)
+ && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('coboWriteEnabled',false) == true;
+}
+function coboFields() {
+ return ['id','commessaId','idSap','denominazione','nome','comune','indirizzo','descrizioneVia','area','competenza','gpsY','gpsX','latitudine','longitudine','coordinate','tipologia','tipologiaImpianto','tipologiaIntervento','lavorazioniRichieste','codicePrezzo','voceRiferimento','hasOrdinario','hasStraordinario','tipoManutenzione','sfalci','sfalciMq','note','noteImpianto','noteOperatore','hasNote','sfalcioCobo','parcoCobo','parcoCodvia','parcoNomevia','parcoQuartiere','parcoConfiniDisponibili','parcoDettagliPrimiSei','parcoFonte','parcoDataset','schedaVersione','updatedByUid','updatedByName','updatedAt'];
+}
+match /commesse/sfalcio-cobo/impianti/{plantId} {
+ function validCobo() {
+  let d=request.resource.data;
+  return canWriteCobo() && plantId.matches('^cobo-parco-[a-z0-9-]{1,100}
+ }
+ match /{document=**} { allow read, write: if false; }
+ }
+}
+)
+  && b.periods is int && b.periods>=1 && b.periods<=120 && validBillingPeriod(b,t)
+  && b.recordedAt==request.time && b.recordedBy==request.auth.uid
+  && d.limits==commercialLimits(b.tier) && withinCommercialUsage(d.limits,t.usage)
+  && d.planUpdatedAt==request.time && d.planUpdatedBy==request.auth.uid
+  && d.upgradeRequested==false && d.requestedTier==null
+  && !exists(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference))
+  && getAfter(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference)).data==b;
+}
+match /tenants/{tid} {
+ allow get,list: if verifiedSuperAdmin();
+ allow create: if verifiedSuperAdmin() && tid.matches('demo-[a-z0-9-]{3,59}')
+ && request.resource.data.keys().hasAll(['name','status','demo','createdAt'])
+ && request.resource.data.keys().hasOnly(['name','status','demo','createdAt'])
+ && request.resource.data.demo==true && request.resource.data.status=='active'
+ && validTenantStatus(request.resource.data) && request.resource.data.createdAt==request.time;
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true && validFullPlan();
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true && validCommercialActivation(tid);
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastRoleUid'])
+  && request.resource.data.lastRoleUid is string
+  && paidRoleTransition(request.resource.data.lastRoleUid,tid);
+ match /billingReceipts/{reference} {
+  allow get,list: if verifiedSuperAdmin();
+  allow create: if verifiedSuperAdmin() && demoTenant(tid)
+   && request.resource.data.reference==reference && request.resource.data.recordedAt==request.time
+   && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.billing==request.resource.data
+   && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.plan=='full'
+   && get(/databases/$(database)/documents/tenants/$(tid)).data.get('billing',{}).get('reference','')!=reference;
+  allow update,delete: if false;
+ }
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','status'])
+ && validTenantStatus(request.resource.data);
+ match /members/{uid} {
+  allow get,list: if verifiedSuperAdmin();
+  allow update: if validMemberChange(uid,tid) && resource.data.demo==true
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.tenantId==tid
+  && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data);
+ }
+}
+match /users/{uid}/memberships/{tid} {
+ allow get,list: if verifiedSuperAdmin();
+ allow update: if validMemberChange(uid,tid) && resource.data.tenantId==tid
+ && get(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data.demo==true
+ && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data);
+}
+ match /users/{uid}/memberships/{tenantId} {
+  allow get,list: if eligible() && request.auth.uid==uid;
+  allow create: if eligible()
+    && request.auth.uid == uid
+    && !exists(/databases/$(database)/documents/tenants/$(tenantId))
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid
+    && request.resource.data.tenantId == tenantId
+    && request.resource.data.role == 'admin'
+    && request.resource.data.status == 'active'
+    && request.resource.data.demo == true;
+  allow create: if companyAdmin(tenantId)
+    && get(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'pending'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'accepted'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.lastOperatorUid == uid
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.usage.operatori == get(/databases/$(database)/documents/tenants/$(tenantId)).data.usage.operatori + 1
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.role == 'employee'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.status == 'active'
+    && request.resource.data.tenantId == tenantId
+    && request.resource.data.role == 'employee'
+    && request.resource.data.status == 'active'
+    && request.resource.data.demo == true;
+ }
+ match /tenants/{tenantId} {
+  allow get: if canReadDemoCommesse();
+  match /members/{uid} {
+   allow get: if eligible() && request.auth.uid==uid && canReadDemoCommesse();
+  }
+ }
+ match /{document=**} { allow read, write: if false; }
+ }
+}
+)
+  && d.id==plantId && d.commessaId=='sfalcio-cobo' && d.sfalcioCobo==true
+  && d.updatedByUid==request.auth.uid && d.updatedAt==request.time
+  && existsAfter(/databases/$(database)/documents/tenants/$(tenantId)/commesse/sfalcio-cobo);
+ }
+ allow create: if quotaCreate('impianti','commesse',plantId,'sfalcio-cobo') && validCobo() && request.resource.data.keys().hasOnly(coboFields().concat(['stato','done','doneAt','doneBy','createdAt']))
+ && request.resource.data.stato=='da_fare' && request.resource.data.done==false
+ && request.resource.data.doneAt==null && request.resource.data.doneBy=='' && request.resource.data.createdAt==request.time;
+ allow update: if validCobo() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(coboFields());
+ allow delete: if false;
+}
+match /commesse/sfalcio-cobo {
+ allow create: if quotaCreate('commesse','commesse','sfalcio-cobo','') && canWriteCobo()
+ && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role=='admin'
+ && request.resource.data == {'nome':'Sfalcio COBO','codice':'COBO-SFALCIO','speciale':true,'tipoSpeciale':'SFALCIO_COBO','verdeBologna':true,'parchiGiardini':true,'attiva':true,'parentCommessaId':null,'excelModelVersion':2,'priceListVersion':2,'workItemsModelVersion':2,'percentualeRibassoGenerale':0.01,'nextImpiantoNumber':1,'creatoDa':request.auth.token.email,'createdAt':request.time};
+ allow update, delete: if false;
+}
+ }
+ match /{document=**} { allow read, write: if false; }
+ }
+}
+)
+  && b.periods is int && b.periods>=1 && b.periods<=120 && validBillingPeriod(b,t)
+  && b.recordedAt==request.time && b.recordedBy==request.auth.uid
+  && d.limits==commercialLimits(b.tier) && withinCommercialUsage(d.limits,t.usage)
+  && d.planUpdatedAt==request.time && d.planUpdatedBy==request.auth.uid
+  && d.upgradeRequested==false && d.requestedTier==null
+  && !exists(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference))
+  && getAfter(/databases/$(database)/documents/tenants/$(tid)/billingReceipts/$(b.reference)).data==b;
+}
+match /tenants/{tid} {
+ allow get,list: if verifiedSuperAdmin();
+ allow create: if verifiedSuperAdmin() && tid.matches('demo-[a-z0-9-]{3,59}')
+ && request.resource.data.keys().hasAll(['name','status','demo','createdAt'])
+ && request.resource.data.keys().hasOnly(['name','status','demo','createdAt'])
+ && request.resource.data.demo==true && request.resource.data.status=='active'
+ && validTenantStatus(request.resource.data) && request.resource.data.createdAt==request.time;
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true && validFullPlan();
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true && validCommercialActivation(tid);
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastRoleUid'])
+  && request.resource.data.lastRoleUid is string
+  && paidRoleTransition(request.resource.data.lastRoleUid,tid);
+ match /billingReceipts/{reference} {
+  allow get,list: if verifiedSuperAdmin();
+  allow create: if verifiedSuperAdmin() && demoTenant(tid)
+   && request.resource.data.reference==reference && request.resource.data.recordedAt==request.time
+   && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.billing==request.resource.data
+   && getAfter(/databases/$(database)/documents/tenants/$(tid)).data.plan=='full'
+   && get(/databases/$(database)/documents/tenants/$(tid)).data.get('billing',{}).get('reference','')!=reference;
+  allow update,delete: if false;
+ }
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true
+ && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','status'])
+ && validTenantStatus(request.resource.data);
+ match /members/{uid} {
+  allow get,list: if verifiedSuperAdmin();
+  allow update: if validMemberChange(uid,tid) && resource.data.demo==true
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.tenantId==tid
+  && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data);
+ }
+}
+match /users/{uid}/memberships/{tid} {
+ allow get,list: if verifiedSuperAdmin();
+ allow update: if validMemberChange(uid,tid) && resource.data.tenantId==tid
+ && get(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data.demo==true
+ && sameMembership(request.resource.data,getAfter(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data);
+}
+ match /users/{uid}/memberships/{tenantId} {
+  allow get,list: if eligible() && request.auth.uid==uid;
+  allow create: if eligible()
+    && request.auth.uid == uid
+    && !exists(/databases/$(database)/documents/tenants/$(tenantId))
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid
+    && request.resource.data.tenantId == tenantId
+    && request.resource.data.role == 'admin'
+    && request.resource.data.status == 'active'
+    && request.resource.data.demo == true;
+  allow create: if companyAdmin(tenantId)
+    && get(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'pending'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'accepted'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.lastOperatorUid == uid
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.usage.operatori == get(/databases/$(database)/documents/tenants/$(tenantId)).data.usage.operatori + 1
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.role == 'employee'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.status == 'active'
+    && request.resource.data.tenantId == tenantId
+    && request.resource.data.role == 'employee'
+    && request.resource.data.status == 'active'
+    && request.resource.data.demo == true;
+ }
+ match /tenants/{tenantId} {
+  allow get: if canReadDemoCommesse();
+  match /members/{uid} {
+   allow get: if eligible() && request.auth.uid==uid && canReadDemoCommesse();
+  }
+ }
+ match /{document=**} { allow read, write: if false; }
+ }
+}

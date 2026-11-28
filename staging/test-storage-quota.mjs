@@ -11,7 +11,8 @@ assert.match(process.env.FIREBASE_AUTH_EMULATOR_HOST||'',/^127\.0\.0\.1:9099$/);
 assert.match(process.env.FIREBASE_STORAGE_EMULATOR_HOST||'',/^127\.0\.0\.1:9199$/);
 const app=initializeApp({projectId,storageBucket:bucketName});
 const db=getFirestore(app),auth=getAuth(app),bucket=getStorage(app).bucket();
-const service=createStorageQuotaService({db,auth,bucket,projectId,serverTimestamp:()=>FieldValue.serverTimestamp()});
+const service=createStorageQuotaService({app});
+assert.throws(()=>createStorageQuotaService({app:{options:{projectId:'hera-app-6cd2b',storageBucket:'hera-app-6cd2b.appspot.com'}}}),e=>e.code==='STAGING_ONLY');
 const password='Only-Local-Test-42',A='demo-storage-a',B='demo-storage-b';
 const user=async uid=>{
  const email=uid+'@example.test';await auth.createUser({uid,email,password,emailVerified:true});

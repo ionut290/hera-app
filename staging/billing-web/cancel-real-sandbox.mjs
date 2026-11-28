@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import Stripe from 'stripe';
-import {SANDBOX_PRICE_IDS} from './stripe-sandbox-catalog.mjs';
+import {SANDBOX_PRICE_IDS} from '../stripe-sandbox-catalog.mjs';
 const secret=process.env.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY;
 assert.match(secret||'',/^rk_test_[A-Za-z0-9]+$/,'Sandbox restricted test key required');
 const state=JSON.parse(readFileSync(join(process.cwd(),'.sandbox-state','state.json'),'utf8'));

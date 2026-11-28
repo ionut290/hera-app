@@ -47,7 +47,12 @@ try{
  assert.equal((await send(event('cancel',{id:sub,customer,livemode:false,status:'canceled'},'customer.subscription.deleted'))).status,'canceled');
  assert.equal((await db.doc('stripeTestSubscriptions/'+sub).get()).data().status,'canceled');
  assert.equal(periodEnd((await db.doc('tenants/'+A).get()).data()),(end+span)*1000);
- // A canceled binding must not extend an existing paid period, even for an otherwise valid invoice.
+ // Even an otherwise valid first invoice cannot activate a canceled binding.
+ const subB='sub_fixture_b',customerB='cus_fixture_b';
+ await service.bindTestSubscription({tenantId:B,subscriptionId:subB,customerId:customerB,tier:'professional'});
+ await send(event('cancel_b',{id:subB,customer:customerB,livemode:false,status:'canceled'},'customer.subscription.deleted'));
+ await err('SUBSCRIPTION_CANCELED',()=>send(event('late_b',{...invoice('late_b'),subscription:subB,customer:customerB})));
+ assert.equal((await db.doc('tenants/'+B).get()).data().plan,'trial');
  await err('PERIOD_ALREADY_PAID',()=>send(event('cancel_duplicate_period',invoice('cancel_duplicate_period',end,'subscription_cycle'))));
  console.log('STRIPE TEST PASS: official SDK signature, live events rejected, verified binding, exact paid amount, duplicate event/invoice/period protection, automatic renewal, failure without entitlement, cancellation retaining paid period, company isolation.');
 }finally{await deleteApp(app);}

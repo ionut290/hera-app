@@ -92,3 +92,28 @@ jobs:
           node assemble-candidate-rules.mjs
           printf '%s' '{"firestore":{"rules":"candidate.rules"},"storage":{"rules":"storage-candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"storage":{"host":"127.0.0.1","port":9199},"ui":{"enabled":false}}}' > emulator-storage.json
           npx --no-install firebase emulators:exec --config emulator-storage.json --only firestore,auth,storage --project varga-cantieri-v2-staging 'node test-storage-quota.mjs'
+  stripe-test-billing:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Stripe SDK signed fixtures and real Firestore emulator
+        run: |
+          printf '%s' '{"name":"varga-stripe-fixture-ci","version":"1.0.0","private":true}' > package.json
+          npm install --no-save --no-audit --no-fund firebase-tools@15.34.2 firebase-admin stripe@17.7.0
+          node assemble-candidate-rules.mjs
+          printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > emulator-stripe.json
+          npx --no-install firebase emulators:exec --config emulator-stripe.json --only firestore --project varga-cantieri-v2-staging 'node test-stripe-test-billing.mjs'

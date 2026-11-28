@@ -3,7 +3,8 @@ import Stripe from 'stripe';
 import {randomUUID} from 'node:crypto';
 import {getFirestore,FieldValue} from 'firebase-admin/firestore';
 import {getAuth} from 'firebase-admin/auth';
-import {SUBSCRIPTION_PLANS,BILLING_PERIOD_DAYS} from './subscription-plans.mjs';
+import {SUBSCRIPTION_PLANS} from './subscription-plans.mjs';
+import {SANDBOX_PRICE_IDS,verifySandboxPrice} from './stripe-sandbox-catalog.mjs';
 const PROJECT='varga-cantieri-v2-staging',VERSION='2024-10-28.acacia';
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 const tenantOk=v=>typeof v==='string'&&/^demo-[a-z0-9-]{3,59}$/.test(v);
@@ -13,9 +14,7 @@ const stamp=()=>FieldValue.serverTimestamp();
 function guard(app){
  if(app?.options?.projectId!==PROJECT||process.env.FIRESTORE_EMULATOR_HOST!=='127.0.0.1:8080'||process.env.FIREBASE_AUTH_EMULATOR_HOST!=='127.0.0.1:9099')fail('EMULATORS_REQUIRED');
 }
-function checkedPrice(p,tier,expected){
- if(!p||p.id!==expected||p.livemode!==false||p.active!==true||p.currency!=='eur'||p.unit_amount!==SUBSCRIPTION_PLANS[tier].priceCents||p.type!=='recurring'||p.recurring?.interval!=='day'||p.recurring?.interval_count!==BILLING_PERIOD_DAYS||p.recurring?.usage_type!=='licensed'||p.billing_scheme!=='per_unit')fail('PRICE_MISMATCH');
-}
+const checkedPrice=verifySandboxPrice;
 function checkedUrl(value){
  let u;try{u=new URL(value);}catch{fail('INVALID_CHECKOUT_URL');}
  if(u.protocol!=='https:'||u.hostname!=='checkout.stripe.com'||u.username||u.password||u.port)fail('INVALID_CHECKOUT_URL');return u.href;
@@ -32,7 +31,7 @@ export function createSandboxStripeProvider({app,secretKey}){
   expire:id=>stripe.checkout.sessions.expire(id,{}, {idempotencyKey:'varga-expire-'+id}),
  });
 }
-export function createSandboxCheckout({app,provider,priceIds}){
+export function createSandboxCheckout({app,provider,priceIds=SANDBOX_PRICE_IDS}){
  guard(app);
  if(!provider||!['price','create','session'].every(k=>typeof provider[k]==='function')||!Object.keys(SUBSCRIPTION_PLANS).every(t=>id(priceIds?.[t],'price_'))||new Set(Object.values(priceIds)).size!==3)fail('INVALID_CONFIG');
  const db=getFirestore(app),auth=getAuth(app);

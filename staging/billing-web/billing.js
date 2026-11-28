@@ -18,7 +18,7 @@ function state(){
  $('checkout').disabled=busy||!c||active||!t||(!locked&&!$('terms').checked)||locked&&!['creating','open'].includes(c.checkoutStatus);
  $('checkout').textContent=locked?'Riprendi checkout di prova':'Avvia checkout di prova';
  $('checkout-panel').hidden=!c||active||!['open','bound'].includes(c.checkoutStatus);
- $('simulate').disabled=busy||c?.checkoutStatus!=='open';$('verify').disabled=busy||!c;
+ $('simulate').disabled=busy||c?.checkoutStatus!=='open';$('verify').disabled=busy||!c;$('cancel').disabled=busy||c?.checkoutStatus!=='open';
  for(const n of document.querySelectorAll('input[name=tier]'))n.disabled=busy||!c||active||locked;
 }
 function drawPlans(){
@@ -60,5 +60,6 @@ $('checkout').onclick=()=>run(async()=>{
  try{await api('checkout',{tenantId:c.id,tier:t,acceptTerms:true});}catch(e){try{await refresh();}catch{}throw e;}await refresh();message('Checkout simulato pronto. Nessun pagamento effettuato.');
 });
 $('simulate').onclick=()=>run(async()=>{const c=selected();if(!c)throw Error('FORBIDDEN');await api('simulate',{tenantId:c.id});await refresh();message('Pagamento di prova confermato. Nessun addebito reale.');});
+$('cancel').onclick=()=>{const c=selected();if(!c||!confirm('Annullare il tentativo di pagamento non ancora pagato?'))return;run(async()=>{await api('cancel',{tenantId:c.id});await refresh();message('Checkout annullato. Puoi scegliere un nuovo piano.');});};
 $('verify').onclick=()=>run(async()=>{await refresh();message('Stato aggiornato dal server.');});
 state();

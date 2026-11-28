@@ -182,10 +182,36 @@ jobs:
           npx --no-install playwright install --with-deps chromium
           node assemble-candidate-rules.mjs
           printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}' > emulator-hosted-sandbox.json
-      - name: One genuine Stripe Sandbox hosted test payment and emulator entitlement
+      - name: Start Firebase emulators for hosted checkout
+        run: |
+          npx --no-install firebase emulators:start --config emulator-hosted-sandbox.json --only firestore,auth --project varga-cantieri-v2-staging > "$RUNNER_TEMP/firebase-emulators.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/firebase-emulators.pid"
+          for attempt in {1..60}; do
+            if (echo > /dev/tcp/127.0.0.1/8080) 2>/dev/null && (echo > /dev/tcp/127.0.0.1/9099) 2>/dev/null; then
+              echo "Firebase Auth and Firestore emulators are ready."
+              exit 0
+            fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/firebase-emulators.pid")" 2>/dev/null; then
+              tail -n 80 "$RUNNER_TEMP/firebase-emulators.log"
+              exit 1
+            fi
+            sleep 2
+          done
+          tail -n 80 "$RUNNER_TEMP/firebase-emulators.log"
+          exit 1
+      - name: Create one genuine Stripe Sandbox hosted Checkout
         env:
           VARGA_ENABLE_STRIPE_SANDBOX: 'yes'
           VARGA_STRIPE_SANDBOX_CHECKOUT_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY }}
-          MANUAL_CHECKOUT_MODE: 'yes'
+        run: node billing-web/prepare-real-sandbox.mjs
+      - name: Verify manual Sandbox payment and emulator entitlement
+        env:
+          VARGA_ENABLE_STRIPE_SANDBOX: 'yes'
+          VARGA_STRIPE_SANDBOX_CHECKOUT_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY }}
+        run: node billing-web/verify-real-sandbox.mjs
+      - name: Stop Firebase emulators
+        if: always()
         run: |
-          npx --no-install firebase emulators:exec --config emulator-hosted-sandbox.json --only firestore,auth --project varga-cantieri-v2-staging 'node billing-web/test-real-sandbox.mjs'
+          if [ -f "$RUNNER_TEMP/firebase-emulators.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/firebase-emulators.pid")" 2>/dev/null || true
+          fi

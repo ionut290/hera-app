@@ -59,6 +59,9 @@ jobs:
           VARGA_STAGING_WEB_API_KEY=AIzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA node build-full-runtime.mjs private-staging
           test -s private-staging-dist/PRIVATE_STAGING_NOT_RELEASED.txt
           test ! -e private-staging-dist/LOCAL_TEST_ONLY.txt
+          test ! -e private-staging-dist/billing.html
+          test ! -e private-staging-dist/billing.js
+          test ! -e private-staging-dist/billing-web
           grep -F 'https://identitytoolkit.googleapis.com' private-staging-dist/index.html
           grep -F 'Piano prova incluso' private-staging-dist/index.html
           if grep -F 'connect-src http://127.0.0.1:9099' private-staging-dist/index.html; then exit 1; fi
@@ -113,7 +116,8 @@ jobs:
       - name: Stripe SDK signed fixtures and real Firestore emulator
         run: |
           printf '%s' '{"name":"varga-stripe-fixture-ci","version":"1.0.0","private":true}' > package.json
-          npm install --no-save --no-audit --no-fund firebase-tools@15.34.2 firebase-admin stripe@17.7.0
+          npm install --no-save --no-audit --no-fund firebase-tools@15.34.2 firebase-admin stripe@17.7.0 playwright@1.55.0
+          npx --no-install playwright install --with-deps chromium
           node assemble-candidate-rules.mjs
           printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}' > emulator-stripe.json
-          npx --no-install firebase emulators:exec --config emulator-stripe.json --only firestore,auth --project varga-cantieri-v2-staging 'node test-stripe-test-billing.mjs && node test-stripe-sandbox-checkout.mjs'
+          npx --no-install firebase emulators:exec --config emulator-stripe.json --only firestore,auth --project varga-cantieri-v2-staging 'node test-stripe-test-billing.mjs && node test-stripe-sandbox-checkout.mjs && node billing-web/test-local-web.mjs'

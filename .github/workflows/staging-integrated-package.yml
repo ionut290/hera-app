@@ -9,6 +9,10 @@ on:
         description: 'Read-only Stripe Sandbox catalog audit (restricted test key)'
         type: boolean
         default: false
+      confirm_test_only:
+        description: 'Create one synthetic Starter subscription in Stripe Sandbox only'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -148,3 +152,39 @@ jobs:
         env:
           VARGA_STRIPE_SANDBOX_READ_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_READ_KEY }}
         run: node audit-stripe-sandbox-catalog.mjs
+
+  hosted-checkout:
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging' && github.event_name == 'workflow_dispatch' && inputs.confirm_test_only == true
+    concurrency:
+      group: varga-stripe-sandbox-hosted-checkout
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: stripe-sandbox-checkout
+    defaults:
+      run:
+        working-directory: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install test dependencies and browser
+        run: |
+          printf '%s' '{"name":"varga-hosted-sandbox-ci","version":"1.0.0","private":true}' > package.json
+          npm install --no-save --no-audit --no-fund firebase-tools@15.34.2 firebase-admin stripe@17.7.0 playwright@1.55.0
+          npx --no-install playwright install --with-deps chromium
+          node assemble-candidate-rules.mjs
+          printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}' > emulator-hosted-sandbox.json
+      - name: One genuine Stripe Sandbox hosted test payment and emulator entitlement
+        env:
+          VARGA_ENABLE_STRIPE_SANDBOX: 'yes'
+          VARGA_STRIPE_SANDBOX_CHECKOUT_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY }}
+        run: |
+          npx --no-install firebase emulators:exec --config emulator-hosted-sandbox.json --only firestore,auth --project varga-cantieri-v2-staging 'node billing-web/test-real-sandbox.mjs'

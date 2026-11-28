@@ -73,9 +73,19 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   const fresh=await auth.getUserByEmail(newEmail);
   assert.equal(fresh.emailVerified,false);
   await page.evaluate(()=>{window.__registrationPageMarker='same-session';});
+  // A conflicting code denies the entire bootstrap batch. Retrying must reuse
+  // the same persisted company ID; no partial company or duplicate.
+  const activation={type:'company',name:newCompany,tenantId:'demo-9e43f616-410f-4af4-9ed1-5b83502a7fc1',joinCode:'VC-FEEDABCD'};
+  await db.doc('tenantJoinCodes/'+activation.joinCode).set({tenantId:'demo-a',companyName:'demo-a',status:'active'});
+  await page.evaluate(({uid,intent})=>localStorage.setItem('varga.onboarding.'+uid,JSON.stringify(intent)),{uid:fresh.uid,intent:activation});
   await auth.updateUser(fresh.uid,{emailVerified:true});
   await page.locator('#verify-check').click();
-  await page.locator('[data-tenant]').filter({hasText:newCompany}).waitFor();
+  await page.locator('#company-status').filter({hasText:'non autorizza ancora'}).waitFor();
+  assert.equal((await db.doc('tenants/'+activation.tenantId).get()).exists,false);
+  assert.deepEqual(await page.evaluate(uid=>JSON.parse(localStorage.getItem('varga.onboarding.'+uid)),fresh.uid),activation);
+  await db.doc('tenantJoinCodes/'+activation.joinCode).delete();
+  await page.locator('#company-form button[type=submit]').click();
+  await page.locator('[data-tenant="'+activation.tenantId+'"]').waitFor();
   assert.equal(await page.evaluate(()=>window.__registrationPageMarker),'same-session');
   const created=await db.collection('tenants').where('ownerUid','==',fresh.uid).get();
   assert.equal(created.size,1);
@@ -160,12 +170,21 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await page.waitForFunction(()=>document.getElementById('join-status')?.textContent.includes('Richiesta inviata'));
   assert.equal((await db.doc('tenants/demo-b/joinRequests/'+joinUid).get()).data().status,'pending');
   assert.equal(await page.locator('[data-tenant="demo-b"]').count(),0);
-  await page.locator('#logout').click();await page.locator('#auth-options').waitFor({state:'visible'});
-  await page.locator('#open-login').click();await page.locator('#email').fill(email);await page.locator('#password').fill(password);await page.locator('#login button[type=submit]').click();
-  await page.locator('#companies button').filter({hasText:'Gestisci codice e richieste'}).first().click();
-  await page.getByRole('button',{name:'Accetta',exact:true}).click();
-  await page.waitForFunction(()=>document.getElementById('company-admin-status')?.textContent.includes('nessuna richiesta'));
-  assert.equal((await db.doc('tenants/demo-b/members/'+joinUid).get()).data().role,'employee');
+  // Keep the operator signed in while a second browser tab approves the request.
+  const approvingPage=await context.newPage();
+  try{
+   await approvingPage.goto('http://127.0.0.1:4173/');
+   await approvingPage.locator('#open-login').click();await approvingPage.locator('#email').fill(email);await approvingPage.locator('#password').fill(password);await approvingPage.locator('#login button[type=submit]').click();
+   await approvingPage.locator('[data-tenant="demo-b"] + button').click();
+   await approvingPage.getByRole('button',{name:'Accetta',exact:true}).click();
+   await approvingPage.waitForFunction(()=>document.getElementById('company-admin-status')?.textContent.includes('nessuna richiesta'));
+   assert.equal((await db.doc('tenants/demo-b/members/'+joinUid).get()).data().role,'employee');
+  }finally{await approvingPage.close();}
+  await page.locator('#back').click();
+  await page.locator('[data-tenant="demo-b"]').waitFor({state:'visible'});
+  await page.locator('#join-panel').waitFor({state:'hidden'});
+  assert.equal(await page.evaluate(uid=>localStorage.getItem('varga.onboarding.'+uid),joinUid),null);
+  console.log('JOIN APPROVAL: operator refreshed membership in the same authenticated session.');
   await page.locator('#logout').click();await page.locator('#auth-options').waitFor({state:'visible'});
   await page.locator('#open-login').click();await page.locator('#email').fill(joinEmail);await page.locator('#password').fill(password);await page.locator('#login button[type=submit]').click();
   await page.locator('[data-tenant="demo-b"]').waitFor({state:'visible'});

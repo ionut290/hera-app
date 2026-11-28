@@ -159,7 +159,7 @@ jobs:
       group: varga-stripe-sandbox-hosted-checkout
       cancel-in-progress: false
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     environment: stripe-sandbox-checkout
     defaults:
       run:

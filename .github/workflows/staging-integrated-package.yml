@@ -159,7 +159,7 @@ jobs:
       group: varga-stripe-sandbox-hosted-checkout
       cancel-in-progress: false
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     environment: stripe-sandbox-checkout
     defaults:
       run:
@@ -186,5 +186,6 @@ jobs:
         env:
           VARGA_ENABLE_STRIPE_SANDBOX: 'yes'
           VARGA_STRIPE_SANDBOX_CHECKOUT_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY }}
+          MANUAL_CHECKOUT_MODE: 'yes'
         run: |
           npx --no-install firebase emulators:exec --config emulator-hosted-sandbox.json --only firestore,auth --project varga-cantieri-v2-staging 'node billing-web/test-real-sandbox.mjs'

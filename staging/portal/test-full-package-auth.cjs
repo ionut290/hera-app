@@ -174,8 +174,13 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await trialFrame.locator('#commessa-code').fill('COL-001');
   await trialFrame.locator('#commessa-form').locator('button[type="submit"]').click();
   await trialFrame.waitForFunction(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('commesse').where('nome','==','Cantiere Collaudo Prima Configurazione').get()).size===1;});
-  const uiJob=await trialFrame.evaluate(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;const snap=await s.session.firestore.collection('commesse').where('nome','==','Cantiere Collaudo Prima Configurazione').get();return snap.docs[0]?.id||null;});
-  assert.ok(uiJob,'The commessa created by the UI must expose an id to the same session.');
+  let uiJob=null;
+  for(let attempt=0;attempt<20&&!uiJob;attempt++){
+   const snap=await created.docs[0].ref.collection('commesse').where('nome','==','Cantiere Collaudo Prima Configurazione').get();
+   uiJob=snap.docs[0]?.id||null;
+   if(!uiJob)await new Promise(resolve=>setTimeout(resolve,250));
+  }
+  assert.ok(uiJob,'The commessa created by the UI must reach the tenant server.');
   console.log('FIRST USER COMMESSA PASS: Cantiere Collaudo Prima Configurazione saved from the Gestione commesse form.');
   let firstJob=uiJob;
   for(let i=0;i<4;i++){const id=await createTrialJob();if(i===0&& !firstJob)firstJob=id;}

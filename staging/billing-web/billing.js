@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id);
-let token=null,companies=[],plans=[],busy=false,epoch=0;
+let token=null,companies=[],plans=[],busy=false,epoch=0,mode='fixture';
 const selected=()=>companies.find(c=>c.id===$('company').value);
 const tier=()=>document.querySelector('input[name=tier]:checked')?.value;
 const money=n=>new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(n/100);
@@ -18,7 +18,7 @@ function state(){
  $('checkout').disabled=busy||!c||active||!t||(!locked&&!$('terms').checked)||locked&&!['creating','open'].includes(c.checkoutStatus);
  $('checkout').textContent=locked?'Riprendi checkout di prova':'Avvia checkout di prova';
  $('checkout-panel').hidden=!c||active||!['open','bound'].includes(c.checkoutStatus);
- $('simulate').disabled=busy||c?.checkoutStatus!=='open';$('verify').disabled=busy||!c;$('cancel').disabled=busy||c?.checkoutStatus!=='open';
+ $('simulate').hidden=mode==='stripe-sandbox';$('simulate').disabled=busy||c?.checkoutStatus!=='open';$('verify').disabled=busy||!c;$('cancel').disabled=busy||c?.checkoutStatus!=='open';
  for(const n of document.querySelectorAll('input[name=tier]'))n.disabled=busy||!c||active||locked;
 }
 function drawPlans(){
@@ -50,16 +50,16 @@ $('login').addEventListener('submit',e=>{e.preventDefault();run(async()=>{
  const response=await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:$('password').value,returnSecureToken:true})});
  $('password').value='';const out=await response.json();if(!response.ok||!out.idToken)throw Error('UNAUTHENTICATED');
  token=out.idToken;
- try{plans=(await api('catalog')).plans;drawPlans();await refresh();$('login-panel').hidden=true;$('account').hidden=false;message('Accesso al collaudo effettuato.');}catch(e){token=null;throw e;}
+ try{const catalog=await api('catalog');plans=catalog.plans;mode=catalog.mode||'fixture';$('billing-notice').textContent=mode==='stripe-sandbox'?'STRIPE SANDBOX · Usa esclusivamente dati e carte di prova. Nessun addebito reale. Dopo il pagamento torna qui, accedi e verifica lo stato.':'AMBIENTE DI COLLAUDO · Pagamenti simulati. Non inserire dati personali reali o carte di credito. Nessun addebito.';drawPlans();await refresh();$('login-panel').hidden=true;$('account').hidden=false;message('Accesso al collaudo effettuato.');}catch(e){token=null;throw e;}
 });});
 $('logout').onclick=()=>{epoch++;token=null;companies=[];plans=[];busy=false;$('account').hidden=true;$('login-panel').hidden=false;$('company').replaceChildren();$('plans').replaceChildren();$('password').value='';$('terms').checked=false;message('Sessione chiusa.');state();};
 $('company').onchange=drawCompany;$('terms').onchange=state;
 $('checkout').onclick=()=>run(async()=>{
  const c=selected(),t=tier();if(!c||!t)throw Error('INVALID_REQUEST');
  if(!c.checkoutStatus){if(!$('terms').checked)throw Error('INVALID_REQUEST');await api('request-plan',{tenantId:c.id,tier:t});}
- try{await api('checkout',{tenantId:c.id,tier:t,acceptTerms:true});}catch(e){try{await refresh();}catch{}throw e;}await refresh();message('Checkout simulato pronto. Nessun pagamento effettuato.');
+ let result;try{result=await api('checkout',{tenantId:c.id,tier:t,acceptTerms:true});}catch(e){try{await refresh();}catch{}throw e;}if(mode==='stripe-sandbox'){const u=new URL(result.url);if(u.protocol!=='https:'||u.hostname!=='checkout.stripe.com'||u.username||u.password||u.port)throw Error('INVALID_CHECKOUT_URL');window.location.assign(u.href);return;}await refresh();message('Checkout simulato pronto. Nessun pagamento effettuato.');
 });
 $('simulate').onclick=()=>run(async()=>{const c=selected();if(!c)throw Error('FORBIDDEN');await api('simulate',{tenantId:c.id});await refresh();message('Pagamento di prova confermato. Nessun addebito reale.');});
 $('cancel').onclick=()=>{const c=selected();if(!c||!confirm('Annullare il tentativo di pagamento non ancora pagato?'))return;run(async()=>{await api('cancel',{tenantId:c.id});await refresh();message('Checkout annullato. Puoi scegliere un nuovo piano.');});};
-$('verify').onclick=()=>run(async()=>{await refresh();message('Stato aggiornato dal server.');});
+$('verify').onclick=()=>run(async()=>{const c=selected();if(mode==='stripe-sandbox'&&c&&c.plan==='trial'&&['open','bound'].includes(c.checkoutStatus)){await api('verify',{tenantId:c.id});await refresh();message('Pagamento Stripe Sandbox verificato. Nessun addebito reale.');return;}await refresh();message('Stato aggiornato dal server.');});
 state();

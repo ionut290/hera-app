@@ -93,19 +93,19 @@ try{
  const submitCandidates=[];
  for(const [frameIndex,context] of contexts.entries()){
   let details=[];
-  try{details=await context.locator('button,[role=button]').evaluateAll(ns=>ns.filter(n=>!!(n.offsetWidth||n.offsetHeight)).map(n=>({text:(n.innerText||'').trim().slice(0,80),type:n.getAttribute('type'),ariaLabel:n.getAttribute('aria-label'),title:n.getAttribute('title'),className:String(n.className||'').slice(0,100),disabled:!!n.disabled})).slice(0,20));}catch{}
+  try{details=await context.locator('button,[role=button]').evaluateAll(ns=>ns.filter(n=>!!(n.offsetWidth||n.offsetHeight)).map((n,elementIndex)=>({elementIndex,text:(n.innerText||'').trim().slice(0,80),type:n.getAttribute('type'),ariaLabel:n.getAttribute('aria-label'),title:n.getAttribute('title'),className:String(n.className||'').slice(0,100),disabled:!!n.disabled})).slice(0,20));}catch{}
   const host=frameIndex===0?'checkout.stripe.com':(()=>{try{return new URL(context.url()).hostname}catch{return 'unknown'}})();
   console.log('CHECKOUT_FRAME_BUTTONS '+JSON.stringify({frameIndex,host,details}));
   for(const detail of details){
    const label=(detail.text+' '+detail.ariaLabel+' '+detail.title).trim();
    if(!detail.disabled&&!/ExpandableText-button/.test(detail.className)&&(/submit/i.test(detail.type||'')||/subscribe|pay|complete|confirm|continue/i.test(label)))
-    submitCandidates.push({frameIndex,label,type:detail.type});
+    submitCandidates.push({frameIndex,elementIndex:detail.elementIndex,label,type:detail.type});
   }
  }
  if(submitCandidates.length!==1)throw new Error('CHECKOUT_SUBMIT_NOT_UNIQUE');
- const submitContext=contexts[submitCandidates[0].frameIndex];
- const submitSelector=submitCandidates[0].type==='submit'?'button[type=submit],[role=button][type=submit]':'button,[role=button]';
- const submit=submitContext.locator(submitSelector).filter({visible:true}).last();
+ const chosen=submitCandidates[0];
+ const submitContext=contexts[chosen.frameIndex];
+ const submit=submitContext.locator('button,[role=button]').filter({visible:true}).nth(chosen.elementIndex);
  await submit.waitFor({state:'visible'});
  await submit.click();
  await page.waitForTimeout(1500);

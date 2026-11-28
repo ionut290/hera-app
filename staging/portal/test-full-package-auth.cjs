@@ -141,6 +141,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   const openMenu=async()=>{const menu=trialFrame.locator('#side-menu');if(!(await menu.isVisible()))await trialFrame.locator('#menu-toggle-btn').click();};
   await openMenu();
   await trialFrame.locator('#open-panel-personale').click();
+  console.log('FIRST USER PERSONALE UI STATE '+JSON.stringify(await trialFrame.evaluate(()=>({menu:document.getElementById('side-menu')?.className,management:document.getElementById('management-page')?.className,panel:document.getElementById('panel-personale')?.className,form:document.getElementById('personale-form')?.className,auth:window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__?.auth?.currentUser?.email||null}))));
   await trialFrame.locator('#personale-form').waitFor({state:'visible'});
   await trialFrame.locator('#personale-nome').fill('Operatore Collaudo');
   await trialFrame.locator('#personale-form').locator('button[type="submit"]').click();

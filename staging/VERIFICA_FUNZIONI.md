@@ -63,3 +63,7 @@ Commit verificato: `e52d9e60e1566397bdd1f5b0a74670fda52eb21d`.
 Per ogni riga registrare: dispositivo/ambiente, account e ruolo di prova, passi eseguiti, risultato, screenshot/log, difetto e commit della correzione. Dopo ogni fix ripetere il test dell’area e le regressioni che possono essere coinvolte.
 
 La verifica è conclusa solo quando ogni area è marcata **Superata**, oppure è indicata chiaramente come bloccata da accesso, credenziali o prova su dispositivo. Un’area non provata non va dichiarata funzionante.
+
+## Ultima simulazione UI
+
+Il collaudo integrato esercita anche le schermate Personale v2, Mezzi v2 e Gestione commesse tramite il browser autenticato.

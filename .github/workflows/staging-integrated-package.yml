@@ -52,8 +52,8 @@ jobs:
           printf '%s' '{"name":"varga-emulator-package-ci","version":"1.0.0","private":true}' > package.json
           npm install --no-save --no-audit --no-fund firebase-tools@15.34.2 firebase-admin
           node assemble-candidate-rules.mjs
-          printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}' > emulator-package.json
-          npx --no-install firebase emulators:exec --config emulator-package.json --only firestore,auth --project varga-cantieri-v2-staging 'node portal/test-full-package-auth.cjs'
+          printf '%s' '{"firestore":{"rules":"candidate.rules"},"storage":{"rules":"storage-candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"storage":{"host":"127.0.0.1","port":9199},"ui":{"enabled":false}}}' > emulator-package.json
+          npx --no-install firebase emulators:exec --config emulator-package.json --only firestore,auth,storage --project varga-cantieri-v2-staging 'node portal/test-full-package-auth.cjs'
       - name: Compile private staging login candidate without live network
         run: |
           VARGA_STAGING_WEB_API_KEY=AIzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA node build-full-runtime.mjs private-staging

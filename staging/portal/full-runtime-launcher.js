@@ -8,6 +8,7 @@ import {createOriginalRuntimeEntry} from '../original-runtime-entry.mjs';
 import {createLegacyFirebaseNamespace} from '../legacy-firebase-namespace.mjs';
 import {connectLocalFirebase,connectStagingFirebase} from '../firebase-runtime-provider.mjs';
 import {createAdminPanel} from './integrated-superadmin.js';
+import {createCompanyDocuments} from './company-documents.js';
 async function start(){
 const $=id=>document.getElementById(id);
 const status=m=>{const node=auth.currentUser?$('session-status'):$('status');node.textContent=m;};
@@ -19,7 +20,7 @@ const {auth,db,statics}=await (isLive?connectStagingFirebase({firebase,location,
 const entry=createOriginalRuntimeEntry({auth,db});
 const socialBridge=nativeProviderBridge(window.Capacitor,isLive&&__VARGA_SOCIAL_AUTH_READY__);
 const adminPanel=createAdminPanel({host:$('admin-panel'),auth,db,statics,readOnly:isLive});
-let prepared=null,revision=0,superAdmin=false,adminVisible=false,registrationMode='company',creatingAccount=false,loginJoinCode='',activationBusy=false,verificationBusy=false;
+let documentPanel=null;let prepared=null,revision=0,superAdmin=false,adminVisible=false,registrationMode='company',creatingAccount=false,loginJoinCode='',activationBusy=false,verificationBusy=false;
 const intentKey=uid=>'varga.onboarding.'+uid;
 function saveIntent(uid,intent){localStorage.setItem(intentKey(uid),JSON.stringify(intent));}
 function readIntent(uid){try{return JSON.parse(localStorage.getItem(intentKey(uid))||'null');}catch{return null;}}
@@ -33,7 +34,7 @@ function replaceRuntimeFrame(src){
  if(src)frame.setAttribute('src',src);
  old.replaceWith(frame);
 }
-function closeRuntime(){revision++;prepared=null;entry.leave();if($('runtime').hasAttribute('src'))replaceRuntimeFrame(null);else $('runtime').hidden=true;$('company-return').hidden=true;document.body.classList.remove('company-runtime');}
+function closeRuntime(){documentPanel?.close();documentPanel=null;revision++;prepared=null;entry.leave();if($('runtime').hasAttribute('src'))replaceRuntimeFrame(null);else $('runtime').hidden=true;$('company-return').hidden=true;document.body.classList.remove('company-runtime');}
 function present(session){
  const namespace=createLegacyFirebaseNamespace({prepared:session,statics});
 // Only the facade reaches the original frame; keep raw SDK in the launcher.
@@ -43,6 +44,7 @@ prepared=Object.freeze({session:view,namespace,apiKey});
  replaceRuntimeFrame('original.html');$('company-return').hidden=false;document.body.classList.add('company-runtime');
 }
 // This is a local testing bridge, not a security boundary. The emulator rules are mandatory.
+Object.defineProperty(window,'__vargaOpenCompanyDocuments',{value:()=>{if(isLive||!prepared?.session.isActive())return false;documentPanel?.close();const session=prepared.session;documentPanel=createCompanyDocuments({host:$('company-documents'),auth,tenantId:session.session.context.tenantId,isActive:()=>prepared?.session===session&&session.isActive()});return true;},writable:false,configurable:false});
 Object.defineProperty(window,'__vargaLocalRuntime',{value:()=>{if(!prepared?.session.isActive())throw Error('Verified local company required');return prepared;},writable:false,configurable:false});
 function clearCompanyAdmin(){ $('company-admin-panel').hidden=true; $('company-admin-list').replaceChildren(); }
 function showWelcome(){ $('verify-panel').hidden=true; $('login-card').hidden=false; $('auth-options').hidden=false; $('login').hidden=true; $('login-title').textContent='Benvenuto'; $('register-panel').hidden=true; $('join-panel').hidden=true; $('company-panel').hidden=true; $('session-status').hidden=true; $('status').textContent=''; loginJoinCode=''; clearCompanyAdmin(); }

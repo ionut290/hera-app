@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {SANDBOX_PRICE_IDS,SANDBOX_LOOKUP_KEYS,auditSandboxCatalog,verifySandboxPrice} from './stripe-sandbox-catalog.mjs';
+import {SUBSCRIPTION_PLANS} from './subscription-plans.mjs';
+assert.equal(new Set(Object.values(SANDBOX_PRICE_IDS)).size,3);
+assert.ok(Object.values(SANDBOX_PRICE_IDS).every(v=>/^price_[A-Za-z0-9]+$/.test(v)));
+const fixtures=Object.fromEntries(Object.entries(SANDBOX_PRICE_IDS).map(([tier,id])=>[id,{id,livemode:false,active:true,currency:'eur',unit_amount:SUBSCRIPTION_PLANS[tier].priceCents,type:'recurring',recurring:{interval:'day',interval_count:30,usage_type:'licensed'},billing_scheme:'per_unit',lookup_key:SANDBOX_LOOKUP_KEYS[tier]}]));
+const result=await auditSandboxCatalog({price:async id=>fixtures[id]});
+assert.deepEqual(result.map(p=>p.amountCents),[1990,3990,7990]);
+const p=fixtures[SANDBOX_PRICE_IDS.starter];
+for(const patch of [{livemode:true},{active:false},{unit_amount:1},{currency:'usd'},{recurring:{...p.recurring,interval:'month',interval_count:1}},{id:SANDBOX_PRICE_IDS.business}])assert.throws(()=>verifySandboxPrice({...p,...patch},'starter'),/PRICE_MISMATCH/);
+await assert.rejects(()=>auditSandboxCatalog({price:async id=>({...fixtures[id],lookup_key:'wrong'})}),/LOOKUP_KEY_MISMATCH/);
+console.log('SANDBOX CATALOG CONFIG PASS: three owner-supplied identifiers, exact EUR amounts, 30 days, live/monthly/mismatched prices rejected (fixtures only).');

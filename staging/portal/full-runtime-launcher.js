@@ -165,7 +165,7 @@ $('admin-toggle').onclick=async()=>{
 async function refreshAccount(user){
  if(creatingAccount&&user)return;
  $('verify-panel').hidden=true;$('verify-status').textContent='';
- closeRuntime();adminPanel.clear();superAdmin=false;adminVisible=false;const request=revision;let companyCount=0;$('companies').replaceChildren();$('companies').hidden=false;$('admin-toggle').hidden=true;$('admin-toggle').textContent='Super Admin';$('login-card').hidden=Boolean(user);$('session-status').hidden=!user;$('session-status').textContent='';$('join-existing').hidden=Boolean(user);$('back-from-join').hidden=Boolean(user);$('join-submit').textContent=user?'Invia richiesta':'Continua';$('register-panel').hidden=true;$('join-panel').hidden=true;$('company-panel').hidden=true;$('company-admin-panel').hidden=true;$('logout').hidden=!user;$('back').hidden=!user;
+ closeRuntime();adminPanel.clear();superAdmin=false;adminVisible=false;const request=revision;let companyCount=0;const companyList=document.createDocumentFragment();$('companies').replaceChildren();$('companies').hidden=false;$('admin-toggle').hidden=true;$('admin-toggle').textContent='Super Admin';$('login-card').hidden=Boolean(user);$('session-status').hidden=!user;$('session-status').textContent='';$('join-existing').hidden=Boolean(user);$('back-from-join').hidden=Boolean(user);$('join-submit').textContent=user?'Invia richiesta':'Continua';$('register-panel').hidden=true;$('join-panel').hidden=true;$('company-panel').hidden=true;$('company-admin-panel').hidden=true;$('logout').hidden=!user;$('back').hidden=!user;
  if(!user){if(!creatingAccount)showWelcome();return;}
  try{
   const joinCode=loginJoinCode;loginJoinCode='';if(joinCode)saveIntent(user.uid,{type:'join',code:joinCode});
@@ -185,7 +185,7 @@ async function refreshAccount(user){
    companyCount++;const button=document.createElement('button');const t=tenant.data();
    button.textContent=(t.name||item.id)+' · '+subscriptionLabel(t);button.dataset.tenant=item.id;
    button.onclick=async()=>{closeRuntime();const attempt=revision;status('Verifica azienda…');try{const session=await entry.enter(item.id);if(attempt!==revision)return;const approval=await session.approval.verify(auth.currentUser);if(!approval.allowed||attempt!==revision)throw Error('Accesso non autorizzato');if(isLive){present(session);status('Azienda caricata: '+session.session.company.name+' — '+session.session.context.role+'.');return;}present(session);status('Azienda locale: '+session.session.company.name);}catch(err){if(attempt===revision){closeRuntime();status('Accesso aziendale non disponibile.');}}};
-   $('companies').append(button);if(item.data().role==='admin'){const manage=document.createElement('button');manage.textContent='Gestisci codice e richieste';manage.onclick=e=>{e.stopPropagation();showCompanyAdmin(item.id,tenant.data());};$('companies').append(manage);if(['trial','full'].includes(t.plan)&&t.ownerUid===user.uid){
+   companyList.append(button);if(item.data().role==='admin'){const manage=document.createElement('button');manage.textContent='Gestisci codice e richieste';manage.onclick=e=>{e.stopPropagation();showCompanyAdmin(item.id,tenant.data());};companyList.append(manage);if(['trial','full'].includes(t.plan)&&t.ownerUid===user.uid){
     const billing=document.createElement('section');billing.className='trial-box';
     const title=document.createElement('strong');title.textContent='Abbonamento aziendale';billing.append(title);
     const select=document.createElement('select');select.setAttribute('aria-label','Piano abbonamento');
@@ -193,9 +193,13 @@ async function refreshAccount(user){
     select.value=t.requestedTier||t.billing?.tier||'starter';
     const detail=document.createElement('p');const showDetails=()=>{const p=SUBSCRIPTION_PLANS[select.value],l=p.limits;detail.textContent=l.commesse+' commesse · '+l.impianti+' impianti · '+l.admin+' amministratori · '+l.operatori+' operatori · '+l.mezzi+' mezzi · '+l.squadre+' squadre · '+l.storageBytes/1000000000+' GB previsti. Attivazione previa conferma amministrativa.';};select.onchange=showDetails;showDetails();
     const upgrade=document.createElement('button');upgrade.textContent=t.upgradeRequested?'Aggiorna richiesta abbonamento':'Richiedi abbonamento';upgrade.onclick=async()=>{if(auth.currentUser?.uid!==user.uid)return;upgrade.disabled=true;try{await tenant.ref.update({upgradeRequested:true,requestedTier:select.value,upgradeRequestedAt:statics.FieldValue.serverTimestamp()});upgrade.textContent='Richiesta abbonamento inviata';}catch(err){status(userError(err));}finally{upgrade.disabled=false;}};
-    billing.append(select,detail,upgrade);$('companies').append(billing);
+    billing.append(select,detail,upgrade);companyList.append(billing);
    }}
   }
+  // Publish the whole verified membership list atomically. Clicking the first
+  // company before the remaining reads finish used to invalidate this refresh.
+  if(request!==revision||auth.currentUser?.uid!==user.uid)return;
+  $('companies').replaceChildren(companyList);
   const intent=readIntent(user.uid);
   if(intent?.type==='join'){ $('join-code').value=intent.code;$('join-panel').hidden=false;$('company-panel').hidden=true;try{const state=await requestJoin(intent.code,$('join-status'));if(request!==revision||auth.currentUser?.uid!==user.uid)return;if(state==='accepted'&&companyCount){clearIntent(user.uid);$('join-panel').hidden=true;}}catch(err){if(request!==revision)return;$('join-status').textContent=joinError(err);} }
   if(!companyCount){$('company-panel').hidden=superAdmin||intent?.type==='join';if(intent?.type==='company'&&!superAdmin){$('company-name-existing').value=intent.name;try{await createCompany(intent.name,$('company-status'));if(request===revision)await refreshAccount(auth.currentUser);return;}catch(err){$('company-status').textContent=err.code==='permission-denied'||err.code==='firestore/permission-denied'?'Account verificato, ma il server non autorizza ancora l’attivazione dell’azienda. Non registrarti di nuovo.':userError(err);}}status(superAdmin?'Apri Super Admin per amministrare le aziende.':intent?.type==='join'?'Controlla lo stato della tua richiesta.':'Crea la tua azienda oppure unisciti a un’azienda esistente.');return;}

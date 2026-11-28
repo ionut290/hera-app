@@ -32,7 +32,7 @@ function drawPlans(){
 function drawCompany(){
  const c=selected();$('terms').checked=false;
  for(const n of document.querySelectorAll('input[name=tier]'))n.checked=n.value===(c?.billingTier||c?.requestedTier||'starter');
- $('subscription-status').textContent=!c?'Nessuna azienda attiva di cui sei titolare.':c.plan==='full'?'Piano attivo (simulazione): '+(plans.find(p=>p.tier===c.billingTier)?.name||c.billingTier)+' · scadenza '+(c.paidThrough?new Date(c.paidThrough).toLocaleDateString('it-IT'):'non disponibile'):c.checkoutStatus==='bound'?'Pagamento in verifica: attendi conferma della fattura.':c.checkoutStatus?'Checkout di prova in corso.':'Piano prova · scegli il tuo abbonamento.';
+ $('subscription-status').textContent=!c?'Nessuna azienda attiva di cui sei titolare.':c.plan==='full'?(c.paidThrough>Date.now()?'Piano attivo (simulazione): ':'Piano scaduto (simulazione): ')+(plans.find(p=>p.tier===c.billingTier)?.name||c.billingTier)+' · scadenza '+(c.paidThrough?new Date(c.paidThrough).toLocaleDateString('it-IT'):'non disponibile'):c.checkoutStatus==='bound'?'Pagamento in verifica: attendi conferma della fattura.':c.checkoutStatus?'Checkout di prova in corso.':'Piano prova · scegli il tuo abbonamento.';
  $('checkout-summary').textContent=c?.requestedTier?'Piano '+(plans.find(p=>p.tier===c.requestedTier)?.name||c.requestedTier):'';
  state();
 }
@@ -57,7 +57,7 @@ $('company').onchange=drawCompany;$('terms').onchange=state;
 $('checkout').onclick=()=>run(async()=>{
  const c=selected(),t=tier();if(!c||!t)throw Error('INVALID_REQUEST');
  if(!c.checkoutStatus){if(!$('terms').checked)throw Error('INVALID_REQUEST');await api('request-plan',{tenantId:c.id,tier:t});}
- await api('checkout',{tenantId:c.id,tier:t,acceptTerms:true});await refresh();message('Checkout simulato pronto. Nessun pagamento effettuato.');
+ try{await api('checkout',{tenantId:c.id,tier:t,acceptTerms:true});}catch(e){try{await refresh();}catch{}throw e;}await refresh();message('Checkout simulato pronto. Nessun pagamento effettuato.');
 });
 $('simulate').onclick=()=>run(async()=>{const c=selected();if(!c)throw Error('FORBIDDEN');await api('simulate',{tenantId:c.id});await refresh();message('Pagamento di prova confermato. Nessun addebito reale.');});
 $('verify').onclick=()=>run(async()=>{await refresh();message('Stato aggiornato dal server.');});

@@ -13,12 +13,13 @@ import {createStripeTestBilling} from '../stripe-test-billing.mjs';
 const app=initializeApp({projectId:'varga-cantieri-v2-staging'}),db=getFirestore(app),auth=getAuth(app);
 let checkout,token,tenantId,completed=false;
 try{
- const state=JSON.parse(readFileSync(join(process.env.RUNNER_TEMP,'varga-sandbox-checkout-state.json'),'utf8'));
+ const state=JSON.parse(readFileSync(join(process.cwd(),'.sandbox-state','state.json'),'utf8'));
  tenantId=state.tenantId;
  const provider=createSandboxStripeProvider({app,secretKey:process.env.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY});
  checkout=createSandboxCheckout({app,provider});
  const billing=createStripeTestBilling({app,webhookSecret:'whsec_unused_external_reconciliation_fixture',priceIds:SANDBOX_PRICE_IDS,authoritativeProvider:provider});
- const login=await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:state.email,password:state.password,returnSecureToken:true})});
+ const customToken=await auth.createCustomToken(state.uid);
+ const login=await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=fake-api-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:customToken,returnSecureToken:true})});
  assert.equal(login.ok,true);token=(await login.json()).idToken;
  let session;
  for(let i=0;i<1050;i++){

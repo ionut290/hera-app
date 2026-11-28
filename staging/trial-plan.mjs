@@ -8,7 +8,6 @@ export function quotaKind(path){
   if(['commesse','neve_commesse','globalCommesse'].includes(p[0]))return 'commesse';
   if(['mezzi','neve_mezzi'].includes(p[0]))return 'mezzi';
   if(['personale','neve_personale'].includes(p[0]))return 'personale';
-  if(['squadreCommesse','neve_squadre'].includes(p[0]))return 'squadre';
  }
  if(p.length===4&&['commesse','neve_commesse','globalCommesse'].includes(p[0])&&p[2]==='impianti')return 'impianti';
  return null;

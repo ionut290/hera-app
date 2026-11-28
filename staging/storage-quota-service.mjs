@@ -1,6 +1,9 @@
 // Candidate backend only. No live deployment or public download URLs.
 // All writes use an Admin SDK identity; client Storage rules must deny direct access.
 import {createHash} from 'node:crypto';
+import {getFirestore,FieldValue} from 'firebase-admin/firestore';
+import {getAuth} from 'firebase-admin/auth';
+import {getStorage} from 'firebase-admin/storage';
 export const MAX_FILE_BYTES=15*1024*1024;
 const PROJECT='varga-cantieri-v2-staging',DAY=86400000;
 const idOk=s=>typeof s==='string'&&/^[a-zA-Z0-9_-]{16,80}$/.test(s);
@@ -21,8 +24,14 @@ function validateFile({name,type,base64}){
  if(!signature)fail('INVALID_FILE_TYPE');
  return {bytes,sha256:createHash('sha256').update(bytes).digest('hex')};
 }
-export function createStorageQuotaService({db,auth,bucket,projectId,serverTimestamp}){
- if(projectId!==PROJECT||db?.app?.options?.projectId!==PROJECT||auth?.app?.options?.projectId!==PROJECT||!bucket?.name?.startsWith(PROJECT+'.')||typeof serverTimestamp!=='function')fail('STAGING_ONLY');
+export function createStorageQuotaService({app}){
+ // Admin Firestore is not a browser SDK instance and does not expose db.app.
+ // Construct all services from the same verified app instead of trusting injected clients.
+ if(app?.options?.projectId!==PROJECT||app.options.storageBucket!==PROJECT+'.appspot.com')fail('STAGING_ONLY');
+ if(process.env.FIRESTORE_EMULATOR_HOST!=='127.0.0.1:8080'||process.env.FIREBASE_AUTH_EMULATOR_HOST!=='127.0.0.1:9099'||process.env.FIREBASE_STORAGE_EMULATOR_HOST!=='127.0.0.1:9199')fail('EMULATORS_REQUIRED');
+ const db=getFirestore(app),auth=getAuth(app),bucket=getStorage(app).bucket();
+ const serverTimestamp=()=>FieldValue.serverTimestamp();
+ if(bucket.name!==PROJECT+'.appspot.com')fail('STAGING_ONLY');
  async function identity(token){
   if(typeof token!=='string'||!token)fail('UNAUTHENTICATED');
   const claims=await auth.verifyIdToken(token,true);
@@ -74,7 +83,11 @@ export function createStorageQuotaService({db,auth,bucket,projectId,serverTimest
     tx.update(r.meta,{status:'ready',generation:String(meta.generation),readyAt:serverTimestamp()});
    });
    return {...result.view,status:'ready'};
-  }catch{fail('FILE_PENDING_RECONCILIATION');}
+  }catch(error){
+   // Only non-sensitive error class/code for emulator diagnostics; reservation stays charged.
+   console.error('STORAGE_UPLOAD_PENDING',error?.name||'Error',error?.code||'unknown');
+   fail('FILE_PENDING_RECONCILIATION');
+  }
  }
  async function download({token,tenantId,fileId}){
   const uid=await identity(token),r=refs(tenantId,uid,fileId);

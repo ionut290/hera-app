@@ -138,7 +138,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
    console.log('DOCUMENT UI PASS: original menu, private upload, confirmed deletion and quota recovery.');
   }
   // First-user operational setup through the real UI: personnel, vehicle and commessa.
-  const openMenu=async()=>{const menu=trialFrame.locator('#side-menu');if(!(await menu.isVisible()))await trialFrame.locator('#menu-toggle-btn').click();};
+  const openMenu=async()=>{const menu=trialFrame.locator('#side-menu');if(!(await menu.isVisible())){await trialFrame.locator('#menu-toggle-btn').click();await menu.waitFor({state:'visible'});}};
   await openMenu();
   await trialFrame.locator('#open-panel-personale').click();
   await trialFrame.locator('#personnel-v2').waitFor({state:'visible'});
@@ -151,6 +151,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await trialFrame.waitForFunction(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('personale').where('nome','==','Operatore').where('cognome','==','Collaudo').get()).size===1;});
   console.log('FIRST USER PERSONALE PASS: Operatore Collaudo saved from the Personale v2 form.');
   await trialFrame.locator('#management-close-btn').click();
+  await trialFrame.locator('#management-page').waitFor({state:'hidden'});
   await openMenu();
   await trialFrame.locator('#open-panel-mezzi').click();
   await trialFrame.locator('#vehicles-v2').waitFor({state:'visible'});
@@ -163,6 +164,7 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   await trialFrame.waitForFunction(async()=>{const s=window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__;return (await s.session.firestore.collection('mezzi').where('codiceMezzo','==','MEZZO-COLLAUDO-01').get()).size===1;});
   console.log('FIRST USER MEZZO PASS: MEZZO-COLLAUDO-01 saved from the Mezzi v2 form.');
   await trialFrame.locator('#management-close-btn').click();
+  await trialFrame.locator('#management-page').waitFor({state:'hidden'});
   await openMenu();
   await trialFrame.locator('#open-panel-commesse').click();
   await trialFrame.locator('#open-new-commessa-btn').click();

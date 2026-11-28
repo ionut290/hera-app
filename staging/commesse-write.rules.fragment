@@ -1,6 +1,6 @@
 // Generic company-owned commesse. Sfalcio COBO keeps its dedicated constrained rules.
 function canManageCommesse() {
- return canReadDemoCommesse()
+ return canReadDemoCommesse() && planWritable(tenantId)
  && get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'admin';
 }
 function canManagePrototypeCommesse() {
@@ -16,7 +16,7 @@ function cantiereKeys() {
  return ['id','commessaId','nome','denominazione','comune','indirizzo','descrizione','coordinate','latitudine','longitudine','gpsX','gpsY','tipologia','note','stato','createdAt','updatedAt','createdBy','updatedBy'];
 }
 match /commesse/{commessaId} {
- allow create: if commessaId != 'sfalcio-cobo' && canManagePrototypeCommesse()
+ allow create: if commessaId != 'sfalcio-cobo' && quotaCreate('commesse','commesse',commessaId,'') && canManagePrototypeCommesse()
  && request.resource.data.keys().hasOnly(commessaKeys())
  && request.resource.data.keys().hasAll(['nome','createdAt','createdBy'])
  && request.resource.data.nome is string && request.resource.data.nome.size()>0
@@ -31,7 +31,7 @@ match /commesse/{commessaId} {
  allow get,list: if canReadDemoCommesse();
  allow delete: if false;
  match /impianti/{impiantoId} {
-  allow create: if commessaId != 'sfalcio-cobo' && canManageCantieri()
+  allow create: if commessaId != 'sfalcio-cobo' && quotaCreate('impianti','commesse',impiantoId,commessaId) && canManageCantieri()
   && request.resource.data.keys().hasOnly(cantiereKeys())
   && request.resource.data.keys().hasAll(['id','commessaId','createdAt','createdBy'])
   && request.resource.data.id==impiantoId

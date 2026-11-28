@@ -87,8 +87,8 @@ try{
  const region=page.locator('#billingAdministrativeArea, select[name=billingAdministrativeArea]').first();
  if(await region.isVisible()){const options=await region.locator('option').evaluateAll(ns=>ns.map(n=>({v:n.value,t:n.textContent})));const b=options.find(o=>o.v==='BO'||o.t==='Bologna');if(b)await region.selectOption(b.v);}
  stage='hosted-checkout-submit';
- const visibleButtons=await page.locator('button').evaluateAll(ns=>ns.filter(n=>!!(n.offsetWidth||n.offsetHeight)).map(n=>({text:(n.innerText||'').trim().slice(0,80),type:n.getAttribute('type'),ariaLabel:n.getAttribute('aria-label'),disabled:!!n.disabled})).slice(0,20));
- console.log('CHECKOUT_SUBMIT_OPTIONS '+JSON.stringify(visibleButtons));
+ const visibleButtonInfo=await page.locator('button').evaluateAll(ns=>ns.filter(n=>!!(n.offsetWidth||n.offsetHeight)).map(n=>({text:(n.innerText||'').trim().slice(0,80),type:n.getAttribute('type'),ariaLabel:n.getAttribute('aria-label'),disabled:!!n.disabled})).slice(0,20));
+ console.log('CHECKOUT_SUBMIT_OPTIONS '+JSON.stringify(visibleButtonInfo));
  const submitSpecific=page.locator('button[type=submit]').filter({hasText:/subscribe|pay/i}).first();
  const byRole=page.getByRole('button',{name:/subscribe|pay|complete|confirm|continue/i}).last();
  const visibleButtons=page.locator('button').filter({visible:true});

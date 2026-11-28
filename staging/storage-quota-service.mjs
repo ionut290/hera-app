@@ -100,5 +100,53 @@ export function createStorageQuotaService({app}){
   if(bytes.length!==d.size||createHash('sha256').update(bytes).digest('hex')!==d.sha256)fail('BLOB_MISMATCH');
   return {...view(d,fileId),base64:bytes.toString('base64')};
  }
- return Object.freeze({upload,download});
+ async function list({token,tenantId,cursor=null}){
+  const uid=await identity(token),r=refs(tenantId,uid,'list-placeholder-0000');
+  if(cursor!==null&&!idOk(cursor))fail('INVALID_PATH');
+  return db.runTransaction(async tx=>{
+   const {t,m}=await membership(tx,r,tenantId);
+   let q=r.tenant.collection('storedFiles');
+   if(m.role!=='admin')q=q.where('ownerUid','==',uid);
+   q=q.orderBy('__name__').limit(101);
+   if(cursor)q=q.startAfter(r.tenant.collection('storedFiles').doc(cursor));
+   const snap=await tx.get(q),page=snap.docs.slice(0,100);
+   return {files:page.filter(x=>['ready','deleting','reserved'].includes(x.data().status)).map(x=>view(x.data(),x.id)),nextCursor:snap.size>100?page.at(-1).id:null,used:t.usage?.storageBytes??null,limit:t.limits?.storageBytes??null,writable:writable(t,Date.now())};
+  });
+ }
+ async function remove({token,tenantId,fileId}){
+  const uid=await identity(token),r=refs(tenantId,uid,fileId);
+  const d=await db.runTransaction(async tx=>{
+   const {t,m}=await membership(tx,r,tenantId),d=(await tx.get(r.meta)).data();
+   if(!d||(d.ownerUid!==uid&&m.role!=='admin'))fail('FORBIDDEN');
+   if(d.status==='deleted')return d;
+   if(!writable(t,Date.now()))fail('PLAN_EXPIRED');
+   if(!['ready','deleting'].includes(d.status)||!d.generation||!Number.isSafeInteger(d.size)||d.size<=0)fail('FILE_PENDING_RECONCILIATION');
+   if(d.status==='ready')tx.update(r.meta,{status:'deleting',deleteStartedAt:serverTimestamp()});
+   return d;
+  });
+  if(d.status==='deleted')return {id:fileId,status:'deleted'};
+  // A generation precondition prevents removal of a replacement object.
+  // Never release quota until absence of the object has been verified.
+  const object=bucket.file(r.path);
+  try{
+   try{
+    const [current]=await object.getMetadata();
+    if(String(current.generation)!==d.generation||Number(current.size)!==d.size||current.metadata?.sha256!==d.sha256)fail('BLOB_MISMATCH');
+    await bucket.file(r.path,{generation:d.generation}).delete({ifGenerationMatch:d.generation});
+   }catch(e){if(Number(e?.code)!==404)throw e;}
+   const [exists]=await object.exists();
+   if(exists)fail('BLOB_MISMATCH');
+  }catch(e){console.error('STORAGE_DELETE_PENDING',e?.name||'Error',e?.code||'unknown');fail('FILE_PENDING_RECONCILIATION');}
+  await db.runTransaction(async tx=>{
+   const [ts,ms]=await Promise.all([tx.get(r.tenant),tx.get(r.meta)]),t=ts.data(),fresh=ms.data();
+   if(fresh?.status==='deleted')return;
+   if(fresh?.status!=='deleting'||fresh.generation!==d.generation||fresh.size!==d.size||fresh.sha256!==d.sha256)fail('RESERVATION_CHANGED');
+   const used=t?.usage?.storageBytes;
+   if(!Number.isSafeInteger(used)||used<d.size)fail('QUOTA_UNVERIFIED');
+   tx.update(r.tenant,{'usage.storageBytes':used-d.size});
+   tx.update(r.meta,{status:'deleted',deletedAt:serverTimestamp()});
+  });
+  return {id:fileId,status:'deleted'};
+ }
+ return Object.freeze({upload,download,list,remove});
 }

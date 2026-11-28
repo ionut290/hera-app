@@ -120,4 +120,4 @@ jobs:
           npx --no-install playwright install --with-deps chromium
           node assemble-candidate-rules.mjs
           printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}' > emulator-stripe.json
-          npx --no-install firebase emulators:exec --config emulator-stripe.json --only firestore,auth --project varga-cantieri-v2-staging 'node test-stripe-test-billing.mjs && node test-stripe-sandbox-checkout.mjs && node billing-web/test-local-web.mjs'
+          npx --no-install firebase emulators:exec --config emulator-stripe.json --only firestore,auth --project varga-cantieri-v2-staging 'node test-stripe-sandbox-catalog.mjs && node test-stripe-test-billing.mjs && node test-stripe-sandbox-checkout.mjs && node billing-web/test-local-web.mjs'

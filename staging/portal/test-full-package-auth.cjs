@@ -191,6 +191,14 @@ const root=path.join(__dirname,'full-runtime-dist'),projectId='varga-cantieri-v2
   assert.equal((await db.doc('users/'+uid+'/memberships/demo-a').get()).data().role,'supervisor');
   assert.equal((await db.doc('tenants/demo-b/members/'+uid).get()).data().role,'admin');
   assert.equal((await db.doc('tenants/demo-a/members/'+uid).get()).data().historicalId,'preserved-local-admin');
+  const trialRow=page.locator('[data-admin-tenant="'+activation.tenantId+'"]');
+  await trialRow.getByText('Piano prova · 30 giorni · Richiesta attivazione ricevuta',{exact:true}).waitFor();
+  await trialRow.getByRole('spinbutton',{name:'Commesse limite',exact:true}).fill('7');
+  await trialRow.getByRole('button',{name:'Attiva piano completo',exact:true}).click();
+  await trialRow.getByRole('button',{name:'Salva limiti piano completo',exact:true}).waitFor();
+  const upgraded=(await created.docs[0].ref.get()).data();
+  assert.equal(upgraded.plan,'full');assert.equal(upgraded.limits.commesse,7);assert.equal(upgraded.usage.commesse,5);
+  assert.equal(upgraded.upgradeRequested,false);assert.equal(upgraded.planUpdatedBy,superUid);
   await page.locator('#admin-new-company-name').fill('Nuova azienda collaudo');
   await page.getByRole('button',{name:'Nuova azienda',exact:true}).click();
   await page.locator('[data-admin-tenant]').filter({hasText:'Nuova azienda collaudo'}).waitFor();

@@ -61,6 +61,7 @@ try{
   await describeCheckoutFields();
   throw new Error('CHECKOUT_FIELD_UNAVAILABLE');
  };
+ await describeCheckoutFields();
  stage='hosted-checkout-email';
  await fill('#email, input[name=email], input[type=email], input[autocomplete=email], input[placeholder*="email" i]',email,false);
  stage='hosted-checkout-card-number';
@@ -69,14 +70,25 @@ try{
  await fill('#cardExpiry, input[name=cardExpiry], input[autocomplete=cc-exp], input[aria-label*="expiration" i]','1230');
  stage='hosted-checkout-card-cvc';
  await fill('#cardCvc, input[name=cardCvc], input[autocomplete=cc-csc], input[aria-label*="security code" i]','123');
+ stage='hosted-checkout-billing-name';
  await fill('#billingName, input[name=billingName], input[autocomplete=cc-name]','Varga Sandbox QA',false);
- const country=page.locator('#billingCountry, select[name=billingCountry]').first();if(await country.isVisible())await country.selectOption('IT');
+ stage='hosted-checkout-country';
+ const country=page.locator('#billingCountry, select[name=billingCountry]').first();
+ if(await country.isVisible()){const options=await country.locator('option').evaluateAll(ns=>ns.map(n=>({v:n.value,t:n.textContent})));const it=options.find(o=>o.v==='IT'||/italy|italia/i.test(o.t||''));if(it)await country.selectOption(it.v);}
+ stage='hosted-checkout-address-expand';
  const manual=page.getByText(/enter address manually/i).first();if(await manual.isVisible())await manual.click();
+ stage='hosted-checkout-address-line';
  await fill('#billingAddressLine1, input[name=billingAddressLine1], input[autocomplete=address-line1]','Via Esempio 1',false);
+ stage='hosted-checkout-city';
  await fill('#billingLocality, input[name=billingLocality], input[autocomplete=address-level2]','Bologna',false);
+ stage='hosted-checkout-postal-code';
  await fill('#billingPostalCode, input[name=billingPostalCode], input[autocomplete=postal-code]','40100',false);
- const region=page.locator('#billingAdministrativeArea, select[name=billingAdministrativeArea]').first();if(await region.isVisible()){const options=await region.locator('option').evaluateAll(ns=>ns.map(n=>({v:n.value,t:n.textContent})));const b=options.find(o=>o.v==='BO'||o.t==='Bologna');if(b)await region.selectOption(b.v);}
- const submit=page.locator('button[type=submit]').filter({hasText:/subscribe|pay/i}).first();
+ stage='hosted-checkout-region';
+ const region=page.locator('#billingAdministrativeArea, select[name=billingAdministrativeArea]').first();
+ if(await region.isVisible()){const options=await region.locator('option').evaluateAll(ns=>ns.map(n=>({v:n.value,t:n.textContent})));const b=options.find(o=>o.v==='BO'||o.t==='Bologna');if(b)await region.selectOption(b.v);}
+ stage='hosted-checkout-submit';
+ const submitSpecific=page.locator('button[type=submit]').filter({hasText:/subscribe|pay/i}).first();
+ const submit=await submitSpecific.count()?submitSpecific:page.getByRole('button',{name:/subscribe|pay/i}).first();
  await submit.waitFor({state:'visible'});await submit.click();
  stage='provider-payment-confirmation';
  // Poll the authoritative API, not the redirect URL. Never submit twice.

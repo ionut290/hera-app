@@ -16,16 +16,45 @@ function canCreateTrialTenant() {
   && request.resource.data.usage.operatori == 0;
 }
 allow create: if canCreateTrialTenant();
+// Each acceptance must atomically consume exactly one slot and create both membership records.
+// The request UID binds the counter increment to one pending request.
+function validOperatorApproval(uid) {
+ let before = get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+ let after = getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data;
+ let req = get(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data;
+ let approved = getAfter(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data;
+ return companyAdmin(tenantId)
+  && before.plan in ['trial','full']
+  && before.usage.operatori is int && before.usage.operatori >= 0
+  && before.limits.operatori is int && before.usage.operatori < before.limits.operatori
+  && after.usage.operatori == before.usage.operatori + 1
+  && after.lastOperatorUid == uid
+  && req.status == 'pending' && approved.status == 'accepted';
+}
+function validOperatorCounter() {
+ let uid = request.resource.data.lastOperatorUid;
+ return uid is string && uid.size()>0 && uid.size()<=128
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastOperatorUid'])
+  && request.resource.data.usage.diff(resource.data.usage).affectedKeys().hasOnly(['operatori'])
+  && validOperatorApproval(uid)
+  && !exists(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid))
+  && !exists(/databases/$(database)/documents/users/$(uid)/memberships/$(tenantId))
+  && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.role == 'employee'
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tenantId)).data.role == 'employee';
+}
+allow update: if validOperatorCounter();
 match /members/{uid} {
  allow create: if eligible()
   && uid == request.auth.uid
+  && !exists(/databases/$(database)/documents/tenants/$(tenantId))
   && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid
   && request.resource.data.uid == request.auth.uid
   && request.resource.data.role == 'admin'
   && request.resource.data.status == 'active'
   && request.resource.data.demo == true;
- allow create: if companyAdmin(tenantId)
-  && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'accepted'
+ allow create: if validOperatorApproval(uid)
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tenantId)).data.role == 'employee'
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tenantId)).data.status == 'active'
   && request.resource.data.uid == uid
   && request.resource.data.role == 'employee'
   && request.resource.data.status == 'active'
@@ -48,7 +77,7 @@ match /joinRequests/{uid} {
   && resource.data.status == 'pending'
   && request.resource.data.uid == resource.data.uid
   && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewedAt','reviewedBy'])
-  && request.resource.data.status in ['accepted','rejected']
+  && (request.resource.data.status == 'rejected' || (request.resource.data.status == 'accepted' && validOperatorApproval(uid)))
   && request.resource.data.reviewedBy == request.auth.uid
   && request.resource.data.reviewedAt == request.time;
  allow delete: if false;

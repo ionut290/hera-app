@@ -59,7 +59,7 @@ function originalPlantCreate(commessaId,impiantoId) {
    || (tenant.get('originalManualEnabled',false)==true && validManualPlant(d)));
 }
 match /commesse/{commessaId} {
- allow create: if commessaId!='sfalcio-cobo' && quotaCreate('commesse','commesse',commessaId,'') && originalCommessaCreate('commesse');
+ allow create: if commessaId!='sfalcio-cobo' && originalCommessaCreate('commesse') && quotaCreate('commesse','commesse',commessaId,'');
  match /impianti/{impiantoId} {
   allow create: if originalPlantCreate(commessaId,impiantoId);
  }

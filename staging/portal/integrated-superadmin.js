@@ -18,7 +18,7 @@ export function createAdminPanel({host,auth,db,statics,readOnly=false}){
   const button=(name,action)=>{const b=el('button',name);b.type='button';b.onclick=action;return b;};
   async function mutate(action,refresh){
    if(readOnly||busy||!current(g,u))return;
-   busy=true;
+   busy=true;feedback.textContent='Salvataggio in corso…';
    try{await authorize(g,u);await action();if(current(g,u)){await refresh();feedback.textContent='Modifica salvata.';}}
    catch(e){if(current(g,u))feedback.textContent='Operazione non riuscita: '+(e.code||e.message);}
    finally{if(current(g,u))busy=false;}

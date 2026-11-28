@@ -48,27 +48,54 @@ async function createCompany(name,node){
  await user.reload();const token=await user.getIdTokenResult(true);
  if(token.claims.email_verified!==true){try{await user.sendEmailVerification();}catch{}throw Error('EMAIL_NOT_VERIFIED');}
  const clean=String(name||'').trim();if(clean.length<2||clean.length>120)throw Error('COMPANY_NAME_INVALID');
- const tenantId='demo-'+crypto.randomUUID(),joinCode=makeJoinCode(),now=statics.FieldValue.serverTimestamp();
+ const previous=readIntent(user.uid);
+ const retry=previous?.type==='company'&&previous.name===clean&&/^demo-[0-9a-f-]{36}$/.test(previous.tenantId||'')&&/^VC-[A-Z0-9]{8}$/.test(previous.joinCode||'');
+ const tenantId=retry?previous.tenantId:'demo-'+crypto.randomUUID(),joinCode=retry?previous.joinCode:makeJoinCode();
+ const ensureSession=()=>{if(auth.currentUser?.uid!==user.uid)throw Error('SESSION_CHANGED');};
+ ensureSession();
+ // Persist the same IDs before attempting a write, including manual activation.
+ saveIntent(user.uid,{type:'company',name:clean,tenantId,joinCode});
+ const now=statics.FieldValue.serverTimestamp();
  const tenant=db.doc('tenants/'+tenantId),codeDoc=db.doc('tenantJoinCodes/'+joinCode),member=db.doc('tenants/'+tenantId+'/members/'+user.uid),membership=db.doc('users/'+user.uid+'/memberships/'+tenantId);
+ const alreadyCreated=async()=>{
+  ensureSession();
+  const existing=await membership.get({source:'server'});ensureSession();
+  if(!existing.exists)return false;
+  const m=existing.data(),t=await tenant.get({source:'server'});ensureSession();
+  if(m.role!=='admin'||m.status!=='active'||!t.exists||t.data().ownerUid!==user.uid||t.data().joinCode!==joinCode)throw Error('ACTIVATION_CONFLICT');
+  return true;
+ };
+ const finish=()=>{ensureSession();clearIntent(user.uid);node.textContent='Azienda registrata. Codice azienda: '+joinCode+'.';};
+ if(await alreadyCreated()){finish();return;}
+ ensureSession();
  const batch=db.batch();
  batch.set(tenant,{name:clean,status:'active',demo:true,ownerUid:user.uid,joinCode,plan:'trial',trial:true,trialStartedAt:now,limits:{commesse:1,impianti:10,admin:1,operatori:3},usage:{commesse:0,impianti:0,admin:1,operatori:0},originalCreateEnabled:true,originalManualEnabled:true,originalArchivesEnabled:true,commesseWriteEnabled:true,snowCreateEnabled:true,fattoMode:'configurable-demo',createdAt:now,createdBy:user.uid});
  batch.set(codeDoc,{tenantId,companyName:clean,status:'active',createdAt:now,createdBy:user.uid});
  batch.set(member,{uid:user.uid,email:user.email||'',displayName:user.displayName||user.email||'Amministratore',role:'admin',status:'active',demo:true,createdAt:now});
  batch.set(membership,{tenantId,role:'admin',status:'active',demo:true,createdAt:now});
- await batch.commit();clearIntent(user.uid);node.textContent='Azienda registrata. Codice azienda: '+joinCode+'.';
+ try{await batch.commit();}catch(err){
+  // A lost response can mean a successful atomic commit. Verify server state;
+  // never create a second company or automatically retry the write.
+  let recovered=false;try{recovered=await alreadyCreated();}catch{}
+  if(!recovered)throw err;
+ }
+ finish();
  }finally{activationBusy=false;}
 }
 async function requestJoin(code,node){
  const user=auth.currentUser;if(!user)throw Error('LOGIN_REQUIRED');
  await user.reload();const token=await user.getIdTokenResult(true);
  if(token.claims.email_verified!==true){try{await user.sendEmailVerification();}catch{}throw Error('EMAIL_NOT_VERIFIED');}
+ const ensureSession=()=>{if(auth.currentUser?.uid!==user.uid)throw Error('SESSION_CHANGED');};ensureSession();
  const clean=normalizeCode(code);
  const codeSnap=await db.doc('tenantJoinCodes/'+clean).get({source:'server'});if(!codeSnap.exists||codeSnap.data().status!=='active')throw Error('CODE_NOT_FOUND');
+ ensureSession();
  const tenantId=codeSnap.data().tenantId;const companyName=codeSnap.data().companyName||'azienda';
  const ref=db.doc('tenants/'+tenantId+'/joinRequests/'+user.uid),existing=await ref.get({source:'server'});
- if(existing.exists){const state=existing.data().status;node.textContent=state==='accepted'?'Richiesta approvata. Accedi nuovamente per entrare.':state==='rejected'?'Richiesta rifiutata. Contatta l’amministratore.':'Richiesta già inviata a '+companyName+'. Attendi l’approvazione.';return;}
+ ensureSession();
+ if(existing.exists){const state=existing.data().status;node.textContent=state==='accepted'?'Richiesta approvata. Aggiorna le aziende per entrare.':state==='rejected'?'Richiesta rifiutata. Contatta l’amministratore.':'Richiesta già inviata a '+companyName+'. Attendi l’approvazione.';return state;}
  await ref.set({uid:user.uid,email:user.email||'',displayName:user.displayName||user.email||'Utente',status:'pending',joinCode:clean,requestedAt:statics.FieldValue.serverTimestamp()});
- node.textContent='Richiesta inviata a '+companyName+'. Attendi l’approvazione dell’amministratore.';
+ ensureSession();node.textContent='Richiesta inviata a '+companyName+'. Attendi l’approvazione dell’amministratore.';return 'pending';
 }
 async function showCompanyAdmin(tenantId,tenantData){
  clearCompanyAdmin();const panel=$('company-admin-panel'),list=$('company-admin-list'),feedback=$('company-admin-status');panel.hidden=false;
@@ -113,9 +140,9 @@ $('register').addEventListener('submit',async e=>{
 });
 $('company-form').addEventListener('submit',async e=>{e.preventDefault();const node=$('company-status');node.textContent='Attivazione piano prova…';try{await createCompany($('company-name-existing').value,node);await refreshAccount(auth.currentUser);}catch(err){node.textContent=err.message==='EMAIL_NOT_VERIFIED'?'Verifica prima l’email.':userError(err);}});
 function joinError(err){return ({CODE_INVALID:'Inserisci un codice valido (VC- seguito da 8 caratteri).',EMAIL_NOT_VERIFIED:'Verifica prima l’email.',CODE_NOT_FOUND:'Codice aziendale non valido o non più attivo.'})[err.message]||userError(err);}
-$('join').addEventListener('submit',async e=>{e.preventDefault();const node=$('join-status');try{const code=normalizeCode($('join-code').value);if(!auth.currentUser){showRegister('join');return;}node.textContent='Invio richiesta…';await requestJoin(code,node);saveIntent(auth.currentUser.uid,{type:'join',code});}catch(err){node.textContent=joinError(err);}});
+$('join').addEventListener('submit',async e=>{e.preventDefault();const node=$('join-status');try{const code=normalizeCode($('join-code').value);if(!auth.currentUser){showRegister('join');return;}const uid=auth.currentUser.uid;node.textContent='Invio richiesta…';await requestJoin(code,node);if(auth.currentUser?.uid!==uid)return;saveIntent(uid,{type:'join',code});}catch(err){node.textContent=joinError(err);}});
 $('logout').onclick=async()=>{closeRuntime();adminPanel.clear();await auth.signOut();};
-$('back').onclick=()=>{closeRuntime();status('Seleziona un’altra azienda.');};
+$('back').onclick=()=>{if(auth.currentUser&&!activationBusy&&!creatingAccount&&!verificationBusy)refreshAccount(auth.currentUser);};
 $('company-return').onclick=()=>{closeRuntime();status('Seleziona un’altra azienda.');};
 $('admin-toggle').onclick=async()=>{
  if(!superAdmin||!auth.currentUser)return;
@@ -148,7 +175,7 @@ async function refreshAccount(user){
    $('companies').append(button);if(item.data().role==='admin'){const manage=document.createElement('button');manage.textContent='Gestisci codice e richieste';manage.onclick=e=>{e.stopPropagation();showCompanyAdmin(item.id,tenant.data());};$('companies').append(manage);}
   }
   const intent=readIntent(user.uid);
-  if(intent?.type==='join'){ $('join-code').value=intent.code;$('join-panel').hidden=false;$('company-panel').hidden=true;try{await requestJoin(intent.code,$('join-status'));}catch(err){$('join-status').textContent=joinError(err);} }
+  if(intent?.type==='join'){ $('join-code').value=intent.code;$('join-panel').hidden=false;$('company-panel').hidden=true;try{const state=await requestJoin(intent.code,$('join-status'));if(request!==revision||auth.currentUser?.uid!==user.uid)return;if(state==='accepted'&&companyCount){clearIntent(user.uid);$('join-panel').hidden=true;}}catch(err){if(request!==revision)return;$('join-status').textContent=joinError(err);} }
   if(!companyCount){$('company-panel').hidden=superAdmin||intent?.type==='join';if(intent?.type==='company'&&!superAdmin){$('company-name-existing').value=intent.name;try{await createCompany(intent.name,$('company-status'));if(request===revision)await refreshAccount(auth.currentUser);return;}catch(err){$('company-status').textContent=err.code==='permission-denied'||err.code==='firestore/permission-denied'?'Account verificato, ma il server non autorizza ancora l’attivazione dell’azienda. Non registrarti di nuovo.':userError(err);}}status(superAdmin?'Apri Super Admin per amministrare le aziende.':intent?.type==='join'?'Controlla lo stato della tua richiesta.':'Crea la tua azienda oppure unisciti a un’azienda esistente.');return;}
   $('company-panel').hidden=true;if(intent?.type==='company')clearIntent(user.uid);
   status('Seleziona la tua azienda.');

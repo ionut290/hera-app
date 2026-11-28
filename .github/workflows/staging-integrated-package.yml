@@ -115,5 +115,5 @@ jobs:
           printf '%s' '{"name":"varga-stripe-fixture-ci","version":"1.0.0","private":true}' > package.json
           npm install --no-save --no-audit --no-fund firebase-tools@15.34.2 firebase-admin stripe@17.7.0
           node assemble-candidate-rules.mjs
-          printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > emulator-stripe.json
-          npx --no-install firebase emulators:exec --config emulator-stripe.json --only firestore --project varga-cantieri-v2-staging 'node test-stripe-test-billing.mjs'
+          printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}' > emulator-stripe.json
+          npx --no-install firebase emulators:exec --config emulator-stripe.json --only firestore,auth --project varga-cantieri-v2-staging 'node test-stripe-test-billing.mjs && node test-stripe-sandbox-checkout.mjs'

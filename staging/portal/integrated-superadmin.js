@@ -83,9 +83,9 @@ export function createAdminPanel({host,auth,db,statics,readOnly=false}){
       }));
      }
      if(t.billing)r.append(el('p','Ultima conferma: '+t.billing.reference+' · '+formatPrice(t.billing.amountCents)));
-     if(t.stripeTestSubscriptionId)r.append(el('p','Stripe — solo simulazione di collaudo; incassi manuali disabilitati.'));
+     if(t.stripeTestSubscriptionId||t.stripeSandboxCheckoutId)r.append(el('p','Stripe — solo simulazione di collaudo; incassi manuali disabilitati.'));
      if(!readOnly&&t.demo===true){
-      if(!t.stripeTestSubscriptionId){
+      if(!t.stripeTestSubscriptionId&&!t.stripeSandboxCheckoutId){
       const tier=el('select');tier.setAttribute('aria-label','Abbonamento da attivare');
       for(const [key,p] of Object.entries(SUBSCRIPTION_PLANS)){const opt=el('option',p.name+' · '+formatPrice(p.priceCents)+' / 30 giorni');opt.value=key;tier.append(opt);}
       tier.value=t.billing&&periodEnd(t)>Date.now()?t.billing.tier:t.requestedTier||t.billing?.tier||'starter';
@@ -97,7 +97,7 @@ export function createAdminPanel({host,auth,db,statics,readOnly=false}){
        mutate(()=>db.runTransaction(async tx=>{
         const currentDoc=await tx.get(item.ref),fresh=currentDoc.data();
         if(!current(g,u))throw Error('Sessione amministrativa chiusa');
-        if(!fresh||fresh.stripeTestSubscriptionId||!['trial','full'].includes(fresh.plan))throw Error('Piano non valido o gestito da Stripe test');
+        if(!fresh||fresh.stripeTestSubscriptionId||fresh.stripeSandboxCheckoutId||!['trial','full'].includes(fresh.plan))throw Error('Piano non valido o gestito da Stripe test');
         for(const [k,v] of Object.entries(p.limits))if(!Number.isSafeInteger(fresh.usage?.[k])||fresh.usage[k]>v)throw Error('Consumo oltre il limite: '+k);
         const old=fresh.billing,active=old&&periodEnd(fresh)>Date.now();
         if(active&&old.tier!==tier.value)throw Error('Cambio piano disponibile a scadenza; nessuna modifica al periodo pagato.');

@@ -7,7 +7,8 @@ import {initializeApp,deleteApp} from 'firebase-admin/app';
 import {getAuth} from 'firebase-admin/auth';
 import {getFirestore} from 'firebase-admin/firestore';
 import {SUBSCRIPTION_PLANS} from '../subscription-plans.mjs';
-import {createSandboxCheckout} from '../stripe-sandbox-checkout.mjs';
+import {createSandboxCheckout,createSandboxStripeProvider} from '../stripe-sandbox-checkout.mjs';
+import {SANDBOX_PRICE_IDS,auditSandboxCatalog} from '../stripe-sandbox-catalog.mjs';
 import {createStripeTestBilling} from '../stripe-test-billing.mjs';
 const projectId='varga-cantieri-v2-staging',origin='http://127.0.0.1:4173',host='127.0.0.1:4173';
 const secret='whsec_local_web_fixture_only_not_real';
@@ -44,13 +45,17 @@ function fixtureProvider(){
   }
  };
 }
-export function createLocalBillingServer({app}){
+export function createLocalBillingServer({app,mode='fixture'}){
  if(app?.options?.projectId!==projectId||process.env.FIRESTORE_EMULATOR_HOST!=='127.0.0.1:8080'||process.env.FIREBASE_AUTH_EMULATOR_HOST!=='127.0.0.1:9099')fail('EMULATORS_REQUIRED');
- const provider=fixtureProvider(),checkout=createSandboxCheckout({app,provider,priceIds}),billing=createStripeTestBilling({app,webhookSecret:secret,priceIds}),stripe=new Stripe('sk_test_LOCAL_FIXTURE_ONLY',{apiVersion:version}),db=getFirestore(app),auth=getAuth(app);
+ if(!['fixture','stripe-sandbox'].includes(mode))fail('INVALID_CONFIG');
+ const external=mode==='stripe-sandbox';
+ const provider=external?createSandboxStripeProvider({app,secretKey:process.env.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY}):fixtureProvider(),catalog=external?SANDBOX_PRICE_IDS:priceIds;
+ const checkout=createSandboxCheckout({app,provider,priceIds:catalog}),billing=createStripeTestBilling({app,webhookSecret:secret,priceIds:catalog,authoritativeProvider:external?provider:null}),stripe=new Stripe('sk_test_LOCAL_FIXTURE_ONLY',{apiVersion:version}),db=getFirestore(app),auth=getAuth(app);
  const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' http://127.0.0.1:9099; frame-ancestors 'none'; form-action 'none'; base-uri 'none'"};
  const assets={'/':['billing.html','text/html'],'/billing-test-return.html':['billing.html','text/html'],'/billing.css':['billing.css','text/css'],'/billing.js':['billing.js','application/javascript']};
- const actions=new Set(['catalog','companies','request-plan','checkout','simulate','cancel']);
+ const actions=new Set(['catalog','companies','request-plan','checkout','simulate','cancel','verify']);
  async function simulate(token,tenantId){
+  if(external)fail('SIMULATION_DISABLED');
   // Only a verified owner can complete this synthetic session. No external API exists here.
   const allowed=(await checkout.companies({token})).companies.some(c=>c.id===tenantId&&['open','bound'].includes(c.checkoutStatus));
   if(!allowed)fail('FORBIDDEN');
@@ -74,21 +79,27 @@ export function createLocalBillingServer({app}){
    const token=String(req.headers.authorization||'').match(/^Bearer ([A-Za-z0-9._-]+)$/)?.[1];if(!token)return reply(401,{code:'UNAUTHENTICATED'});
    let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>8192)return reply(413,{code:'INVALID_REQUEST'});chunks.push(chunk);}
    const data=JSON.parse(Buffer.concat(chunks).toString('utf8'));if(!data||typeof data!=='object'||Array.isArray(data))return reply(400,{code:'INVALID_REQUEST'});
-   if(action==='catalog'){await checkout.companies({token});return reply(200,{plans:Object.entries(SUBSCRIPTION_PLANS).map(([tier,p])=>({tier,...p})),testMode:true});}
+   if(action==='catalog'){await checkout.companies({token});return reply(200,{plans:Object.entries(SUBSCRIPTION_PLANS).map(([tier,p])=>({tier,...p})),testMode:true,mode});}
    if(action==='companies')return reply(200,await checkout.companies({token}));
    if(action==='request-plan')return reply(200,await checkout.requestPlan({token,tenantId:data.tenantId,tier:data.tier}));
    if(action==='checkout'){
+    if(external)await auditSandboxCatalog(provider);
     const result=await checkout.createCheckout({token,tenantId:data.tenantId,tier:data.tier,acceptTerms:data.acceptTerms});
     // Never return the fixture's placeholder external URL or any payment secret.
-    return reply(200,{status:result.status,testMode:true});
+    return reply(200,{status:result.status,testMode:true,...(external?{url:result.url}:{})});
    }
    if(action==='cancel')return reply(200,await checkout.cancelCheckout({token,tenantId:data.tenantId}));
    if(action==='simulate')return reply(200,await simulate(token,data.tenantId));
+   if(action==='verify'){
+    if(!external)fail('RECONCILIATION_UNAVAILABLE');
+    const bound=await checkout.finalizeCheckout({token,tenantId:data.tenantId});
+    return reply(200,await billing.reconcileInitialInvoice(bound.subscriptionId));
+   }
   }catch(e){const code=typeof e?.code==='string'&&/^[A-Z_]{3,48}$/.test(e.code)?e.code:'REQUEST_FAILED';return reply(code==='UNAUTHENTICATED'?401:code==='FORBIDDEN'?403:400,{code});}
  });
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
- const app=initializeApp({projectId}),server=createLocalBillingServer({app});
- server.listen(4173,'127.0.0.1',()=>console.log('LOCAL BILLING SIMULATION ONLY: '+origin));
+ const app=initializeApp({projectId}),mode=process.argv.includes('--stripe-sandbox')?'stripe-sandbox':'fixture',server=createLocalBillingServer({app,mode});
+ server.listen(4173,'127.0.0.1',()=>console.log('LOCAL BILLING '+mode+' ONLY: '+origin));
  process.once('SIGINT',()=>server.close(async()=>{await deleteApp(app);process.exit(0);}));
 }

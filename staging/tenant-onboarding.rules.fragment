@@ -20,9 +20,9 @@ function canCreateTrialTenant() {
 }
 allow create: if canCreateTrialTenant();
 // Owner may request upgrade even after trial expiry. Cannot change plan or counters.
-allow update: if companyAdmin(tenantId) && resource.data.plan in ['trial','full']
+allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upgradeRequested','upgradeRequestedAt','requestedTier'])
+ && companyAdmin(tenantId) && resource.data.plan in ['trial','full']
  && resource.data.ownerUid==request.auth.uid
- && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upgradeRequested','upgradeRequestedAt','requestedTier'])
  && request.resource.data.requestedTier in ['starter','professional','business']
  && request.resource.data.upgradeRequested==true
  && request.resource.data.upgradeRequestedAt==request.time;
@@ -53,7 +53,7 @@ function validOperatorCounter() {
   && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.role == 'employee'
   && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tenantId)).data.role == 'employee';
 }
-allow update: if validOperatorCounter();
+allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastOperatorUid']) && validOperatorCounter();
 match /members/{uid} {
  allow create: if eligible()
   && uid == request.auth.uid

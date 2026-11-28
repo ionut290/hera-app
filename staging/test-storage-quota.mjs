@@ -49,8 +49,26 @@ try{
  assert.equal(pair.filter(x=>x.status==='rejected'&&x.reason.code==='STORAGE_LIMIT').length,1);
  assert.equal((await db.doc('tenants/'+A).get()).data().usage.storageBytes,100000000);
  assert.equal((await db.doc('tenants/'+B).get()).data().usage.storageBytes,0);
+ // Listing respects ownership, and deletion releases exactly one reservation.
+ const listing=await service.list({token:worker,tenantId:A});
+ assert.ok(listing.files.some(f=>f.id===first.fileId));assert.equal(listing.used,100000000);
+ assert.ok((await service.list({token:other,tenantId:B})).files.length===0);
+ await err('FORBIDDEN',()=>service.remove({token:other,tenantId:A,fileId:first.fileId}));
+ const deletion=make(worker,A,'local-storage-delete-0001');
+ const winning=pair.find(x=>x.status==='fulfilled').value.id;
+ await Promise.all([service.remove({token:admin,tenantId:A,fileId:winning}),service.remove({token:admin,tenantId:A,fileId:winning})]);
+ assert.equal((await db.doc('tenants/'+A).get()).data().usage.storageBytes,100000000-pdf.length);
+ await service.upload(deletion);
+ assert.equal((await db.doc('tenants/'+A).get()).data().usage.storageBytes,100000000);
+ await service.remove({token:worker,tenantId:A,fileId:deletion.fileId});
+ await service.remove({token:worker,tenantId:A,fileId:deletion.fileId});
+ assert.equal((await db.doc('tenants/'+A).get()).data().usage.storageBytes,100000000-pdf.length);
+ await err('FORBIDDEN',()=>service.download({token:worker,tenantId:A,fileId:deletion.fileId}));
+ assert.equal((await service.list({token:worker,tenantId:A})).files.some(f=>f.id===deletion.fileId),false);
+ console.log('STORAGE DELETE PASS: concurrent deletion, once-only release, new upload after release, hidden tombstone.');
  await db.doc('tenants/'+A).update({trialStartedAt:new Date(Date.now()-31*86400000)});
  await err('PLAN_EXPIRED',()=>service.upload(make(worker,A,'local-storage-file-0006')));
+ await err('PLAN_EXPIRED',()=>service.remove({token:worker,tenantId:A,fileId:first.fileId}));
  assert.equal((await service.download({token:worker,tenantId:A,fileId:first.fileId})).base64,payload);
  await db.doc('tenants/'+A+'/members/storage-worker').update({status:'suspended'});
  await err('FORBIDDEN',()=>service.download({token:worker,tenantId:A,fileId:first.fileId}));

@@ -35,21 +35,32 @@ try{
  console.log('REAL SANDBOX CHECKOUT CREATED: test-only Starter session, 1990 EUR cents, no entitlement granted.');
  stage='hosted-checkout-browser';
  browser=await chromium.launch({headless:true});
- const page=await browser.newPage({locale:'en-US'});page.setDefaultTimeout(20000);
- await page.goto(session.url,{waitUntil:'domcontentloaded',timeout:45000});
+ const page=await browser.newPage({locale:'en-US'});page.setDefaultTimeout(45000);
+ await page.goto(session.url,{waitUntil:'domcontentloaded',timeout:60000});
  assert.equal(new URL(page.url()).hostname,'checkout.stripe.com');
- // Stripe's publicly documented test card; never substitute a real card.
- const fill=async(sel,value,required=true)=>{const el=page.locator(sel).first();if(required)await el.waitFor({state:'visible'});if(await el.isVisible())await el.fill(value);};
- await fill('#email, input[name=email]',email);
- await fill('#cardNumber, input[name=cardNumber]','4242424242424242');
- await fill('#cardExpiry, input[name=cardExpiry]','1230');
- await fill('#cardCvc, input[name=cardCvc]','123');
- await fill('#billingName, input[name=billingName]','Varga Sandbox QA',false);
+ // Stripe Checkout hosts payment inputs in cross-origin frames. Search the page
+ // and its frames, but keep all entered data synthetic and test-only.
+ const fill=async(sel,value,required=true)=>{
+  const selectors=sel.split(',').map(s=>s.trim()).filter(Boolean),deadline=Date.now()+(required?45000:0);
+  do{
+   for(const context of [page,...page.frames().filter(f=>f!==page.mainFrame())]){
+    for(const selector of selectors){const el=context.locator(selector).first();try{if(await el.isVisible()){await el.fill(value,{timeout:5000});return true;}}catch{}}
+   }
+   if(!required)return false;
+   await page.waitForTimeout(400);
+  }while(Date.now()<deadline);
+  throw new Error('CHECKOUT_FIELD_UNAVAILABLE');
+ };
+ await fill('#email, input[name=email], input[type=email], input[autocomplete=email]',email);
+ await fill('#cardNumber, input[name=cardNumber], input[name=cardnumber], input[autocomplete=cc-number], input[aria-label*="card number" i]','4242424242424242');
+ await fill('#cardExpiry, input[name=cardExpiry], input[autocomplete=cc-exp], input[aria-label*="expiration" i]','1230');
+ await fill('#cardCvc, input[name=cardCvc], input[autocomplete=cc-csc], input[aria-label*="security code" i]','123');
+ await fill('#billingName, input[name=billingName], input[autocomplete=cc-name]','Varga Sandbox QA',false);
  const country=page.locator('#billingCountry, select[name=billingCountry]').first();if(await country.isVisible())await country.selectOption('IT');
  const manual=page.getByText(/enter address manually/i).first();if(await manual.isVisible())await manual.click();
- await fill('#billingAddressLine1, input[name=billingAddressLine1]','Via Esempio 1',false);
- await fill('#billingLocality, input[name=billingLocality]','Bologna',false);
- await fill('#billingPostalCode, input[name=billingPostalCode]','40100',false);
+ await fill('#billingAddressLine1, input[name=billingAddressLine1], input[autocomplete=address-line1]','Via Esempio 1',false);
+ await fill('#billingLocality, input[name=billingLocality], input[autocomplete=address-level2]','Bologna',false);
+ await fill('#billingPostalCode, input[name=billingPostalCode], input[autocomplete=postal-code]','40100',false);
  const region=page.locator('#billingAdministrativeArea, select[name=billingAdministrativeArea]').first();if(await region.isVisible()){const options=await region.locator('option').evaluateAll(ns=>ns.map(n=>({v:n.value,t:n.textContent})));const b=options.find(o=>o.v==='BO'||o.t==='Bologna');if(b)await region.selectOption(b.v);}
  const submit=page.locator('button[type=submit]').filter({hasText:/subscribe|pay/i}).first();
  await submit.waitFor({state:'visible'});await submit.click();

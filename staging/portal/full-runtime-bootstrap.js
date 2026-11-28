@@ -17,4 +17,5 @@
  Object.defineProperty(window,'localStorage',{value:session.localStorage,configurable:true});
  Object.defineProperty(window,'sessionStorage',{value:session.sessionStorage,configurable:true});
  window.__VARGA_STAGING_FIREBASE_CONFIG__={apiKey};
+ document.addEventListener('click',event=>{if(event.target?.closest?.('#open-private-docs-btn')&&window.parent.__vargaOpenCompanyDocuments?.()){event.preventDefault();event.stopImmediatePropagation();}},true);
 })();

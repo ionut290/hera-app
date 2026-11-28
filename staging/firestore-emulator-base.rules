@@ -6,7 +6,10 @@ service cloud.firestore {
  }
  function planWritable(tenantId) {
   let t = get(/databases/$(database)/documents/tenants/$(tenantId)).data;
-  return !('plan' in t) || t.plan == 'full' ||
+  return !('plan' in t) || (t.plan == 'full' && (!('billing' in t) ||
+    (t.billing.periodStart is timestamp && t.billing.periods is int
+     && t.billing.periods>0 && t.billing.periods<=120
+     && request.time < t.billing.periodStart + duration.value(t.billing.periods*30,'d')))) ||
     (t.plan == 'trial' && t.trialStartedAt is timestamp
      && t.trialDays == 30 && request.time < t.trialStartedAt + duration.value(30,'d'));
  }

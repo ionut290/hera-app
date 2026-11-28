@@ -193,6 +193,7 @@ jobs:
         with:
           name: stripe-sandbox-emulator-state
           path: staging/.sandbox-state/
+          include-hidden-files: true
           retention-days: 1
 
   hosted-checkout-verify:

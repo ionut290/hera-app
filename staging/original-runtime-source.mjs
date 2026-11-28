@@ -53,6 +53,10 @@ export function buildIntegratedRuntimeCandidate(source){
  const builtIn=code.match(/^const BUILT_IN_SUPER_ADMIN_EMAILS = [^\r\n]+;$/gm);
  if(!builtIn||builtIn.length!==1)throw Error('Legacy administrator list changed');
  code=replaceExactly(code,builtIn[0],'const BUILT_IN_SUPER_ADMIN_EMAILS = [];');
+ // Add an independent photo archive action; never replace WhatsApp/FATTO attachments.
+ const photoAnchor='    secondaryActionsRow.appendChild(safetyQuickBtn);';
+ const photoAction=[photoAnchor,'    if (window.parent.__vargaCompanyDocumentsEnabled?.()) {','      const ids = getImpiantoDocIds(impianto);','      const photoButton = document.createElement("button");','      photoButton.type = "button";','      photoButton.className = "btn action-icon-btn";','      photoButton.textContent = "📷";','      photoButton.setAttribute("aria-label", "Archivio fotografie impianto");','      photoButton.dataset.v2PlantPhotos = "1";','      photoButton.disabled = ids.length !== 1 || !selectedCommessaId;','      photoButton.title = photoButton.disabled ? "Apri un impianto non aggregato per associare le foto" : "Archivio fotografie impianto";','      photoButton.addEventListener("click", event => {','        event.preventDefault(); event.stopPropagation();','        if (ids.length !== 1 || !selectedCommessaId) return;','        window.parent.__vargaOpenCompanyDocuments?.({archive:getCommesseCollectionName(),jobId:String(selectedCommessaId),plantId:String(ids[0])});','      });','      secondaryActionsRow.appendChild(photoButton);','    }'].join('\n');
+ code=replaceExactly(code,photoAnchor,photoAction);
  // Bind only the app's unqualified cache identifiers; other modules and window/native
  // APIs are not covered by this transform and must remain in quarantine.
  const binding=['const localStorage = window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.localStorage;','const sessionStorage = window.__VARGA_ISOLATED_RUNTIME_CANDIDATE__.sessionStorage;',''].join('\n');

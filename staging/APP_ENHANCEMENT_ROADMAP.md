@@ -1,60 +1,91 @@
-# Varga Cantieri 2.0 — ampliamenti funzionali
+# Varga Cantieri 2.0 — audit e completamento funzionale
 
 ## Obiettivo
 
-Integrare le idee più utili delle soluzioni di gestione del verde e delle squadre sul territorio, mantenendo l’interfaccia, i dati e i flussi già presenti in Varga Cantieri 2.0. Le nuove funzioni si aggiungono come moduli compatibili: non sostituiscono le procedure esistenti.
+Mantenere Varga Cantieri 2.0 nella sua forma attuale e renderla affidabile e realmente utilizzabile. Il lavoro consiste nel verificare, correggere e completare le funzioni già presenti, rispettando interfaccia, flussi, dati e impostazioni esistenti.
 
-## Funzioni già presenti da riutilizzare
+Non aggiungere nuovi moduli o cambiare il modo di lavorare dell’app senza una richiesta esplicita.
 
-- Flussi specializzati per Potature/Abbattimenti e Sfalcio COBO.
-- Pianificatore cartografico del Servizio Neve con percorsi, stati, import/export KML e coda offline specifica.
-- Lettura QR per le schede degli alberi.
-- Commesse, impianti, mappe, personale, mezzi, calendario, contabilità, foto e documenti.
-- Strumenti di durata dati e sincronizzazione da verificare prima di estendere ad altri moduli.
+## Regole di conservazione
 
-Queste funzioni restano intatte e vanno usate come base quando hanno già la logica necessaria.
+- Lasciare invariati i flussi esistenti e la struttura generale dell’app.
+- Proteggere FATTO, WhatsApp/WHAZZUP, impianti, Personale/Utenti, identificativi e storico.
+- Non cancellare, azzerare o scollegare dati o relazioni esistenti.
+- Mantenere compatibilità con i dati già presenti e con il funzionamento offline.
+- Correggere una funzione solo dopo averne verificato dipendenze, permessi e dati coinvolti.
+- Lavorare su staging/emulatore; nessuna pubblicazione di regole o modifiche in produzione durante l’audit.
 
-## Nuove funzioni selezionate
+## Verifiche funzionali
 
-### 1. Ordini di lavoro generali — prima priorità
+### Accesso e aziende
 
-Un modulo ODL disponibile per le commesse ordinarie, senza rimpiazzare i moduli specializzati esistenti.
+- Creazione account e azienda, accesso, uscita e riapertura dell’app.
+- Collegamento a un’azienda tramite codice e approvazione/rifiuto dell’amministratore.
+- Accesso Google e Apple nei percorsi previsti.
+- Ruoli e permessi coerenti tra schermate, app e regole Firebase.
+- Nessuna schermata vuota, blocco o ritorno improvviso al login.
 
-Ogni ODL dovrà poter collegare una commessa e, quando pertinente, uno o più impianti; indicare priorità, scadenza, squadra, operatori, mezzi, istruzioni e stato; raccogliere orari, materiali, note e foto prima/dopo; produrre un rapporto esportabile.
+### Piano prova e limiti
 
-Gli stati e i permessi dovranno impedire chiusure o modifiche non autorizzate. Il completamento dovrà restare compatibile con i flussi originali FATTO/WHAZZUP e non aggirarli.
+Verificare che il piano gratuito rispetti i limiti già definiti:
 
-### 2. QR universale per impianti e mezzi
+- 5 commesse;
+- 100 impianti;
+- 1 amministratore;
+- 11 operatori;
+- 11 mezzi.
 
-Estendere la scansione già disponibile per gli alberi affinché il codice di un impianto o mezzo apra la scheda corretta e, se consentito, l’ODL collegato. Ogni codice dovrà essere convalidato nel tenant selezionato: la scansione di un codice di un’altra azienda non deve esporre dati.
+Controllare che il limite venga applicato correttamente, che l’elemento successivo sia rifiutato con un messaggio comprensibile e che non si verifichino duplicati o conteggi errati.
 
-La compatibilità NFC va verificata separatamente su iOS e Android prima di includerla nel requisito.
+### Commesse, impianti e completamento
 
-### 3. Pianificazione ricorrente e capacità squadre
+- Creazione, apertura, modifica, ricerca, filtri e visualizzazione delle commesse.
+- Inserimento manuale e gestione degli impianti, collegamenti e posizione in mappa.
+- Passaggio Da fare/Fatti e conservazione di data, ora, operatore, note e storico.
+- Pulsante FATTO e messaggio WhatsApp/WHAZZUP verificati senza alterarne la logica.
+- Navigazione verso l’impianto e comportamento con rete assente/ripristinata.
 
-Aggiungere piani ripetuti per attività stagionali e controlli periodici, con assegnazione di squadra e mezzo, rilevamento delle sovrapposizioni e riprogrammazione suggerita quando il meteo o un imprevisto cambia il programma. Le modifiche dovranno essere confermate da una persona.
+### Personale, squadre e mezzi
 
-### 4. Segnalazioni trasformabili in ODL
+- Inserimento e modifica manuale di persone, squadre e mezzi.
+- Assegnazioni e collegamenti mantenuti nel tempo.
+- Ruoli, permessi e storico coerenti.
+- Nessuna perdita o duplicazione di record quando si sincronizza o si aggiorna l’elenco.
 
-Consentire a un utente autorizzato dell’azienda di inviare una segnalazione con posizione, impianto, foto e descrizione; l’amministratore o responsabile potrà convertirla in ODL senza reinserire i dati. Un eventuale portale pubblico per cittadini o committenti resta una fase successiva, dopo la definizione di accessi e privacy.
+### Mappe e servizi
 
-### 5. Lavoro offline e sincronizzazione uniforme
+- Apertura mappa, posizione, ricerca e navigazione verso gli impianti.
+- Servizio Neve: commesse, percorsi, importazione KML, stato dei tratti, modifica e reset del giro.
+- Potature/Abbattimenti, Sfalcio COBO e QR alberi: verificare i flussi già presenti, senza sostituirli.
+- Foto, allegati e documenti: acquisizione, visualizzazione e sincronizzazione.
 
-Verificare la coda offline esistente e riutilizzarla per ODL, mappe e prove fotografiche. La sincronizzazione dovrà essere idempotente, legata a utente e tenant, mostrare gli errori e presentare i conflitti prima di sovrascrivere dati.
+### Contabilità, calendario e report
+
+- Inserimento e consultazione dei dati contabili e delle ore.
+- Calendario, assegnazioni e dati storici.
+- Esportazioni e report: completezza dei dati, formattazione e collegamento alla commessa corretta.
+
+### Offline e dispositivi
+
+- Verificare la coda offline esistente e la sincronizzazione successiva.
+- Ripetere le operazioni senza creare duplicati o sovrascrivere dati più recenti.
+- Provare interfaccia, login, mappe, foto e pulsanti su iPhone e Android.
+- Controllare che nessun comando sia coperto da notch, fotocamera o barra di sistema e che l’app resti utilizzabile con testo ingrandito.
 
 ## Ordine di lavoro
 
-1. Chiudere l’audit delle regole Firebase staging attive e completare l’inventario tenant dei moduli già esistenti.
-2. Progettare e collaudare ODL generale solo nello staging/emulatore, con regole server-side e test d’isolamento.
-3. Estendere il QR a impianti e mezzi riutilizzando lo scanner esistente.
-4. Aggiungere pianificazione ricorrente e gestione delle segnalazioni.
-5. Estendere e testare offline/sincronizzazione su tutti i flussi approvati.
-6. Provare su iPhone e Android con account e dati di test prima di qualsiasi attivazione operativa.
+1. Inventariare schermate, pulsanti, percorsi utente e permessi già presenti.
+2. Provare ogni percorso in staging con dati di test e annotare esito, errore e dipendenze.
+3. Correggere prima blocchi di accesso, navigazione e operazioni fondamentali.
+4. Correggere gli altri difetti in modifiche isolate, mantenendo i flussi e i dati attuali.
+5. Ripetere i test di regressione per le parti protette e verificare i limiti del piano prova.
+6. Eseguire prove sui dispositivi e preparare un riepilogo chiaro delle funzioni verificate e di quelle ancora bloccate.
 
-## Criteri di accettazione
+## Criteri di completamento
 
-- Tutti i nuovi documenti e allegati sono nel tenant corretto; test di lettura e scrittura incrociata tra tenant sempre negati.
-- Ruoli e transizioni di stato sono controllati dalle regole Firestore, non solo dalla UI.
-- Le prove coprono creazione, assegnazione, aggiornamento, rifiuto di modifiche non autorizzate, sincronizzazione ripetuta e conflitti offline.
-- Le regressioni esistenti su commesse, impianti, Personale/Utenti, neve, FATTO e WHAZZUP restano verdi.
-- Nessuna regola live viene pubblicata e nessuna funzione viene attivata in produzione prima dell’audit autorevole e delle prove su dispositivo.
+- Ogni funzione già presente ha un percorso verificato dall’inizio alla fine oppure un difetto documentato con causa e correzione prevista.
+- I limiti del piano prova corrispondono ai valori indicati sopra.
+- FATTO, WhatsApp/WHAZZUP, impianti, Personale/Utenti, collegamenti e storico superano i test di regressione.
+- Non si perdono dati durante uso offline, aggiornamento o sincronizzazione.
+- Nessuna funzione è dichiarata operativa sulla sola base di un test dell’interfaccia: vengono verificati anche salvataggio, permessi e lettura dei dati.
+- Nessuna modifica viene pubblicata in produzione senza un’autorizzazione e una verifica dedicate.

@@ -10,10 +10,30 @@ function demoTenant(tid) {
  return exists(/databases/$(database)/documents/tenants/$(tid))
  && get(/databases/$(database)/documents/tenants/$(tid)).data.demo==true;
 }
+function paidRoleTransition(uid,tid) {
+ let t=get(/databases/$(database)/documents/tenants/$(tid)).data;
+ let next=getAfter(/databases/$(database)/documents/tenants/$(tid)).data;
+ let m=get(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data;
+ let n=getAfter(/databases/$(database)/documents/tenants/$(tid)/members/$(uid)).data;
+ return t.plan=='full' && 'billing' in t && planWritable(tid)
+  && uid!=t.ownerUid && uid!=request.auth.uid && t.status=='active'
+  && m.status=='active' && n.status=='active' && m.demo==true && n.demo==true
+  && m.role in ['admin','employee'] && n.role in ['admin','employee'] && m.role!=n.role
+  && n.diff(m).affectedKeys().hasOnly(['role'])
+  && next.lastRoleUid==uid
+  && next.usage.diff(t.usage).affectedKeys().hasOnly(['admin','operatori'])
+  && next.usage.admin==t.usage.admin+(n.role=='admin'?1:-1)
+  && next.usage.operatori==t.usage.operatori+(n.role=='employee'?1:-1)
+  && next.usage.admin>=1 && next.usage.admin<=t.limits.admin
+  && next.usage.operatori>=0 && next.usage.operatori<=t.limits.operatori
+  && get(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.role==m.role
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.role==n.role
+  && getAfter(/databases/$(database)/documents/users/$(uid)/memberships/$(tid)).data.status=='active';
+}
 function validMemberChange(uid,tid) {
  return verifiedSuperAdmin() && request.auth.uid!=uid && demoTenant(tid)
  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role','status'])
- && (!(get(/databases/$(database)/documents/tenants/$(tid)).data.get('plan','') in ['trial','full']) || request.resource.data.role==resource.data.role)
+ && (!(get(/databases/$(database)/documents/tenants/$(tid)).data.get('plan','') in ['trial','full']) || request.resource.data.role==resource.data.role || paidRoleTransition(uid,tid))
  && request.resource.data.role in ['admin','supervisor','employee']
  && request.resource.data.status in ['active','suspended'];
 }
@@ -75,6 +95,10 @@ function validCommercialActivation(tid) {
  && validTenantStatus(request.resource.data) && request.resource.data.createdAt==request.time;
  allow update: if verifiedSuperAdmin() && resource.data.demo==true && validFullPlan();
  allow update: if verifiedSuperAdmin() && resource.data.demo==true && validCommercialActivation(tid);
+ allow update: if verifiedSuperAdmin() && resource.data.demo==true
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastRoleUid'])
+  && request.resource.data.lastRoleUid is string
+  && paidRoleTransition(request.resource.data.lastRoleUid,tid);
  match /billingReceipts/{reference} {
   allow get,list: if verifiedSuperAdmin();
   allow create: if verifiedSuperAdmin() && demoTenant(tid)

@@ -44,6 +44,7 @@ prepared=Object.freeze({session:view,namespace,apiKey});
  replaceRuntimeFrame('original.html');$('company-return').hidden=false;document.body.classList.add('company-runtime');
 }
 // This is a local testing bridge, not a security boundary. The emulator rules are mandatory.
+Object.defineProperty(window,'__vargaCompanyDocumentsEnabled',{value:()=>!isLive&&prepared?.session.isActive()===true,writable:false,configurable:false});
 Object.defineProperty(window,'__vargaOpenCompanyDocuments',{value:(plant=null)=>{if(isLive||!prepared?.session.isActive())return false;documentPanel?.close();const session=prepared.session;documentPanel=createCompanyDocuments({host:$('company-documents'),auth,tenantId:session.session.context.tenantId,plant,isActive:()=>prepared?.session===session&&session.isActive()});return true;},writable:false,configurable:false});
 Object.defineProperty(window,'__vargaLocalRuntime',{value:()=>{if(!prepared?.session.isActive())throw Error('Verified local company required');return prepared;},writable:false,configurable:false});
 function clearCompanyAdmin(){ $('company-admin-panel').hidden=true; $('company-admin-list').replaceChildren(); }

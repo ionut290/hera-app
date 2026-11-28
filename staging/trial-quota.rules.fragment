@@ -36,4 +36,4 @@ function quotaCreate(kind,archive,id,parent) {
  return planWritable(tenantId) && (!managedPlan(before) ||
   quotaStep(before,getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data,q));
 }
-allow update: if validQuotaCounter();
+allow update: if request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastQuotaWrite']) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usage','lastQuotaWrite']) && validQuotaCounter();

@@ -96,6 +96,10 @@ try{
  const submit=await submitSpecific.count()?submitSpecific:await byRole.count()?byRole:visibleButtonCount===1?visibleButtons.first():null;
  if(!submit)throw new Error('CHECKOUT_SUBMIT_AMBIGUOUS');
  await submit.waitFor({state:'visible'});await submit.click();
+ await page.waitForTimeout(2000);
+ const postText=(await page.locator('body').innerText().catch(()=>'' )).split(/\\r?\\n/).map(x=>x.trim()).filter(x=>x&&x.length<140&&!/@|https?:|[0-9]{4,}/.test(x)).slice(0,30);
+ const postButtons=await page.locator('button').evaluateAll(ns=>ns.filter(n=>!!(n.offsetWidth||n.offsetHeight)).map(n=>({text:(n.innerText||'').trim().slice(0,80),type:n.getAttribute('type'),ariaLabel:n.getAttribute('aria-label'),id:n.id,disabled:!!n.disabled})).slice(0,12));
+ console.log('CHECKOUT_AFTER_SUBMIT '+JSON.stringify({title:await page.title(),host:new URL(page.url()).hostname,text:postText,buttons:postButtons}));
  stage='provider-payment-confirmation';
  // Poll the authoritative API, not the redirect URL. Never submit twice.
  for(let i=0;i<30;i++){const fresh=await provider.session(session.sessionId);if(fresh.status==='complete'&&fresh.payment_status==='paid'){completed=true;break;}await new Promise(r=>setTimeout(r,2000));}

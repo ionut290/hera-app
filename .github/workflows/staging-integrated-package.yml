@@ -159,6 +159,49 @@ jobs:
       group: varga-stripe-sandbox-hosted-checkout
       cancel-in-progress: false
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: stripe-sandbox-checkout
+    defaults:
+      run:
+        working-directory: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install emulator and Stripe Sandbox dependencies
+        run: |
+          printf '%s' '{"name":"varga-hosted-sandbox-ci","version":"1.0.0","private":true}' > package.json
+          npm install --no-save --no-audit --no-fund firebase-tools@15.34.2 firebase-admin stripe@17.7.0
+          node assemble-candidate-rules.mjs
+          printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}' > emulator-hosted-sandbox.json
+      - name: Create Checkout and export synthetic emulator state
+        env:
+          VARGA_ENABLE_STRIPE_SANDBOX: 'yes'
+          VARGA_STRIPE_SANDBOX_CHECKOUT_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY }}
+        run: |
+          mkdir -p .sandbox-state
+          npx --no-install firebase emulators:exec --config emulator-hosted-sandbox.json --only firestore,auth --export-on-exit=.sandbox-state/emulator --project varga-cantieri-v2-staging 'node billing-web/prepare-real-sandbox.mjs'
+      - name: Save short-lived synthetic emulator state
+        uses: actions/upload-artifact@v4
+        with:
+          name: stripe-sandbox-emulator-state
+          path: staging/.sandbox-state/
+          retention-days: 1
+
+  hosted-checkout-verify:
+    needs: hosted-checkout
+    if: github.ref == 'refs/heads/varga-cantieri-v2-staging' && github.event_name == 'workflow_dispatch' && inputs.confirm_test_only == true
+    concurrency:
+      group: varga-stripe-sandbox-hosted-checkout
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     environment: stripe-sandbox-checkout
     defaults:
@@ -175,47 +218,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Install test dependencies and browser
+      - uses: actions/download-artifact@v4
+        with:
+          name: stripe-sandbox-emulator-state
+          path: staging/.sandbox-state
+      - name: Install verification dependencies
         run: |
-          printf '%s' '{"name":"varga-hosted-sandbox-ci","version":"1.0.0","private":true}' > package.json
-          npm install --no-save --no-audit --no-fund firebase-tools@15.34.2 firebase-admin stripe@17.7.0 playwright@1.55.0
-          npx --no-install playwright install --with-deps chromium
+          printf '%s' '{"name":"varga-hosted-sandbox-verify","version":"1.0.0","private":true}' > package.json
+          npm install --no-save --no-audit --no-fund firebase-tools@15.34.2 firebase-admin stripe@17.7.0
           node assemble-candidate-rules.mjs
           printf '%s' '{"firestore":{"rules":"candidate.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}' > emulator-hosted-sandbox.json
-      - name: Start Firebase emulators for hosted checkout
-        run: |
-          npx --no-install firebase emulators:start --config emulator-hosted-sandbox.json --only firestore,auth --project varga-cantieri-v2-staging > "$RUNNER_TEMP/firebase-emulators.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/firebase-emulators.pid"
-          for attempt in {1..60}; do
-            if (echo > /dev/tcp/127.0.0.1/8080) 2>/dev/null && (echo > /dev/tcp/127.0.0.1/9099) 2>/dev/null; then
-              echo "Firebase Auth and Firestore emulators are ready."
-              exit 0
-            fi
-            if ! kill -0 "$(cat "$RUNNER_TEMP/firebase-emulators.pid")" 2>/dev/null; then
-              tail -n 80 "$RUNNER_TEMP/firebase-emulators.log"
-              exit 1
-            fi
-            sleep 2
-          done
-          tail -n 80 "$RUNNER_TEMP/firebase-emulators.log"
-          exit 1
-      - name: Create one genuine Stripe Sandbox hosted Checkout
+      - name: Verify payment and emulator entitlement
         env:
           VARGA_ENABLE_STRIPE_SANDBOX: 'yes'
           VARGA_STRIPE_SANDBOX_CHECKOUT_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY }}
-          FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080'
-          FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099'
-        run: node billing-web/prepare-real-sandbox.mjs
-      - name: Verify manual Sandbox payment and emulator entitlement
-        env:
-          VARGA_ENABLE_STRIPE_SANDBOX: 'yes'
-          VARGA_STRIPE_SANDBOX_CHECKOUT_KEY: ${{ secrets.VARGA_STRIPE_SANDBOX_CHECKOUT_KEY }}
-          FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080'
-          FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099'
-        run: node billing-web/verify-real-sandbox.mjs
-      - name: Stop Firebase emulators
-        if: always()
         run: |
-          if [ -f "$RUNNER_TEMP/firebase-emulators.pid" ]; then
-            kill "$(cat "$RUNNER_TEMP/firebase-emulators.pid")" 2>/dev/null || true
-          fi
+          npx --no-install firebase emulators:exec --config emulator-hosted-sandbox.json --only firestore,auth --import=.sandbox-state/emulator --project varga-cantieri-v2-staging 'node billing-web/verify-real-sandbox.mjs'

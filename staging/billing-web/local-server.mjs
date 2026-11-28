@@ -25,14 +25,16 @@ function fixtureProvider(){
    const id='cs_test_web_'+key.replace(/[^A-Za-z0-9_]/g,'_');
    if(!sessions.has(id)){
     const price=prices.get(params.line_items?.[0]?.price);if(!price)fail('PRICE_MISMATCH');
-    sessions.set(id,{id,livemode:false,mode:'subscription',status:'open',payment_status:'unpaid',client_reference_id:params.client_reference_id,metadata:params.metadata,url:'https://checkout.stripe.com/c/pay/'+id,price});
+    sessions.set(id,{id,livemode:false,mode:'subscription',status:'open',payment_status:'unpaid',subscription:null,client_reference_id:params.client_reference_id,metadata:params.metadata,url:'https://checkout.stripe.com/c/pay/'+id,price});
    }
    return structuredClone(sessions.get(id));
   },
   async session(id){return structuredClone(sessions.get(id));},
+  async expire(id){const s=sessions.get(id);if(!s||s.status!=='open'||s.payment_status!=='unpaid'||s.subscription!==null)fail('CHECKOUT_RECONCILIATION_REQUIRED');s.status='expired';return structuredClone(s);},
   complete(id){
    const s=sessions.get(id);if(!s)fail('CHECKOUT_RECONCILIATION_REQUIRED');
    if(s.event)return structuredClone(s.event);
+   if(s.status!=='open')fail('CHECKOUT_RECONCILIATION_REQUIRED');
    const p=s.price,suffix=id.slice('cs_test_'.length),customer='cus_'+suffix,subscription='sub_'+suffix,invoice='in_'+suffix,start=Math.floor(Date.now()/1000);
    Object.assign(s,{status:'complete',payment_status:'paid',currency:'eur',amount_total:p.unit_amount,customer,
     line_items:{has_more:false,data:[{quantity:1,amount_total:p.unit_amount,price:p}]},
@@ -47,7 +49,7 @@ export function createLocalBillingServer({app}){
  const provider=fixtureProvider(),checkout=createSandboxCheckout({app,provider,priceIds}),billing=createStripeTestBilling({app,webhookSecret:secret,priceIds}),stripe=new Stripe('sk_test_LOCAL_FIXTURE_ONLY',{apiVersion:version}),db=getFirestore(app),auth=getAuth(app);
  const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' http://127.0.0.1:9099; frame-ancestors 'none'; form-action 'none'; base-uri 'none'"};
  const assets={'/':['billing.html','text/html'],'/billing-test-return.html':['billing.html','text/html'],'/billing.css':['billing.css','text/css'],'/billing.js':['billing.js','application/javascript']};
- const actions=new Set(['catalog','companies','request-plan','checkout','simulate']);
+ const actions=new Set(['catalog','companies','request-plan','checkout','simulate','cancel']);
  async function simulate(token,tenantId){
   // Only a verified owner can complete this synthetic session. No external API exists here.
   const allowed=(await checkout.companies({token})).companies.some(c=>c.id===tenantId&&['open','bound'].includes(c.checkoutStatus));
@@ -80,6 +82,7 @@ export function createLocalBillingServer({app}){
     // Never return the fixture's placeholder external URL or any payment secret.
     return reply(200,{status:result.status,testMode:true});
    }
+   if(action==='cancel')return reply(200,await checkout.cancelCheckout({token,tenantId:data.tenantId}));
    if(action==='simulate')return reply(200,await simulate(token,data.tenantId));
   }catch(e){const code=typeof e?.code==='string'&&/^[A-Z_]{3,48}$/.test(e.code)?e.code:'REQUEST_FAILED';return reply(code==='UNAUTHENTICATED'?401:code==='FORBIDDEN'?403:400,{code});}
  });

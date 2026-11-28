@@ -26,14 +26,21 @@ function readIntent(uid){try{return JSON.parse(localStorage.getItem(intentKey(ui
 function clearIntent(uid){localStorage.removeItem(intentKey(uid));}
 function normalizeCode(value){const code=String(value||'').trim().toUpperCase().replace(/\s/g,'');if(!/^VC-[A-Z0-9]{8}$/.test(code))throw Error('CODE_INVALID');return code;}
 function userError(err){return ({'auth/invalid-email':'Indirizzo email non valido.','auth/invalid-credential':'Email o password non corrette.','auth/wrong-password':'Email o password non corrette.','auth/user-not-found':'Email o password non corrette.','auth/too-many-requests':'Troppi tentativi. Riprova più tardi.','auth/network-request-failed':'Connessione non disponibile. Riprova.','auth/email-already-in-use':'Questa email è già registrata. Accedi con il tuo account.','auth/weak-password':'Scegli una password di almeno 8 caratteri.','permission-denied':'Operazione non autorizzata. Contatta l’amministratore.','firestore/permission-denied':'Operazione non autorizzata. Contatta l’amministratore.'})[err.code]||'Operazione non riuscita. Riprova o contatta l’assistenza.';}
-function closeRuntime(){revision++;$('runtime').removeAttribute('src');$('runtime').hidden=true;$('company-return').hidden=true;document.body.classList.remove('company-runtime');prepared=null;entry.leave();}
+// Tear down the old browsing context rather than queuing about:blank on it.
+function replaceRuntimeFrame(src){
+ const old=$('runtime'),frame=old.cloneNode(false);
+ frame.removeAttribute('src');frame.hidden=!src;
+ if(src)frame.setAttribute('src',src);
+ old.replaceWith(frame);
+}
+function closeRuntime(){revision++;prepared=null;entry.leave();if($('runtime').hasAttribute('src'))replaceRuntimeFrame(null);else $('runtime').hidden=true;$('company-return').hidden=true;document.body.classList.remove('company-runtime');}
 function present(session){
  const namespace=createLegacyFirebaseNamespace({prepared:session,statics});
 // Only the facade reaches the original frame; keep raw SDK in the launcher.
 // The frame is still same-origin, so server rules remain the security boundary.
 const view=Object.freeze({projectId:session.projectId,session:session.session,auth:namespace.auth(),approval:session.approval,localStorage:session.localStorage,sessionStorage:session.sessionStorage,isActive:session.isActive});
 prepared=Object.freeze({session:view,namespace,apiKey});
- $('runtime').src='original.html';$('runtime').hidden=false;$('company-return').hidden=false;document.body.classList.add('company-runtime');
+ replaceRuntimeFrame('original.html');$('company-return').hidden=false;document.body.classList.add('company-runtime');
 }
 // This is a local testing bridge, not a security boundary. The emulator rules are mandatory.
 Object.defineProperty(window,'__vargaLocalRuntime',{value:()=>{if(!prepared?.session.isActive())throw Error('Verified local company required');return prepared;},writable:false,configurable:false});

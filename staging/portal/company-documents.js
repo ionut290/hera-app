@@ -28,7 +28,7 @@ export function createCompanyDocuments({host,auth,isActive,tenantId,plant=null})
  async function refresh(next=false){
   const attempt=++sequence,result=await api('list',{cursor:next?cursor:null,plant});if(attempt!==sequence)return;
   writable=result.writable===true;usage.textContent=format(result.used)+' utilizzati su '+format(result.limit)+(writable?'':' · solo consultazione');bar.max=Math.max(1,result.limit||1);bar.value=Math.min(bar.max,result.used||0);
-  if(!next)list.replaceChildren();for(const f of result.files)renderFile(f);cursor=result.nextCursor;if(!list.children.length)list.append(el('p','Nessun documento disponibile.'));sync();
+  if(!next){list.replaceChildren();if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=null;preview.removeAttribute('src');preview.hidden=true;}for(const f of result.files)renderFile(f);cursor=result.nextCursor;if(!list.children.length)list.append(el('p','Nessun documento disponibile.'));sync();
  }
  upload.onclick=()=>task(async()=>{const f=input.files?.[0];if(!f||!f.size||f.size>15*1024*1024)throw Error('INVALID_FILE');const bytes=new Uint8Array(await f.arrayBuffer());ensure();let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));await api('upload',{fileId:crypto.randomUUID(),name:f.name,type:f.type,base64:btoa(binary),visibility:visibility.value,plant});input.value='';await refresh();});
  more.onclick=()=>task(()=>refresh(true));close.onclick=()=>destroy();

@@ -27,12 +27,18 @@ service cloud.firestore {
   allow get,list: if eligible() && request.auth.uid==uid;
   allow create: if eligible()
     && request.auth.uid == uid
+    && !exists(/databases/$(database)/documents/tenants/$(tenantId))
     && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid
     && request.resource.data.tenantId == tenantId
     && request.resource.data.role == 'admin'
     && request.resource.data.status == 'active'
     && request.resource.data.demo == true;
   allow create: if companyAdmin(tenantId)
+    && get(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'pending'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/joinRequests/$(uid)).data.status == 'accepted'
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.lastOperatorUid == uid
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)).data.usage.operatori == get(/databases/$(database)/documents/tenants/$(tenantId)).data.usage.operatori + 1
+    && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.role == 'employee'
     && getAfter(/databases/$(database)/documents/tenants/$(tenantId)/members/$(uid)).data.status == 'active'
     && request.resource.data.tenantId == tenantId
     && request.resource.data.role == 'employee'
